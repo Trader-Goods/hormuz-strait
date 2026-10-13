@@ -7,7 +7,8 @@ class HormuzViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
         view.backgroundColor = navy
-        guard let webView, let scroll = webView.scrollView else { return }
+        guard let webView else { return }
+        let scroll = webView.scrollView
         scroll.bounces = false
         scroll.alwaysBounceVertical = false
         scroll.alwaysBounceHorizontal = false
