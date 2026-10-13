@@ -1,0 +1,18 @@
+{
+  "appId": "com.tradergoods.hormuzstrait",
+  "appName": "Hormuz Strait",
+  "webDir": "www",
+  "ios": {
+    "backgroundColor": "#071a2b",
+    "contentInset": "never",
+    "preferredContentMode": "mobile",
+    "scrollEnabled": false
+  },
+  "plugins": {
+    "SystemBars": {
+      "animation": "NONE",
+      "hidden": true,
+      "style": "DARK"
+    }
+  }
+}
