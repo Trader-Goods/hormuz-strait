@@ -25,7 +25,7 @@ function gainOil(n,big){if(big)SFX.chime();else SFX.level(lastSc);runOil+=n;oil+
 const TYPES=['destroyer','sub','tanker','checkpoint'];
 function speedFor(s){return s<=1?S0:s<40?S0*(1+1.5*(s-1)/39):s<=50?2.5*S0:s>=100?S0*(3+.5*Math.min(1,(s-100)/100)):s>=75?3.75*S0:2.5*S0*(1+.5*(s-50)/25)}
 let cf,op,lastG=null,msls=[],puffs=[];
-function reset(){op={done:false,active:false,acc:0,banner:0};cf={done:false,active:false,target:0,acc:0,banner:0,resume:0};lastG=null;msls=[];puffs=[];b={y:300,v:0};obs=[];sc=0;sp=S0;t=0;foam=[];runOil=0;lastSc=0;pops=[];}
+function reset(){runFrames=0;op={done:false,active:false,acc:0,banner:0};cf={done:false,active:false,target:0,acc:0,banner:0,resume:0};lastG=null;msls=[];puffs=[];b={y:300,v:0};obs=[];sc=0;sp=S0;t=0;foam=[];runOil=0;lastSc=0;pops=[];}
 reset();
 // ---- sound (Web Audio, synthesized)
 let AC=null,MG=null,muted=false;try{muted=localStorage.getItem('hzMute')==='1'}catch(e){}
@@ -59,19 +59,23 @@ function flap(){if(st==='shop'||st==='lb'||nameOpen)return;if(st==='win'){if(win
 // ---- global leaderboard (Supabase REST, plain fetch)
 const SB_URL='https://jnoakkyceerijjccszcd.supabase.co/rest/v1/scores',SB_KEY='sb_publishable_CbdLaV1mXYcsprSjEeyceg__KCHE7b5',LB_POST=true;
 let lbData=null,lbState='idle',nameOpen=false,lastName='';try{lastName=localStorage.getItem('hzName')||''}catch(e){}
-function cleanName(n){return String(n||'').replace(/[\u0000-\u001f\u007f<>]/g,'').replace(/\s+/g,' ').trim().slice(0,16)}
+function cleanName(n){return String(n||'').replace(/[^A-Za-z0-9 ]/g,'').replace(/\s+/g,' ').trim().slice(0,16)}
+var lbMsg=0,lbMsgT='';function toast(m){lbMsgT=m;lbMsg=150}
 function lbFetch(){lbState='loading';const ctl=window.AbortController?new AbortController():null;const tm=setTimeout(()=>ctl&&ctl.abort(),8000);
  return fetch(SB_URL+'?select=name,score&order=score.desc,created_at.asc&limit=10',{headers:{apikey:SB_KEY},signal:ctl?ctl.signal:undefined})
   .then(r=>{if(!r.ok)throw 0;return r.json()}).then(d=>{lbData=Array.isArray(d)?d:[];lbState='ok'}).catch(()=>{lbState='offline'}).finally(()=>clearTimeout(tm))}
-function lbPost(name,score){if(!LB_POST)return Promise.resolve();return fetch(SB_URL,{method:'POST',headers:{apikey:SB_KEY,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify({name,score})}).then(r=>{if(!r.ok)throw 0}).then(()=>lbFetch()).catch(()=>{shopMsgT='Could not submit (offline?)';shopMsg=120})}
+function lbPost(name,score,ms){if(!LB_POST)return Promise.resolve();return fetch(SB_URL.replace('/scores','/rpc/submit_score'),{method:'POST',headers:{apikey:SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({p_name:name,p_score:score,p_ms:ms})})
+ .then(r=>r.ok?(toast('Score submitted!'),lbFetch()):r.json().catch(()=>({})).then(j=>{const m=String(j&&j.message||'');if(m.includes('name_not_allowed'))askName(score,ms,'Name not allowed - try another');else if(m.includes('rate_limited'))toast('Try again in a moment');else toast('Score not accepted')}))
+ .catch(()=>toast('Could not submit (offline?)'))}
 function qualifies(score,prevBest){if(!LB_POST||score<=0)return false;if(score>prevBest)return true;if(!lbData)return false;return lbData.length<10||score>lbData[lbData.length-1].score}
-function askName(score){nameOpen=true;const ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9;font-family:Trebuchet MS,Segoe UI,sans-serif';
+function askName(score,ms,err){nameOpen=true;const ov=document.createElement('div');ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9;font-family:Trebuchet MS,Segoe UI,sans-serif';
  ov.innerHTML='<div style="background:#0b2236;border:2px solid #ffd78c;border-radius:16px;padding:18px;width:min(300px,86vw);text-align:center;color:#fff"><div style="font-weight:bold;font-size:20px;color:#ffe28a;margin-bottom:6px">NEW HIGH SCORE!</div><div style="margin-bottom:10px">Score <b></b> &mdash; enter your name</div><input maxlength="16" autocomplete="off" style="width:90%;font-size:20px;padding:10px;border-radius:10px;border:none;text-align:center"><div style="display:flex;gap:10px;margin-top:14px"><button data-a="skip" style="flex:1;font-size:18px;padding:12px;border-radius:12px;border:none;background:#556">SKIP</button><button data-a="ok" style="flex:1;font-size:18px;padding:12px;border-radius:12px;border:none;background:#ffd78c;font-weight:bold">SUBMIT</button></div></div>';
- ov.querySelector('b').textContent=score;const inp=ov.querySelector('input');inp.value=lastName;document.body.appendChild(ov);setTimeout(()=>inp.focus(),50);
+ ov.querySelector('b').textContent=score;const inp=ov.querySelector('input');inp.value=cleanName(lastName);const em=document.createElement('div');em.style.cssText='color:#ff7a6a;min-height:18px;margin-top:8px;font-size:14px';em.textContent=err||'';inp.after(em);
+ inp.addEventListener('input',()=>{const v=inp.value.replace(/[^A-Za-z0-9 ]/g,'').slice(0,16);if(v!==inp.value)inp.value=v});document.body.appendChild(ov);setTimeout(()=>inp.focus(),50);
  const close=()=>{ov.remove();nameOpen=false;dead=Date.now()};
- const ok=()=>{const n=cleanName(inp.value);if(!n){inp.focus();return}lastName=n;try{localStorage.setItem('hzName',n)}catch(e){}close();lbPost(n,score)};
+ const ok=()=>{const n=cleanName(inp.value);if(!n){inp.focus();return}lastName=n;try{localStorage.setItem('hzName',n)}catch(e){}close();lbPost(n,score,ms)};
  ov.addEventListener('pointerdown',e=>e.stopPropagation());ov.querySelector('[data-a=ok]').onclick=ok;ov.querySelector('[data-a=skip]').onclick=close;inp.addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter')ok()})}
-function endRun(prevBest){if(qualifies(sc,prevBest))askName(sc)}
+var runFrames=0;function endRun(prevBest){if(qualifies(sc,prevBest))askName(sc,Math.round(runFrames*STEP))}
 const LBBTN=[W/2+6,474,146,46],LBBACK=[W/2-60,H-62,120,44];
 function lbUI(){x.fillStyle='rgba(7,26,43,.92)';x.fillRect(0,0,W,H);txt('LEADERBOARD',60,30,'#ffe28a');txt('TOP 10 CAPTAINS',88,13,'#cfe3f1');
  if(lbState==='loading'&&!lbData)txt('Loading...',300,18,'#fff');
@@ -290,7 +294,7 @@ function shopUI(){x.fillStyle='rgba(7,26,43,.88)';x.fillRect(0,0,W,H);txt('SHOP'
   txt('Buy '+pend.it.n+'?',285,pend.it.n.length>16?16:19,'#fff');txt('for '+pend.it.p+' oil',318,17,'#ffe28a');btn(CFNO,'CANCEL','#8a96a3',16);btn(CFOK,'CONFIRM',undefined,16)}}
 function hudOil(){x.fillStyle='rgba(7,26,43,.55)';rr(10,18,70,30,12);x.fill();drop(26,35,6);x.font='bold 17px '+F;x.textAlign='left';x.fillStyle='#ffe28a';x.fillText(runOil,38,40);x.textAlign='center';
  for(const q of pops){const a=Math.max(0,1-q.f/(q.big?110:45));x.save();x.globalAlpha=a;if(q.big)txt(q.s,210-q.f*.4,30,'#ffd23f','#3a2600');else{x.font='bold 14px '+F;x.fillStyle='#ffe28a';x.fillText(q.s,PX,b.y-22-q.f*.6)}x.restore()}}
-function ui(){if(st==='lb'){lbUI();muteIcon();return}if(st==='shop'){shopUI();muteIcon();return}muteIcon();if(st==='play')hudOil();
+function ui(){if(lbMsg){x.save();x.globalAlpha=Math.min(1,lbMsg/20);txt(lbMsgT,H-20,15,lbMsgT.includes('submitted')?'#7fe08a':'#ff9a8a');x.restore()}if(st==='lb'){lbUI();muteIcon();return}if(st==='shop'){shopUI();muteIcon();return}muteIcon();if(st==='play')hudOil();
  if(st==='win'){panel(170,300);txt('STRAIT REOPENED',225,30,'#7fe08a');txt('YOU MADE IT!',268,26,'#fff');txt('SCORE  '+sc,318,22,'#ffe28a');txt('OIL EARNED',356,14,'#cfe3f1');oilTxt(runOil,388,24);txt('Total oil: '+oil,418,14,'#cfe3f1');if(winT>60)txt('Tap to return',450,16,'#fff')}if(st==='play')cfBanner();if(st==='play'||st==='win'){x.fillStyle='rgba(7,26,43,.55)';rr(W/2-38,12,76,48,14);x.fill();txt(sc,50,34,'#ffe28a')}
  if(st==='start'){panel(170,290);txt('HORMUZ',232,46,'#ffe28a');txt('STRAIT',280,46,'#fff');txt('Steer the tanker through the blockade',318,13,'#cfe3f1');
   txt((t>>5)%2?'TAP / SPACE TO SAIL':'',380,20,'#fff');txt('BEST  '+best,416,18,'#ffe28a');oilTxt(oil,446,18);btn(SHOPBTN,'SHOP');btn(LBBTN,'LEADERBOARD',undefined,15)}
@@ -330,7 +334,7 @@ function debugDraw(){x.save();x.strokeStyle='#0f0';x.lineWidth=1;x.strokeRect(PX
  for(const o of obs){const cx=o.x+OW/2;for(const top of[true,false]){const type=top?o.t[0]:o.t[1],y0=top?o.g:o.g+o.gap,L=top?o.g-SEA:BED-o.g-o.gap,sg=top?-1:1;if(L<4)continue;
   x.beginPath();for(let d=INSET;d<=L;d+=3)x.lineTo(cx-(halfW(type,d)-INSET),y0+sg*d);for(let d=L;d>=INSET;d-=3)x.lineTo(cx+(halfW(type,d)-INSET),y0+sg*d);x.closePath();x.stroke()}}x.restore()}
 function pick(){const a=[];for(let i=0;i<2;i++)a.push(TYPES[Math.random()*TYPES.length|0]);return a}
-let prevY=300;function update(){prevY=b.y;t++;for(const q of pops)q.f++;pops=pops.filter(q=>q.f<(q.big?110:45));if(shopMsg)shopMsg--;if(st==='win')winT++;if(cf.banner)cf.banner++;if(op.banner)op.banner++;if(cf.resume)cf.resume++;
+let prevY=300;function update(){prevY=b.y;t++;if(st==='play')runFrames++;if(lbMsg)lbMsg--;for(const q of pops)q.f++;pops=pops.filter(q=>q.f<(q.big?110:45));if(shopMsg)shopMsg--;if(st==='win')winT++;if(cf.banner)cf.banner++;if(op.banner)op.banner++;if(cf.resume)cf.resume++;
  {const mv=st==='play'?sp:st==='start'?S0*.5:0;for(const f of foam)f.x-=mv;if(st!=='over'){foam.unshift({x:PX-27,y:b.y+9});}foam=foam.filter((f,i)=>f.x>-20&&i<70);}
  if(st!=='over'){dist+=st==='play'?sp:S0*.5;}
  if(st==='start'){b.y=300+Math.sin(t/20)*8;}
