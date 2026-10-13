@@ -27,8 +27,6 @@ class HormuzViewController: CAPBridgeViewController {
 
     override var prefersStatusBarHidden: Bool { true }
 
-    override var prefersHomeIndicatorAutoHidden: Bool { true }
-
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation { .portrait }
 }
 
