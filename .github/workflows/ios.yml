@@ -7,15 +7,16 @@ on:
   workflow_dispatch:
 
 jobs:
-  unsigned-build:
-    name: Unsigned iOS build
+  testflight:
+    name: Build, sign and upload to TestFlight
     runs-on: macos-latest
+    env:
+      TEAM_ID: 35734G7ZCQ
+      BUNDLE_ID: com.tradergoods.hormuzstrait
     steps:
-      - name: Check out
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
@@ -29,41 +30,26 @@ jobs:
         working-directory: app
         run: npx cap sync ios
 
-      - name: Compile an unsigned simulator build
-        working-directory: app/ios/App
-        run: |
-          xcodebuild \
-            -project App.xcodeproj \
-            -scheme App \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO \
-            build
-
-      # TODO: Signing and TestFlight upload.
-      # This step is skipped so the unsigned compile above can pass on its own.
-      # Remove `if: false` after these repository secrets exist:
-      #   APP_STORE_CONNECT_KEY_ID
-      #   APP_STORE_CONNECT_ISSUER_ID
-      #   APP_STORE_CONNECT_PRIVATE_KEY  (contents of the AuthKey .p8 file)
-      # Automatic signing uses `xcodebuild -allowProvisioningUpdates` or fastlane.
-      - name: "TODO: sign and upload to TestFlight"
-        if: false
+      - name: Write API key
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          test -n "$APP_STORE_CONNECT_KEY_ID"
-          test -n "$APP_STORE_CONNECT_ISSUER_ID"
-          test -n "$APP_STORE_CONNECT_PRIVATE_KEY"
           mkdir -p "$HOME/private_keys"
-          printf '%s\n' "$APP_STORE_CONNECT_PRIVATE_KEY" > "$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
-          # Archive with automatic signing. A fastlane lane can replace this
-          # block: app_store_connect_api_key(key_id:, issuer_id:, key_content:)
-          # then build_app(..., export_method: "app-store").
+          KEY="$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          # Accept the key with or without BEGIN/END lines and with any line breaks.
+          BODY=$(printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" | sed -e 's/-----[A-Z ]*-----//g' | tr -d ' \r\n\t')
+          { echo "-----BEGIN PRIVATE KEY-----"; echo "$BODY" | fold -w 64; echo "-----END PRIVATE KEY-----"; } > "$KEY"
+          chmod 600 "$KEY"
+          echo "KEY_PATH=$KEY" >> "$GITHUB_ENV"
+
+      - name: Archive (automatic signing)
+        env:
+          KID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISS: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -euo pipefail
           xcodebuild \
             -project app/ios/App/App.xcodeproj \
             -scheme App \
@@ -71,31 +57,41 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/HormuzStrait.xcarchive" \
             -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$KID" \
+            -authenticationKeyIssuerID "$ISS" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             archive
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'PLIST'
+
+      - name: Export and upload to TestFlight
+        env:
+          KID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISS: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store-connect</string>
-            <key>signingStyle</key>
-            <string>automatic</string>
-            <key>destination</key>
-            <string>upload</string>
-          </dict>
-          </plist>
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>destination</key><string>upload</string>
+          </dict></plist>
           PLIST
-          # Export and upload to TestFlight. Equivalent fastlane call:
-          # upload_to_testflight
-          xcodebuild \
-            -exportArchive \
+          # destination=upload sends the build straight to App Store Connect / TestFlight.
+          xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/HormuzStrait.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -allowProvisioningUpdates
-          xcrun altool --upload-app \
-            -f "$RUNNER_TEMP/export/"*.ipa \
-            -t ios \
-            --apiKey "$APP_STORE_CONNECT_KEY_ID" \
-            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID"
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$KID" \
+            -authenticationKeyIssuerID "$ISS"
+
+      - name: Remove API key
+        if: always()
+        run: rm -rf "$HOME/private_keys"
