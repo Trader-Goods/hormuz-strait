@@ -44,10 +44,13 @@ jobs:
           chmod 600 "$KEY"
           echo "KEY_PATH=$KEY" >> "$GITHUB_ENV"
 
-      - name: Archive (automatic signing)
+      - name: Prepare App Store certificate and profile
         env:
           KID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISS: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: python3 app/ios/scripts/prepare_appstore_signing.py
+
+      - name: Archive (manual App Store signing)
         run: |
           set -euo pipefail
           xcodebuild \
@@ -56,13 +59,12 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/HormuzStrait.xcarchive" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$KEY_PATH" \
-            -authenticationKeyID "$KID" \
-            -authenticationKeyIssuerID "$ISS" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_STYLE=Manual \
             "CODE_SIGN_IDENTITY=Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+            PROVISIONING_PROFILE="$PROFILE_UUID" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
             PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             archive
@@ -78,8 +80,14 @@ jobs:
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
             <key>method</key><string>app-store-connect</string>
-            <key>signingStyle</key><string>automatic</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
             <key>teamID</key><string>${TEAM_ID}</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${BUNDLE_ID}</key>
+              <string>${PROFILE_NAME}</string>
+            </dict>
             <key>destination</key><string>upload</string>
           </dict></plist>
           PLIST
@@ -88,11 +96,14 @@ jobs:
             -archivePath "$RUNNER_TEMP/HormuzStrait.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -allowProvisioningUpdates \
             -authenticationKeyPath "$KEY_PATH" \
             -authenticationKeyID "$KID" \
             -authenticationKeyIssuerID "$ISS"
 
-      - name: Remove API key
+      - name: Remove signing material
         if: always()
-        run: rm -rf "$HOME/private_keys"
+        run: |
+          rm -rf "$HOME/private_keys" "$RUNNER_TEMP/signing"
+          if [ -n "${KEYCHAIN_PATH:-}" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
