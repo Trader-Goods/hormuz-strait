@@ -1,0 +1,16 @@
+{
+  "name": "hormuz-strait",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hormuz Strait iOS wrapper",
+  "scripts": {
+    "assets": "python3 scripts/generate_branding.py",
+    "sync": "cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
+    "@capacitor/status-bar": "^8.0.4"
+  }
+}
