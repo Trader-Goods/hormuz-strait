@@ -1,0 +1,26 @@
+name: App Store screenshots
+
+on:
+  workflow_dispatch:
+
+jobs:
+  screenshots:
+    name: Capture 6.9-inch screenshots
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: livetostill-app
+
+      - name: Capture simulator screenshots
+        run: python3 scripts/screenshots/capture.py
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: appstore-screenshots-6.9
+          path: |
+            artifacts/screenshots/
+            artifacts/logs/
+          if-no-files-found: ignore
