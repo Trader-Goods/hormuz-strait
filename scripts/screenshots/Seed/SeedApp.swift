@@ -16,6 +16,7 @@ private enum Seed {
     static func run() async {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let report = documents.appendingPathComponent("seed-result.txt")
+        try? "started".write(to: documents.appendingPathComponent("seed-started.txt"), atomically: true, encoding: .utf8)
         do {
             let status = await authorize()
             guard status == .authorized else {

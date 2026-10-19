@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -128,7 +129,44 @@ def sign_and_install(udid, app):
 
 def grant_photos(udid, bundle_id):
     for service in ("photos", "photos-add"):
-        subprocess.run(["xcrun", "simctl", "privacy", udid, "grant", service, bundle_id], check=False)
+        result = subprocess.run(
+            ["xcrun", "simctl", "privacy", udid, "grant", service, bundle_id],
+            text=True,
+            capture_output=True,
+        )
+        log(f"privacy grant {service} {bundle_id} -> {result.returncode} {result.stdout} {result.stderr}")
+
+
+def wait_for_seed(udid):
+    launched = subprocess.run(
+        ["xcrun", "simctl", "launch", udid, "com.tradergoods.screenshotseed"],
+        text=True,
+        capture_output=True,
+    )
+    log(launched.stdout)
+    log(launched.stderr)
+    if launched.returncode != 0:
+        raise SystemExit(f"seed app failed to launch ({launched.returncode})")
+    container = subprocess.check_output(
+        ["xcrun", "simctl", "get_app_container", udid, "com.tradergoods.screenshotseed", "data"],
+        text=True,
+    ).strip()
+    report = Path(container) / "Documents" / "seed-result.txt"
+    started = Path(container) / "Documents" / "seed-started.txt"
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        if report.exists():
+            text = report.read_text()
+            log(text)
+            subprocess.run(["xcrun", "simctl", "terminate", udid, "com.tradergoods.screenshotseed"], check=False)
+            if not text.startswith("ok"):
+                raise SystemExit(text)
+            return
+        time.sleep(1)
+    log(f"seed started file exists={started.exists()}")
+    if started.exists():
+        log(started.read_text())
+    raise SystemExit("sample photo seed did not finish")
 
 
 def main():
@@ -178,17 +216,7 @@ def main():
         raise SystemExit(f"missing built app seed={seed_app.exists()} live={live_app.exists()}")
     sign_and_install(udid, seed_app)
     grant_photos(udid, "com.tradergoods.screenshotseed")
-    seed = subprocess.run(
-        ["xcrun", "simctl", "launch", "--console", udid, "com.tradergoods.screenshotseed"],
-        text=True,
-        capture_output=True,
-        timeout=180,
-    )
-    log(seed.stdout)
-    log(seed.stderr)
-    (LOG_DIR / "seed-launch.log").write_text(seed.stdout + "\n" + seed.stderr)
-    if seed.returncode != 0:
-        raise SystemExit(f"sample photo seed failed ({seed.returncode})")
+    wait_for_seed(udid)
 
     sign_and_install(udid, live_app)
     grant_photos(udid, "com.tradergoods.livetostill")
