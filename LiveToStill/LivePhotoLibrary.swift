@@ -110,6 +110,8 @@ final class LibraryModel: ObservableObject {
     @Published var totalBytes: Int64 = 0
     @Published var scanning = false
     @Published var scannedCount = 0
+    @Published var scanChecked = 0
+    @Published var scanTotal = 0
     @Published var progress: WorkProgress?
     @Published var result: ConversionResult?
     @Published var keepVideoClips: Bool {
@@ -178,10 +180,18 @@ final class LibraryModel: ObservableObject {
         let generation = scanGeneration
         scanning = true
         scannedCount = 0
+        scanChecked = 0
+        scanTotal = 0
         clearLibrary()
         let found: [LiveItem] = await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                let items = Self.collect { _ in }
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                let items = Self.collect { checked, foundCount, total in
+                    DispatchQueue.main.async {
+                        self?.scanChecked = checked
+                        self?.scanTotal = total
+                        self?.scannedCount = foundCount
+                    }
+                }
                 continuation.resume(returning: items)
             }
         }
@@ -515,61 +525,56 @@ final class LibraryModel: ObservableObject {
         }
     }
 
-    nonisolated static func collect(onCount: @escaping (Int) -> Void) -> [LiveItem] {
+    /// Images only. A Live Photo with the Live switch turned off keeps its paired video
+    /// resource but loses the photoLive subtype, so the subtype flag is not used.
+    nonisolated static func collect(onProgress: @escaping (_ checked: Int, _ found: Int, _ total: Int) -> Void) -> [LiveItem] {
         let options = PHFetchOptions()
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-        options.predicate = NSPredicate(
-            format: "(mediaSubtype & %d) != 0",
-            Int(PHAssetMediaSubtype.photoLive.rawValue)
-        )
         let result = PHAsset.fetchAssets(with: .image, options: options)
+        let total = result.count
         var all: [LiveItem] = []
-        all.reserveCapacity(result.count)
-        var sinceReport = 0
-        result.enumerateObjects { asset, _, _ in
+        let batchSize = 200
+        var index = 0
+        while index < total {
+            let end = min(index + batchSize, total)
             autoreleasepool {
-                all.append(LiveItem(
-                    id: asset.localIdentifier,
-                    videoByteCount: videoByteCount(of: asset),
-                    stillByteCount: stillByteCount(of: asset)
-                ))
+                let indexes = IndexSet(integersIn: index..<end)
+                result.enumerateObjects(at: indexes, options: []) { asset, _, _ in
+                    autoreleasepool {
+                        let resources = PHAssetResource.assetResources(for: asset)
+                        let paired = resources.filter { isReclaimablePairedVideo($0.type) }
+                        guard !paired.isEmpty else { return }
+                        let videoBytes = paired.reduce(Int64(0)) { sum, resource in
+                            sum + max(0, LiveResourceFileSize(resource))
+                        }
+                        all.append(LiveItem(
+                            id: asset.localIdentifier,
+                            videoByteCount: videoBytes,
+                            stillByteCount: displayedStillByteCount(in: resources, adjusted: asset.hasAdjustments)
+                        ))
+                    }
+                }
             }
-            sinceReport += 1
-            if sinceReport == 40 {
-                sinceReport = 0
-                onCount(all.count)
-            }
+            index = end
+            onProgress(index, all.count, total)
         }
-        onCount(all.count)
+        if total == 0 {
+            onProgress(0, 0, 0)
+        }
         return all
     }
 
-    nonisolated static func stillByteCount(of asset: PHAsset) -> Int64 {
-        let resources = PHAssetResource.assetResources(for: asset)
-        let resource: PHAssetResource?
-        if asset.hasAdjustments {
-            resource = resources.first { $0.type == .fullSizePhoto }
-        } else {
-            resource = resources.first { $0.type == .photo }
-        }
-        guard let resource else { return 0 }
+    nonisolated private static func displayedStillByteCount(in resources: [PHAssetResource], adjusted: Bool) -> Int64 {
+        let type: PHAssetResourceType = adjusted ? .fullSizePhoto : .photo
+        guard let resource = resources.first(where: { $0.type == type }) else { return 0 }
         return max(0, LiveResourceFileSize(resource))
     }
 
-    nonisolated static func videoByteCount(of asset: PHAsset) -> Int64 {
-        var total: Int64 = 0
-        for resource in PHAssetResource.assetResources(for: asset) where isPairedVideo(resource.type) {
-            let size = LiveResourceFileSize(resource)
-            if size > 0 {
-                total += size
-            }
-        }
-        return total
-    }
-
-    nonisolated static func isPairedVideo(_ type: PHAssetResourceType) -> Bool {
+    /// Motion that converting can drop: the current paired video, its full-size render,
+    /// or the original paired video kept behind an edit such as Live turned off.
+    nonisolated static func isReclaimablePairedVideo(_ type: PHAssetResourceType) -> Bool {
         switch type {
-        case .pairedVideo, .fullSizePairedVideo, .video, .fullSizeVideo:
+        case .pairedVideo, .fullSizePairedVideo, .adjustmentBasePairedVideo:
             return true
         default:
             return false
@@ -699,9 +704,10 @@ final class LibraryModel: ObservableObject {
         }
     }
 
-    /// The still file to copy. Edited Live Photos use the full-size rendered photo so the
-    /// adjustment stays. Unedited ones use the original photo resource. Either way the
-    /// bytes are copied as stored; nothing is decoded or resized.
+    /// The still file to copy. Edited photos, including Live turned off, use the full-size
+    /// rendered photo so the picture matches what Photos is showing. Unedited ones use the
+    /// original photo resource. Either way the bytes are copied as stored; nothing is
+    /// decoded or resized, and the paired video is not added to the new still.
     nonisolated private static func stillResource(for asset: PHAsset) throws -> PHAssetResource {
         let resources = PHAssetResource.assetResources(for: asset)
         if asset.hasAdjustments {
@@ -716,17 +722,21 @@ final class LibraryModel: ObservableObject {
         return original
     }
 
-    /// The motion file to copy when clips are kept. Edited Live Photos prefer the full-size
-    /// rendered paired video; otherwise the original paired video. Bytes are copied as stored.
+    /// The motion file to copy when clips are kept. Prefer the current rendered paired
+    /// video, then the current paired video, then the original kept behind an edit
+    /// (Live turned off). Bytes are copied as stored.
     nonisolated private static func clipResource(for asset: PHAsset) throws -> PHAssetResource {
         let resources = PHAssetResource.assetResources(for: asset)
         if asset.hasAdjustments, let rendered = resources.first(where: { $0.type == .fullSizePairedVideo }) {
             return rendered
         }
-        guard let original = resources.first(where: { $0.type == .pairedVideo }) else {
-            throw ConvertError.unavailable
+        if let current = resources.first(where: { $0.type == .pairedVideo }) {
+            return current
         }
-        return original
+        if let stored = resources.first(where: { $0.type == .adjustmentBasePairedVideo }) {
+            return stored
+        }
+        throw ConvertError.unavailable
     }
 
     nonisolated private static func assertCopiedSize(of resource: PHAssetResource, at url: URL) throws {

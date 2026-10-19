@@ -114,7 +114,7 @@ private struct LibraryScreen: View {
                 if model.scanning && model.items.isEmpty {
                     HStack(spacing: 10) {
                         ProgressView()
-                        Text(model.scannedCount == 0 ? "Scanning your photo library…" : "Found \(model.scannedCount.formatted()) Live Photos…")
+                        Text(scanningText)
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -212,6 +212,13 @@ private struct LibraryScreen: View {
         .background(pine.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
+    private var scanningText: String {
+        if model.scanTotal == 0 {
+            return "Scanning your photo library…"
+        }
+        return "Checked \(model.scanChecked.formatted()) of \(model.scanTotal.formatted()) photos · \(model.scannedCount.formatted()) with motion"
+    }
+
     private var summaryLine: String {
         guard model.totalBytes > 0 else {
             return "Paired video size appears as the library is measured"
@@ -223,7 +230,7 @@ private struct LibraryScreen: View {
     }
 
     private var explanation: String {
-        let shared = "Converting copies the full-size photo file unchanged, including edits, format, and embedded details, plus its date, location, favorite flag, and regular albums. Photos that are not stored on this iPhone are skipped, because nothing is downloaded. Stills are saved in batches that fit the free space, then that batch’s originals are deleted. They stay in Recently Deleted and still use space until you empty that album in Photos."
+        let shared = "Converting copies the full-size photo file unchanged, including edits, format, and embedded details, plus its date, location, favorite flag, and regular albums. Photos with Live turned off are included when the motion file is still stored. Photos that are not stored on this iPhone are skipped, because nothing is downloaded. Stills are saved in batches that fit the free space, then that batch’s originals are deleted. They stay in Recently Deleted and still use space until you empty that album in Photos."
         if model.keepVideoClips {
             return "\(shared) Each batch also saves the paired video in \(LibraryModel.clipsAlbumTitle)."
         }
