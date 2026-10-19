@@ -5,19 +5,10 @@ final class ScreenshotUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        app.launchArguments = []
+        app.launchArguments = ["-copyDebug"]
     }
 
     func testCapture() throws {
-        let seed = XCUIApplication(bundleIdentifier: "com.tradergoods.screenshotseed")
-        seed.launch()
-        allowPhotos(in: seed)
-        let seeded = seed.staticTexts["Seeded"].waitForExistence(timeout: 90)
-        if !seeded {
-            dumpUI("sample videos were not added", application: seed)
-            XCTFail("sample videos were not added")
-        }
-
         app.launch()
         dismissSystemAlerts()
         allowPhotos(in: app)

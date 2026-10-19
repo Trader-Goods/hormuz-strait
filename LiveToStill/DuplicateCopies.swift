@@ -140,7 +140,14 @@ final class CopiesModel: ObservableObject {
         let built = CopyScanner.groups(from: candidates, prints: prints, cancelled: flag)
         publish(built, resetTouched: true)
         scanning = false
-        status = built.isEmpty ? "No edited copies found." : selectionStatus(for: built)
+        if built.isEmpty {
+            status = "No edited copies found."
+            if ProcessInfo.processInfo.arguments.contains("-copyDebug") {
+                status += " " + CopyScanner.debugSummary(records: records, candidates: candidates, prints: prints)
+            }
+        } else {
+            status = selectionStatus(for: built)
+        }
     }
 
     private func selectionStatus(for built: [CopyGroup]) -> String {
@@ -863,6 +870,32 @@ fileprivate enum CopyScanner {
             }
         }
         return FramePrint(cells: prints)
+    }
+
+    static func debugSummary(records: [CopyVideo], candidates: [CopyVideo], prints: [String: CachedPrint]) -> String {
+        let described = records.prefix(8).map { video in
+            let frames = prints[video.id]?.print.frames.count ?? 0
+            let day = video.creationDate == nil ? "nodate" : "dated"
+            return "\(video.filename) \(String(format: "%.2f", video.duration))s \(video.pixelWidth)x\(video.pixelHeight) \(day) loc=\(video.hasLocation) cam=\(video.cameraLikeName) frames=\(frames)"
+        }
+        var match = ""
+        if candidates.count >= 2,
+           let left = prints[candidates[0].id]?.print,
+           let right = prints[candidates[1].id]?.print {
+            let score = debugScore(left, right)
+            match = " score=\(String(format: "%.2f", score))"
+        }
+        return "n=\(records.count) c=\(candidates.count)\(match) " + described.joined(separator: " | ")
+    }
+
+    private static func debugScore(_ lhs: VideoPrint, _ rhs: VideoPrint) -> Double {
+        let count = min(lhs.frames.count, rhs.frames.count)
+        guard count > 0 else { return 0 }
+        var total = 0.0
+        for index in 0..<count {
+            total += frameScore(lhs.frames[index], rhs.frames[index])
+        }
+        return total / Double(count)
     }
 
     private static func cameraLike(_ name: String) -> Bool {
