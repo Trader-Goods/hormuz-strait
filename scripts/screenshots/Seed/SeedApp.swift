@@ -1,0 +1,111 @@
+import CoreLocation
+import Photos
+import SwiftUI
+
+@main
+struct SeedApp: App {
+    var body: some Scene {
+        WindowGroup {
+            Text("Adding sample photos")
+                .task { await Seed.run() }
+        }
+    }
+}
+
+private enum Seed {
+    static func run() async {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let report = documents.appendingPathComponent("seed-result.txt")
+        do {
+            let status = await authorize()
+            guard status == .authorized else {
+                try "authorization \(status.rawValue)".write(to: report, atomically: true, encoding: .utf8)
+                exit(1)
+            }
+            let media = Bundle.main.url(forResource: "SampleMedia", withExtension: nil)
+                ?? Bundle.main.resourceURL?.appendingPathComponent("SampleMedia")
+            guard let media, FileManager.default.fileExists(atPath: media.path) else {
+                try "missing SampleMedia bundle folder".write(to: report, atomically: true, encoding: .utf8)
+                exit(1)
+            }
+            let (originalDate, editedDate) = sampleDates()
+            try await PHPhotoLibrary.shared().performChanges {
+                for index in 1...6 {
+                    let photo = media.appendingPathComponent("live-\(index).jpg")
+                    let video = media.appendingPathComponent("live-\(index).mov")
+                    let request = PHAssetCreationRequest.forAsset()
+                    let still = PHAssetResourceCreationOptions()
+                    still.originalFilename = String(format: "IMG_%04d.JPG", 1200 + index)
+                    request.addResource(with: .photo, fileURL: photo, options: still)
+                    let motion = PHAssetResourceCreationOptions()
+                    motion.originalFilename = String(format: "IMG_%04d.MOV", 1200 + index)
+                    request.addResource(with: .pairedVideo, fileURL: video, options: motion)
+                    request.creationDate = editedDate.addingTimeInterval(TimeInterval(-index * 90))
+                    request.location = CLLocation(latitude: 37.8199, longitude: -122.4783)
+                }
+                addVideo(named: "original.mov", filename: "IMG_2041.MOV", date: originalDate, location: CLLocation(latitude: 37.8199, longitude: -122.4783), in: media)
+                addVideo(named: "edited.mov", filename: "SNAP_edit.MOV", date: editedDate, location: nil, in: media)
+            }
+            let summary = inventory()
+            print(summary)
+            try summary.write(to: report, atomically: true, encoding: .utf8)
+            exit(0)
+        } catch {
+            let message = "failed \(error)"
+            print(message)
+            try? message.write(to: report, atomically: true, encoding: .utf8)
+            exit(1)
+        }
+    }
+
+    static func addVideo(named file: String, filename: String, date: Date, location: CLLocation?, in media: URL) {
+        let request = PHAssetCreationRequest.forAsset()
+        let options = PHAssetResourceCreationOptions()
+        options.originalFilename = filename
+        request.addResource(with: .video, fileURL: media.appendingPathComponent(file), options: options)
+        request.creationDate = date
+        request.location = location
+    }
+
+    static func sampleDates() -> (Date, Date) {
+        let calendar = Calendar.current
+        let now = Date()
+        let hour = calendar.component(.hour, from: now)
+        let minute = calendar.component(.minute, from: now)
+        let edited: Date
+        if hour == 0 && minute < 20 {
+            edited = calendar.date(byAdding: .hour, value: -3, to: now) ?? now
+        } else {
+            edited = now.addingTimeInterval(-180)
+        }
+        return (edited.addingTimeInterval(-300), edited)
+    }
+
+    static func authorize() async -> PHAuthorizationStatus {
+        let current = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        if current != .notDetermined { return current }
+        return await withCheckedContinuation { continuation in
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
+                continuation.resume(returning: status)
+            }
+        }
+    }
+
+    static func inventory() -> String {
+        var lines = ["ok"]
+        let images = PHAsset.fetchAssets(with: .image, options: nil)
+        lines.append("images \(images.count)")
+        images.enumerateObjects { asset, _, _ in
+            let resources = PHAssetResource.assetResources(for: asset)
+            let names = resources.map { "\($0.type.rawValue):\($0.originalFilename)" }.joined(separator: ",")
+            lines.append("image \(asset.mediaSubtypes.rawValue) \(names)")
+        }
+        let videos = PHAsset.fetchAssets(with: .video, options: nil)
+        videos.enumerateObjects { asset, _, _ in
+            let resources = PHAssetResource.assetResources(for: asset)
+            let name = resources.first?.originalFilename ?? "?"
+            lines.append("video \(name) loc=\(asset.location != nil) \(asset.pixelWidth)x\(asset.pixelHeight) dur=\(String(format: "%.2f", asset.duration))")
+        }
+        return lines.joined(separator: "\n")
+    }
+}
