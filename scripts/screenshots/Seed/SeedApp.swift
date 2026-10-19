@@ -26,7 +26,7 @@ private struct SeedRoot: View {
                     try? await Task.sleep(nanoseconds: 200_000_000)
                 }
                 let text = (try? String(contentsOf: report, encoding: .utf8)) ?? ""
-                message = text.hasPrefix("ok") ? "Seeded" : "Seed failed"
+                message = text.hasPrefix("ok") ? "Seeded" : String(text.prefix(180))
             }
     }
 }
@@ -51,23 +51,29 @@ private enum Seed {
                 exit(1)
             }
             let (originalDate, editedDate) = sampleDates()
+            var livePairs: [(Data, Data, Int)] = []
+            for index in 1...6 {
+                let photo = try Data(contentsOf: media.appendingPathComponent("live-\(index).jpg"))
+                let video = try Data(contentsOf: media.appendingPathComponent("live-\(index).mov"))
+                livePairs.append((photo, video, index))
+            }
+            let originalVideo = try Data(contentsOf: media.appendingPathComponent("original.mov"))
+            let editedVideo = try Data(contentsOf: media.appendingPathComponent("edited.mov"))
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 PHPhotoLibrary.shared().performChanges {
-                for index in 1...6 {
-                    let photo = media.appendingPathComponent("live-\(index).jpg")
-                    let video = media.appendingPathComponent("live-\(index).mov")
+                for (photo, video, index) in livePairs {
                     let request = PHAssetCreationRequest.forAsset()
                     let still = PHAssetResourceCreationOptions()
                     still.originalFilename = String(format: "IMG_%04d.JPG", 1200 + index)
-                    request.addResource(with: .photo, fileURL: photo, options: still)
+                    request.addResource(with: .photo, data: photo, options: still)
                     let motion = PHAssetResourceCreationOptions()
                     motion.originalFilename = String(format: "IMG_%04d.MOV", 1200 + index)
-                    request.addResource(with: .pairedVideo, fileURL: video, options: motion)
+                    request.addResource(with: .pairedVideo, data: video, options: motion)
                     request.creationDate = editedDate.addingTimeInterval(TimeInterval(-index * 90))
                     request.location = CLLocation(latitude: 37.8199, longitude: -122.4783)
                 }
-                addVideo(named: "original.mov", filename: "IMG_2041.MOV", date: originalDate, location: CLLocation(latitude: 37.8199, longitude: -122.4783), in: media)
-                addVideo(named: "edited.mov", filename: "SNAP_edit.MOV", date: editedDate, location: nil, in: media)
+                addVideo(originalVideo, filename: "IMG_2041.MOV", date: originalDate, location: CLLocation(latitude: 37.8199, longitude: -122.4783))
+                addVideo(editedVideo, filename: "SNAP_edit.MOV", date: editedDate, location: nil)
                 }
             completionHandler: { success, error in
                 if let error {
@@ -91,11 +97,11 @@ private enum Seed {
         }
     }
 
-    static func addVideo(named file: String, filename: String, date: Date, location: CLLocation?, in media: URL) {
+    static func addVideo(_ data: Data, filename: String, date: Date, location: CLLocation?) {
         let request = PHAssetCreationRequest.forAsset()
         let options = PHAssetResourceCreationOptions()
         options.originalFilename = filename
-        request.addResource(with: .video, fileURL: media.appendingPathComponent(file), options: options)
+        request.addResource(with: .video, data: data, options: options)
         request.creationDate = date
         request.location = location
     }

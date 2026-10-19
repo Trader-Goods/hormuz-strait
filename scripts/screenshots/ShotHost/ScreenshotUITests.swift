@@ -12,7 +12,11 @@ final class ScreenshotUITests: XCTestCase {
         let seed = XCUIApplication(bundleIdentifier: "com.tradergoods.screenshotseed")
         seed.launch()
         allowPhotos(in: seed)
-        XCTAssertTrue(seed.staticTexts["Seeded"].waitForExistence(timeout: 90), "sample photos were not added")
+        let seeded = seed.staticTexts["Seeded"].waitForExistence(timeout: 90)
+        if !seeded {
+            dumpUI("sample photos were not added", application: seed)
+            XCTFail("sample photos were not added")
+        }
 
         app.launch()
         dismissSystemAlerts()
@@ -179,12 +183,13 @@ final class ScreenshotUITests: XCTestCase {
         }
     }
 
-    private func dumpUI(_ message: String) {
+    private func dumpUI(_ message: String, application: XCUIApplication? = nil) {
+        let target = application ?? app
         print("DUMP \(message)")
-        for element in app.staticTexts.allElementsBoundByIndex where element.exists {
+        for element in target.staticTexts.allElementsBoundByIndex where element.exists {
             print("TEXT \(element.label)")
         }
-        for element in app.buttons.allElementsBoundByIndex where element.exists {
+        for element in target.buttons.allElementsBoundByIndex where element.exists {
             print("BUTTON \(element.label) hittable=\(element.isHittable)")
         }
     }

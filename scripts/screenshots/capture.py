@@ -246,6 +246,14 @@ def main():
         )
     finally:
         collect_simulator_screenshots(udid)
+        report = subprocess.run(
+            ["xcrun", "simctl", "get_app_container", udid, "com.tradergoods.screenshotseed", "data"],
+            text=True,
+            capture_output=True,
+        )
+        if report.returncode == 0:
+            result = Path(report.stdout.strip()) / "Documents" / "seed-result.txt"
+            log(f"seed result exists={result.exists()} {result.read_text() if result.exists() else ''}")
         for name in EXPECTED:
             source = SHOT_DIR / name
             if source.exists():
