@@ -35,6 +35,12 @@ jobs:
           ISS: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: python3 scripts/prepare_appstore_signing.py
 
+      - name: Select Xcode 26
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode_26.3.app
+          xcodebuild -version
+
       - name: Archive (manual App Store signing)
         run: |
           set -euo pipefail

@@ -7,9 +7,9 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Live to Still saves a still copy of each Live Photo you convert. Photos stay on this iPhone.</string>
+	<string>Live to Still saves still copies and, if you turn on Keep video clips, standalone videos in an album named Live Photo Clips. Photos stay on this iPhone.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Live to Still needs your photo library to find Live Photos, save a still copy of each one you choose, and delete the original after you confirm. Photos stay on this iPhone.</string>
+	<string>Live to Still needs your photo library to find Live Photos and similar videos, save still copies and optional video clips, and delete the items you confirm. Everything stays on this iPhone.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiresFullScreen</key>
