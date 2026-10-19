@@ -164,8 +164,9 @@ def wait_for_seed(udid):
             return
         time.sleep(1)
     log(f"seed started file exists={started.exists()}")
-    if started.exists():
-        log(started.read_text())
+    for name in ("seed-started.txt", "seed-status.txt", "seed-result.txt"):
+        path = Path(container) / "Documents" / name
+        log(f"{name} exists={path.exists()} {path.read_text() if path.exists() else ''}")
     raise SystemExit("sample photo seed did not finish")
 
 

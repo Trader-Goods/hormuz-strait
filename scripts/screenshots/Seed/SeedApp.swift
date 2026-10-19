@@ -7,7 +7,11 @@ struct SeedApp: App {
     var body: some Scene {
         WindowGroup {
             Text("Adding sample photos")
-                .task { await Seed.run() }
+                .task {
+                    Task.detached(priority: .userInitiated) {
+                        await Seed.run()
+                    }
+                }
         }
     }
 }
@@ -17,8 +21,10 @@ private enum Seed {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let report = documents.appendingPathComponent("seed-result.txt")
         try? "started".write(to: documents.appendingPathComponent("seed-started.txt"), atomically: true, encoding: .utf8)
+        let initial = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        try? "status \(initial.rawValue)".write(to: documents.appendingPathComponent("seed-status.txt"), atomically: true, encoding: .utf8)
         do {
-            let status = await authorize()
+            let status = await authorize(initial)
             guard status == .authorized else {
                 try "authorization \(status.rawValue)".write(to: report, atomically: true, encoding: .utf8)
                 exit(1)
@@ -30,7 +36,8 @@ private enum Seed {
                 exit(1)
             }
             let (originalDate, editedDate) = sampleDates()
-            try await PHPhotoLibrary.shared().performChanges {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                PHPhotoLibrary.shared().performChanges {
                 for index in 1...6 {
                     let photo = media.appendingPathComponent("live-\(index).jpg")
                     let video = media.appendingPathComponent("live-\(index).mov")
@@ -46,6 +53,16 @@ private enum Seed {
                 }
                 addVideo(named: "original.mov", filename: "IMG_2041.MOV", date: originalDate, location: CLLocation(latitude: 37.8199, longitude: -122.4783), in: media)
                 addVideo(named: "edited.mov", filename: "SNAP_edit.MOV", date: editedDate, location: nil, in: media)
+                }
+            completionHandler: { success, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if success {
+                    continuation.resume()
+                } else {
+                    continuation.resume(throwing: CocoaError(.userCancelled))
+                }
+            }
             }
             let summary = inventory()
             print(summary)
@@ -82,8 +99,7 @@ private enum Seed {
         return (edited.addingTimeInterval(-300), edited)
     }
 
-    static func authorize() async -> PHAuthorizationStatus {
-        let current = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+    static func authorize(_ current: PHAuthorizationStatus) async -> PHAuthorizationStatus {
         if current != .notDetermined { return current }
         return await withCheckedContinuation { continuation in
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
