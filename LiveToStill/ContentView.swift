@@ -144,7 +144,7 @@ private struct LibraryScreen: View {
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .refreshable {
-            if model.progress == nil {
+            if model.progress == nil && model.storagePause == nil {
                 await model.scan()
             }
         }
@@ -180,6 +180,15 @@ private struct LibraryScreen: View {
                 dismiss: { model.result = nil }
             )
         }
+        .fullScreenCover(item: $model.storagePause) { pause in
+            OutOfSpaceScreen(
+                converted: pause.converted,
+                remaining: pause.remaining,
+                onContinue: { Task { await model.resumeAfterStoragePause() } },
+                onStop: model.stopConversionForNow
+            )
+            .interactiveDismissDisabled()
+        }
     }
 
     private var summary: some View {
@@ -214,18 +223,18 @@ private struct LibraryScreen: View {
     }
 
     private var explanation: String {
-        let shared = "Converting copies the full-size photo file unchanged, including edits, format, and embedded details, plus its date, location, favorite flag, and regular albums. Photos that are not stored on this iPhone are skipped, because nothing is downloaded. iOS then asks once to delete the Live Photos. They stay in Recently Deleted, and that space stays used until you empty Recently Deleted in Photos."
+        let shared = "Converting copies the full-size photo file unchanged, including edits, format, and embedded details, plus its date, location, favorite flag, and regular albums. Photos that are not stored on this iPhone are skipped, because nothing is downloaded. Stills are saved in batches that fit the free space, then that batch’s originals are deleted. They stay in Recently Deleted and still use space until you empty that album in Photos."
         if model.keepVideoClips {
-            return "\(shared) The paired video is also saved in \(LibraryModel.clipsAlbumTitle)."
+            return "\(shared) Each batch also saves the paired video in \(LibraryModel.clipsAlbumTitle)."
         }
         return "\(shared) Only the Live Photo video is removed."
     }
 
     private var confirmMessage: String {
         if model.keepVideoClips {
-            return "Still copies and video clips are saved first. iOS then shows one deletion confirmation. Originals stay in Recently Deleted until you empty that album in Photos. About \(ByteText.string(model.selectedBytes)) remains in \(LibraryModel.clipsAlbumTitle)."
+            return "Stills and clips are saved in batches that fit the free space. iOS asks once per batch. Originals stay in Recently Deleted and still use space until you empty that album in Photos. About \(ByteText.string(model.selectedBytes)) remains in \(LibraryModel.clipsAlbumTitle)."
         }
-        return "Still copies are saved first. iOS then shows one deletion confirmation. Originals stay in Recently Deleted until you empty that album in Photos. About \(ByteText.string(model.selectedBytes)) of paired video can be freed then."
+        return "Stills are saved in batches that fit the free space. iOS asks once per batch. Originals stay in Recently Deleted and still use space until you empty that album in Photos. About \(ByteText.string(model.selectedBytes)) of paired video can be freed then."
     }
 
     private func resultTitle(_ result: ConversionResult) -> String {
@@ -236,11 +245,12 @@ private struct LibraryScreen: View {
     }
 
     private func resultMessage(_ result: ConversionResult) -> String {
+        let waiting = result.remaining > 0 ? " \(result.remaining.formatted()) are left for when there is room." : ""
         if result.deleted && result.keptClips {
-            return "Saved \(result.converted.formatted()) still photos and \(result.converted.formatted()) video clips in \(LibraryModel.clipsAlbumTitle). The original Live Photos are in Recently Deleted. About \(ByteText.string(result.retainedClipBytes)) of clip video stays in use until you delete those clips. The originals stay used until you empty Recently Deleted in Photos."
+            return "Saved \(result.converted.formatted()) still photos and \(result.converted.formatted()) video clips in \(LibraryModel.clipsAlbumTitle). The original Live Photos are in Recently Deleted. About \(ByteText.string(result.retainedClipBytes)) of clip video stays in use until you delete those clips. The originals stay used until you empty Recently Deleted in Photos.\(waiting)"
         }
         if result.deleted {
-            return "Saved \(result.converted.formatted()) still photos. The Live Photos are in Recently Deleted. About \(ByteText.string(result.freedBytes)) of paired video stays used until you empty Recently Deleted in Photos."
+            return "Saved \(result.converted.formatted()) still photos. The Live Photos are in Recently Deleted. About \(ByteText.string(result.freedBytes)) of paired video stays used until you empty Recently Deleted in Photos.\(waiting)"
         }
         if result.converted == 0 {
             return "No still photos were saved, so nothing was deleted."
@@ -575,6 +585,86 @@ struct PostDeleteSummary: View {
     }
 }
 
+private struct OutOfSpaceScreen: View {
+    let converted: Int
+    let remaining: Int
+    let onContinue: () -> Void
+    let onStop: () -> Void
+    @State private var openFailed = false
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Your iPhone is out of space. Empty Recently Deleted to keep going")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    Text("Deleted photos stay in Recently Deleted and still use space until that album is emptied. Live to Still cannot empty it.")
+                        .foregroundStyle(.secondary)
+                    if converted > 0 {
+                        Text("\(converted.formatted()) converted. \(remaining.formatted()) left. Continue picks up where this left off.")
+                            .font(.subheadline)
+                    } else {
+                        Text("There is not enough room for the next still. Nothing was deleted.")
+                            .font(.subheadline)
+                    }
+                    VStack(alignment: .leading, spacing: 12) {
+                        guideStep("1", "Open Photos, then tap Albums.")
+                        guideStep("2", "Open Recently Deleted.")
+                        guideStep("3", "Tap Select, then Delete All.")
+                    }
+                    if openFailed {
+                        Text("Photos did not open. Switch to the Photos app and follow the steps above.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    Button("Open Photos") {
+                        PhotosApp.open { openFailed = true }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity)
+                    Button("Continue", action: onContinue)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .frame(maxWidth: .infinity)
+                    Button("Not now", action: onStop)
+                        .buttonStyle(.bordered)
+                        .frame(maxWidth: .infinity)
+                }
+                .padding(24)
+            }
+            .navigationTitle("Out of space")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private func guideStep(_ number: String, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(number)
+                .font(.headline)
+                .frame(width: 28, height: 28)
+                .background(pine.opacity(0.15), in: Circle())
+            Text(text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+enum PhotosApp {
+    static func open(_ onFailure: @escaping () -> Void) {
+        guard let url = URL(string: "photos-redirect://") else {
+            onFailure()
+            return
+        }
+        UIApplication.shared.open(url, options: [:]) { opened in
+            if !opened {
+                DispatchQueue.main.async(execute: onFailure)
+            }
+        }
+    }
+}
+
 struct EmptyRecentlyDeletedButton: View {
     @State private var showingGuide = false
 
@@ -614,10 +704,12 @@ private struct RecentlyDeletedGuide: View {
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
-                    Button("Open Photos", action: openPhotos)
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .frame(maxWidth: .infinity)
+                    Button("Open Photos") {
+                        PhotosApp.open { openFailed = true }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity)
                 }
                 .padding(24)
             }
@@ -643,14 +735,4 @@ private struct RecentlyDeletedGuide: View {
         }
     }
 
-    private func openPhotos() {
-        guard let url = URL(string: "photos-redirect://") else { return }
-        UIApplication.shared.open(url, options: [:]) { opened in
-            if !opened {
-                DispatchQueue.main.async {
-                    openFailed = true
-                }
-            }
-        }
-    }
 }

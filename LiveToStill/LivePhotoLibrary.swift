@@ -7,6 +7,7 @@ import UIKit
 struct LiveItem: Identifiable, Equatable, Sendable {
     let id: String
     let videoByteCount: Int64
+    var stillByteCount: Int64 = 0
 }
 
 struct WorkProgress: Equatable {
@@ -24,6 +25,7 @@ struct ConversionResult: Identifiable, Equatable {
     let skipped: Int
     let deleted: Bool
     let keptClips: Bool
+    var remaining: Int = 0
 }
 
 struct ClipDeletionResult: Identifiable, Equatable {
@@ -46,6 +48,59 @@ enum ConvertError: Error {
     case unavailable
 }
 
+struct StoragePause: Identifiable, Equatable {
+    let id = UUID()
+    let converted: Int
+    let remaining: Int
+}
+
+enum StorageCapacity {
+    /// Leave room so iOS is not filled to the last byte. A single photo can still
+    /// proceed when it fits in the raw free space.
+    static let safetyMargin: Int64 = 150 * 1024 * 1024
+
+    static func available() -> Int64 {
+        let url = URL(fileURLWithPath: NSHomeDirectory())
+        let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        return values?.volumeAvailableCapacityForImportantUsage ?? 0
+    }
+
+    /// Bytes that must be free before saving this Live Photo. The new file is written
+    /// to a temporary file and then copied into the library, so both exist briefly.
+    /// Deleted originals stay in Recently Deleted and do not give this space back.
+    static func bytesNeeded(for item: LiveItem, keepingClips: Bool) -> Int64 {
+        let still = item.stillByteCount > 0 ? item.stillByteCount : 8 * 1024 * 1024
+        if keepingClips {
+            let video = item.videoByteCount > 0 ? item.videoByteCount : still
+            return (still + video) * 2
+        }
+        return still * 2
+    }
+
+    static func fits(_ item: LiveItem, keepingClips: Bool) -> Bool {
+        available() >= bytesNeeded(for: item, keepingClips: keepingClips)
+    }
+
+    static func chunk(from items: [LiveItem], available: Int64, keepingClips: Bool) -> [LiveItem] {
+        let usable = available > safetyMargin ? available - safetyMargin : 0
+        var chosen: [LiveItem] = []
+        var used: Int64 = 0
+        for item in items {
+            let need = bytesNeeded(for: item, keepingClips: keepingClips)
+            if used + need <= usable {
+                chosen.append(item)
+                used += need
+            } else {
+                break
+            }
+        }
+        if chosen.isEmpty, let first = items.first, bytesNeeded(for: first, keepingClips: keepingClips) <= available {
+            return [first]
+        }
+        return chosen
+    }
+}
+
 @MainActor
 final class LibraryModel: ObservableObject {
     @Published var access: LibraryAccess = .requesting
@@ -66,11 +121,21 @@ final class LibraryModel: ObservableObject {
     @Published var clipsTotalBytes: Int64 = 0
     @Published var clipsLoading = false
     @Published var clipDeletion: ClipDeletionResult?
+    @Published var storagePause: StoragePause?
 
     nonisolated static let clipsAlbumTitle = "Live Photo Clips"
     private static let keepClipsKey = "keepVideoClips"
+    private static let savedKey = "convertedLivePhotoIDs"
     private var didPrepare = false
     private var scanGeneration = 0
+    private var conversionActive = false
+    private var pendingItems: [LiveItem] = []
+    private var savedIDs: Set<String> = []
+    private var sessionConverted = 0
+    private var sessionSkipped = 0
+    private var sessionFreed: Int64 = 0
+    private var sessionRetained: Int64 = 0
+    private var sessionDeletedAny = false
 
     var allClipsSelected: Bool {
         !clips.isEmpty && clipsSelected.count == clips.count
@@ -78,6 +143,7 @@ final class LibraryModel: ObservableObject {
 
     init() {
         keepVideoClips = UserDefaults.standard.bool(forKey: Self.keepClipsKey)
+        savedIDs = Set(UserDefaults.standard.stringArray(forKey: Self.savedKey) ?? [])
     }
 
     var allSelected: Bool {
@@ -95,7 +161,7 @@ final class LibraryModel: ObservableObject {
     }
 
     func onForeground() async {
-        guard didPrepare, progress == nil, result == nil else { return }
+        guard didPrepare, progress == nil, result == nil, storagePause == nil, !conversionActive else { return }
         let mapped = Self.map(PHPhotoLibrary.authorizationStatus(for: .readWrite))
         guard mapped != access else { return }
         access = mapped
@@ -107,7 +173,7 @@ final class LibraryModel: ObservableObject {
     }
 
     func scan() async {
-        guard progress == nil else { return }
+        guard progress == nil, storagePause == nil, !conversionActive else { return }
         scanGeneration += 1
         let generation = scanGeneration
         scanning = true
@@ -147,80 +213,202 @@ final class LibraryModel: ObservableObject {
     }
 
     func convertSelected() async {
-        let chosen = items.filter { selected.contains($0.id) }
-        guard !chosen.isEmpty, progress == nil else { return }
+        await runConversion(resume: false)
+    }
+
+    func resumeAfterStoragePause() async {
+        storagePause = nil
+        await runConversion(resume: true)
+    }
+
+    func stopConversionForNow() {
+        storagePause = nil
+        progress = nil
+        conversionActive = false
+        guard sessionConverted > 0 || sessionSkipped > 0 else { return }
+        result = sessionResult(keptClips: keepVideoClips)
+    }
+
+    private func runConversion(resume: Bool) async {
+        guard progress == nil, storagePause == nil, !conversionActive else { return }
         let keeping = keepVideoClips
+        if !resume {
+            pendingItems = items.filter { selected.contains($0.id) }
+            sessionConverted = 0
+            sessionSkipped = 0
+            sessionFreed = 0
+            sessionRetained = 0
+            sessionDeletedAny = false
+        }
+        guard !pendingItems.isEmpty else { return }
+        conversionActive = true
+        let jobTotal = pendingItems.count + sessionConverted + sessionSkipped
+
+        if !StorageCapacity.fits(pendingItems[0], keepingClips: keeping) {
+            pauseForStorage()
+            return
+        }
+
         let album: PHAssetCollection?
         if keeping {
             do {
                 album = try await Self.clipsAlbum()
             } catch {
-                result = ConversionResult(
-                    freedBytes: 0,
-                    retainedClipBytes: 0,
-                    converted: 0,
-                    skipped: chosen.count,
-                    deleted: false,
-                    keptClips: true
-                )
+                conversionActive = false
+                if !StorageCapacity.fits(pendingItems[0], keepingClips: true) {
+                    pauseForStorage()
+                } else {
+                    result = ConversionResult(
+                        freedBytes: 0,
+                        retainedClipBytes: 0,
+                        converted: sessionConverted,
+                        skipped: pendingItems.count,
+                        deleted: false,
+                        keptClips: true,
+                        remaining: pendingItems.count
+                    )
+                }
                 return
             }
         } else {
             album = nil
         }
-        var convertedIDs: [String] = []
-        var freed: Int64 = 0
-        var retained: Int64 = 0
-        var skipped = 0
-        for (index, item) in chosen.enumerated() {
-            progress = WorkProgress(
-                title: keeping ? "Saving stills and clips" : "Saving still photos",
-                detail: keeping
-                    ? "Each video is copied into \(Self.clipsAlbumTitle). Originals stay until that finishes."
-                    : "The motion video is not kept. Originals stay until every still copy is saved.",
-                completed: index,
-                total: chosen.count
-            )
-            do {
-                try await Self.convert(localIdentifier: item.id, keepClip: keeping, clipsAlbum: album)
-                convertedIDs.append(item.id)
-                if keeping {
-                    retained += item.videoByteCount
-                } else {
-                    freed += item.videoByteCount
+
+        while !pendingItems.isEmpty {
+            var awaitingDelete: [LiveItem] = []
+            while let next = pendingItems.first, savedIDs.contains(next.id) {
+                awaitingDelete.append(pendingItems.removeFirst())
+            }
+            if !awaitingDelete.isEmpty {
+                let deleted = await deleteChunk(awaitingDelete, keeping: keeping, total: jobTotal)
+                if !deleted {
+                    pendingItems.insert(contentsOf: awaitingDelete, at: 0)
+                    conversionActive = false
+                    progress = nil
+                    result = sessionResult(keptClips: keeping)
+                    return
                 }
-            } catch {
-                skipped += 1
+                continue
+            }
+
+            let available = StorageCapacity.available()
+            let chunk = StorageCapacity.chunk(from: pendingItems, available: available, keepingClips: keeping)
+            if chunk.isEmpty {
+                pauseForStorage()
+                return
+            }
+
+            var savedThisChunk: [LiveItem] = []
+            var ranOutOfSpace = false
+            for item in chunk {
+                let needed = StorageCapacity.bytesNeeded(for: item, keepingClips: keeping)
+                if StorageCapacity.available() < needed {
+                    ranOutOfSpace = true
+                    break
+                }
+                let done = sessionConverted + sessionSkipped + savedThisChunk.count
+                progress = WorkProgress(
+                    title: keeping ? "Saving stills and clips" : "Saving still photos",
+                    detail: keeping
+                        ? "Saving a batch that fits the free space, including the clip. Originals in this batch are deleted only after both files are saved."
+                        : "Saving a batch that fits the free space. Each original is deleted only after its still is saved.",
+                    completed: done,
+                    total: jobTotal
+                )
+                do {
+                    try await Self.convert(localIdentifier: item.id, keepClip: keeping, clipsAlbum: album)
+                    savedIDs.insert(item.id)
+                    persistSavedIDs()
+                    savedThisChunk.append(item)
+                    pendingItems.removeAll { $0.id == item.id }
+                } catch is ConvertError {
+                    sessionSkipped += 1
+                    pendingItems.removeAll { $0.id == item.id }
+                } catch {
+                    ranOutOfSpace = true
+                    break
+                }
+            }
+
+            if !savedThisChunk.isEmpty {
+                let deleted = await deleteChunk(savedThisChunk, keeping: keeping, total: jobTotal)
+                if !deleted {
+                    pendingItems.insert(contentsOf: savedThisChunk, at: 0)
+                    conversionActive = false
+                    progress = nil
+                    result = sessionResult(keptClips: keeping)
+                    return
+                }
+            }
+
+            if ranOutOfSpace {
+                pauseForStorage()
+                return
             }
         }
-        var deleted = false
-        if !convertedIDs.isEmpty {
-            progress = WorkProgress(
-                title: "Waiting for deletion confirmation",
-                detail: "iOS asks once. Confirm to move the Live Photos to Recently Deleted. Their space stays used until that album is emptied in Photos.",
-                completed: chosen.count,
-                total: chosen.count
-            )
-            do {
-                try await Self.delete(localIdentifiers: convertedIDs)
-                deleted = true
-            } catch {
-                deleted = false
-                freed = 0
-            }
-        } else {
-            freed = 0
-            retained = 0
-        }
+
+        conversionActive = false
         progress = nil
-        result = ConversionResult(
-            freedBytes: deleted && !keeping ? freed : 0,
-            retainedClipBytes: deleted && keeping ? retained : 0,
-            converted: convertedIDs.count,
-            skipped: skipped,
-            deleted: deleted,
-            keptClips: keeping
+        result = sessionResult(keptClips: keeping)
+    }
+
+    private func deleteChunk(_ chunk: [LiveItem], keeping: Bool, total: Int) async -> Bool {
+        progress = WorkProgress(
+            title: "Waiting for deletion confirmation",
+            detail: "iOS asks once for this batch. These Live Photos move to Recently Deleted and still use space until that album is emptied in Photos.",
+            completed: sessionConverted,
+            total: max(total, 1)
         )
+        do {
+            try await Self.delete(localIdentifiers: chunk.map(\.id))
+        } catch {
+            return false
+        }
+        for item in chunk {
+            savedIDs.remove(item.id)
+            sessionConverted += 1
+            if keeping {
+                sessionRetained += item.videoByteCount
+            } else {
+                sessionFreed += item.videoByteCount
+            }
+        }
+        sessionDeletedAny = true
+        persistSavedIDs()
+        markRemoved(chunk)
+        return true
+    }
+
+    private func pauseForStorage() {
+        progress = nil
+        conversionActive = false
+        storagePause = StoragePause(converted: sessionConverted, remaining: pendingItems.count)
+    }
+
+    private func sessionResult(keptClips: Bool) -> ConversionResult {
+        ConversionResult(
+            freedBytes: sessionDeletedAny && !keptClips ? sessionFreed : 0,
+            retainedClipBytes: sessionDeletedAny && keptClips ? sessionRetained : 0,
+            converted: sessionConverted,
+            skipped: sessionSkipped,
+            deleted: sessionDeletedAny,
+            keptClips: keptClips,
+            remaining: pendingItems.count
+        )
+    }
+
+    private func persistSavedIDs() {
+        UserDefaults.standard.set(Array(savedIDs), forKey: Self.savedKey)
+    }
+
+    private func markRemoved(_ done: [LiveItem]) {
+        let ids = Set(done.map(\.id))
+        items.removeAll { ids.contains($0.id) }
+        selected.subtract(ids)
+        totalBytes = items.reduce(0) { $0 + $1.videoByteCount }
+        selectedBytes = items.reduce(0) { partial, item in
+            partial + (selected.contains(item.id) ? item.videoByteCount : 0)
+        }
     }
 
     func loadClips() async {
@@ -340,7 +528,11 @@ final class LibraryModel: ObservableObject {
         var sinceReport = 0
         result.enumerateObjects { asset, _, _ in
             autoreleasepool {
-                all.append(LiveItem(id: asset.localIdentifier, videoByteCount: videoByteCount(of: asset)))
+                all.append(LiveItem(
+                    id: asset.localIdentifier,
+                    videoByteCount: videoByteCount(of: asset),
+                    stillByteCount: stillByteCount(of: asset)
+                ))
             }
             sinceReport += 1
             if sinceReport == 40 {
@@ -350,6 +542,18 @@ final class LibraryModel: ObservableObject {
         }
         onCount(all.count)
         return all
+    }
+
+    nonisolated static func stillByteCount(of asset: PHAsset) -> Int64 {
+        let resources = PHAssetResource.assetResources(for: asset)
+        let resource: PHAssetResource?
+        if asset.hasAdjustments {
+            resource = resources.first { $0.type == .fullSizePhoto }
+        } else {
+            resource = resources.first { $0.type == .photo }
+        }
+        guard let resource else { return 0 }
+        return max(0, LiveResourceFileSize(resource))
     }
 
     nonisolated static func videoByteCount(of asset: PHAsset) -> Int64 {

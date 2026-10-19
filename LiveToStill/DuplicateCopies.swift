@@ -20,7 +20,29 @@ struct CopyVideo: Identifiable, Equatable, Sendable {
 enum CopyRole: Equatable {
     case original
     case edited
-    case unsure
+}
+
+enum CopyKeepChoice: String, CaseIterable, Identifiable {
+    case edited
+    case original
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .edited: return "Keep Edited"
+        case .original: return "Keep Original"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .edited:
+            return "Keeps the copy with text, stickers or filters (like from Snapchat) and deletes the plain original."
+        case .original:
+            return "Keeps the plain video straight from your camera and deletes the edited copy."
+        }
+    }
 }
 
 struct CopyMember: Identifiable, Equatable {
@@ -32,7 +54,7 @@ struct CopyMember: Identifiable, Equatable {
 struct CopyGroup: Identifiable, Equatable {
     let id: String
     let members: [CopyMember]
-    /// True when one clip is a clear unedited original. Unsure groups preselect nothing.
+    /// True when one clip is a clear unedited original. Groups that are not confident are not shown.
     let confident: Bool
 }
 
@@ -46,9 +68,27 @@ final class CopiesModel: ObservableObject {
     @Published var candidateCount = 0
     @Published var status = "Scan your videos for an original and an edited copy."
     @Published var deletion: ClipDeletionResult?
+    @Published var keepChoice: CopyKeepChoice {
+        didSet {
+            UserDefaults.standard.set(keepChoice.rawValue, forKey: Self.keepChoiceKey)
+            guard keepChoice != oldValue else { return }
+            touched = []
+            publish(groups, resetTouched: true)
+            if !groups.isEmpty {
+                status = selectionStatus(for: groups)
+            }
+        }
+    }
 
+    static let matchInfoSeenKey = "copyMatchInfoSeen"
+    private static let keepChoiceKey = "copyKeepChoice"
     private var touched: Set<String> = []
     private var cancelFlag = CancelFlag()
+
+    init() {
+        let stored = UserDefaults.standard.string(forKey: Self.keepChoiceKey) ?? ""
+        keepChoice = CopyKeepChoice(rawValue: stored) ?? .edited
+    }
 
     func scan() async {
         cancelFlag.cancel()
@@ -79,7 +119,8 @@ final class CopiesModel: ObservableObject {
         var finished = 0
         for record in candidates {
             if flag.isCancelled { break }
-            if prints[record.id] == nil || prints[record.id]?.stamp != record.modificationStamp {
+            let cached = prints[record.id]
+            if cached == nil || cached?.stamp != record.modificationStamp || (cached?.print.frames.count ?? 0) < 3 {
                 if let made = await CopyScanner.fingerprint(id: record.id, cancelled: flag) {
                     prints[record.id] = CachedPrint(stamp: record.modificationStamp, print: made)
                 }
@@ -99,9 +140,14 @@ final class CopiesModel: ObservableObject {
         let built = CopyScanner.groups(from: candidates, prints: prints, cancelled: flag)
         publish(built, resetTouched: true)
         scanning = false
-        status = built.isEmpty
-            ? "No edited copies found."
-            : "\(built.count.formatted()) groups. The likely original is selected. Unsure groups select nothing."
+        status = built.isEmpty ? "No edited copies found." : selectionStatus(for: built)
+    }
+
+    private func selectionStatus(for built: [CopyGroup]) -> String {
+        let which = keepChoice == .edited
+            ? "The plain original is selected for deletion"
+            : "The edited copies are selected for deletion"
+        return "\(built.count.formatted()) groups. \(which)."
     }
 
     func cancel() {
@@ -145,7 +191,8 @@ final class CopiesModel: ObservableObject {
             if group.members.contains(where: { touched.contains($0.id) }) {
                 chosen = group.members.map(\.id).filter { selected.contains($0) }
             } else if group.confident {
-                chosen = group.members.filter { $0.role == .original }.map(\.id)
+                let roleToDelete: CopyRole = keepChoice == .edited ? .original : .edited
+                chosen = group.members.filter { $0.role == roleToDelete }.map(\.id)
             } else {
                 chosen = []
             }
@@ -214,12 +261,14 @@ struct CopiesScreen: View {
     @StateObject private var thumbnails = ThumbnailKeeper()
     @State private var playing: String?
     @State private var confirming = false
+    @State private var showMatchInfo = false
     @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Finds a video and an edited copy of it, even when stickers, captions, or a different size cover part of the frame. Nothing leaves this iPhone. Nothing is selected in a group marked Unsure.")
+                keepChoiceCard
+                Text("Finds a video and an edited copy from the same day, even when stickers, captions, or a different size cover part of the frame. Nothing leaves this iPhone. Only a clear match is listed. A green KEEP stays. A red DELETE is removed.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 if model.scanning {
@@ -243,6 +292,7 @@ struct CopiesScreen: View {
                     ForEach(model.groups) { group in
                         CopyGroupCard(
                             group: group,
+                            keepChoice: model.keepChoice,
                             selected: model.selected,
                             store: thumbnails.store,
                             side: 160 * displayScale,
@@ -293,12 +343,51 @@ struct CopiesScreen: View {
         .sheet(item: playingBinding) { token in
             AssetPlayerSheet(id: token.id)
         }
+        .sheet(isPresented: $showMatchInfo, onDismiss: {
+            UserDefaults.standard.set(true, forKey: CopiesModel.matchInfoSeenKey)
+        }) {
+            MatchInfoSheet()
+        }
+        .onAppear {
+            if !UserDefaults.standard.bool(forKey: CopiesModel.matchInfoSeenKey) {
+                showMatchInfo = true
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Rescan") { Task { await model.scan() } }
                     .disabled(model.scanning)
             }
         }
+    }
+
+    private var keepChoiceCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Which copy to keep")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    showMatchInfo = true
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.title3)
+                }
+                .accessibilityLabel("How copies are matched")
+            }
+            Picker("Which copy to keep", selection: $model.keepChoice) {
+                ForEach(CopyKeepChoice.allCases) { choice in
+                    Text(choice.title).tag(choice)
+                }
+            }
+            .pickerStyle(.segmented)
+            Text(model.keepChoice.detail)
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var playingBinding: Binding<PlayerToken?> {
@@ -313,8 +402,33 @@ struct PlayerToken: Identifiable {
     let id: String
 }
 
+private struct MatchInfoSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Only videos shot on the same calendar day are compared. Live to Still checks several frames from each clip on this iPhone, and most of those frames have to look the same. Stickers, captions, and filters can cover part of the picture. If the match is not clear, or it is not clear which video is the plain original, that pair is left out.")
+                        .foregroundStyle(.secondary)
+                }
+                .padding(24)
+            }
+            .navigationTitle("How copies are matched")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+}
+
 private struct CopyGroupCard: View {
     let group: CopyGroup
+    let keepChoice: CopyKeepChoice
     let selected: Set<String>
     let store: ThumbnailStore
     let side: CGFloat
@@ -323,11 +437,9 @@ private struct CopyGroupCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(group.confident ? "Original selected" : "Unsure")
+            Text(heading)
                 .font(.headline)
-            Text(group.confident
-                 ? "The likely unedited original is selected for deletion. The edited copy is not. Change either one before you delete."
-                 : "These look related, but it is not clear which is the original. Nothing is selected.")
+            Text(detail)
                 .font(.caption)
                 .foregroundStyle(.secondary)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -347,6 +459,17 @@ private struct CopyGroupCard: View {
         }
         .padding(12)
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var heading: String {
+        keepChoice == .edited ? "Original selected" : "Edited selected"
+    }
+
+    private var detail: String {
+        if keepChoice == .edited {
+            return "The plain original is marked DELETE. The edited copy is marked KEEP. Change either tag before you delete."
+        }
+        return "The edited copies are marked DELETE. The plain original is marked KEEP. Change any tag before you delete."
     }
 }
 
@@ -380,17 +503,24 @@ private struct CopyMemberCard: View {
                     .padding(6)
                 }
             Text(roleTitle)
-                .font(.caption)
-                .fontWeight(.semibold)
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
+            Button(action: toggle) {
+                Text(marked ? "DELETE" : "KEEP")
+                    .font(.caption.weight(.bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .foregroundStyle(.white)
+                    .background(marked ? Color.red : Color.green, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(marked ? "Delete this video" : "Keep this video")
             Text(durationText)
             Text(member.video.byteCount > 0 ? ByteText.string(member.video.byteCount) : "Size unknown")
             Text(member.video.pixelWidth > 0 ? "\(member.video.pixelWidth)×\(member.video.pixelHeight)" : "Resolution unknown")
             Text(dateText)
-            Button(action: toggle) {
-                Label(marked ? "Selected" : "Select", systemImage: marked ? "checkmark.circle.fill" : "circle")
-            }
-            .buttonStyle(.bordered)
-            .tint(marked ? pine : nil)
         }
         .font(.caption2)
         .foregroundStyle(.secondary)
@@ -409,7 +539,6 @@ private struct CopyMemberCard: View {
         switch member.role {
         case .original: return "Original"
         case .edited: return "Edited"
-        case .unsure: return "Unsure"
         }
     }
 
@@ -475,16 +604,25 @@ fileprivate enum CopyScanner {
 
     static func durationCandidates(in records: [CopyVideo]) -> [CopyVideo] {
         guard records.count > 1 else { return [] }
+        var byDay: [Date: [CopyVideo]] = [:]
+        for record in records {
+            guard let day = localDayStart(record.creationDate) else { continue }
+            byDay[day, default: []].append(record)
+        }
         var ids = Set<String>()
-        var end = 0
-        for start in records.indices {
-            if end < start { end = start }
-            while end + 1 < records.count && durationsMatch(records[start].duration, records[end + 1].duration) {
-                end += 1
-            }
-            if end > start {
-                for index in start...end {
-                    ids.insert(records[index].id)
+        for dayRecords in byDay.values {
+            guard dayRecords.count > 1 else { continue }
+            let sorted = dayRecords.sorted { $0.duration < $1.duration }
+            var end = 0
+            for start in sorted.indices {
+                if end < start { end = start }
+                while end + 1 < sorted.count && durationsMatch(sorted[start].duration, sorted[end + 1].duration) {
+                    end += 1
+                }
+                if end > start {
+                    for index in start...end {
+                        ids.insert(sorted[index].id)
+                    }
                 }
             }
         }
@@ -521,7 +659,7 @@ fileprivate enum CopyScanner {
                 frames.append(print)
             }
         }
-        guard frames.count >= 2 else { return nil }
+        guard frames.count >= 3 else { return nil }
         return VideoPrint(frames: frames)
     }
 
@@ -556,8 +694,8 @@ fileprivate enum CopyScanner {
             buckets[find(record.id), default: []].append(record)
         }
         return buckets.values
-            .filter { $0.count > 1 }
-            .map(label)
+            .filter { $0.count > 1 && pairsMatch($0, prints: prints) }
+            .compactMap { label($0) }
             .sorted { ($0.members.first?.video.creationDate ?? .distantPast) > ($1.members.first?.video.creationDate ?? .distantPast) }
     }
 
@@ -571,16 +709,13 @@ fileprivate enum CopyScanner {
         try? data.write(to: url, options: .atomic)
     }
 
-    private static func label(_ videos: [CopyVideo]) -> CopyGroup {
+    private static func label(_ videos: [CopyVideo]) -> CopyGroup? {
         let maxPixels = videos.map { $0.pixelWidth * $0.pixelHeight }.max() ?? 0
         let earliest = videos.compactMap(\.creationDate).min()
         let ranked = videos
             .map { ($0, originality($0, earliest: earliest, maxPixels: maxPixels)) }
             .sorted { $0.1 > $1.1 }
-        let id = videos.map(\.id).sorted().joined(separator: "|")
-        guard let best = ranked.first, ranked.count > 1 else {
-            return CopyGroup(id: id, members: videos.map { CopyMember(video: $0, role: .unsure) }, confident: false)
-        }
+        guard let best = ranked.first, ranked.count > 1 else { return nil }
         let second = ranked[1]
         let gap = best.1 - second.1
         let bestPixels = best.0.pixelWidth * best.0.pixelHeight
@@ -592,12 +727,11 @@ fileprivate enum CopyScanner {
         }()
         let cleanerMetadata = (best.0.hasLocation && !second.0.hasLocation) || (best.0.cameraLikeName && !second.0.cameraLikeName)
         let confident = gap >= 1.5 && (clearerPicture || earlier || cleanerMetadata)
-        if !confident {
-            return CopyGroup(id: id, members: videos.map { CopyMember(video: $0, role: .unsure) }, confident: false)
-        }
+        guard confident else { return nil }
         let members = videos.map { video in
             CopyMember(video: video, role: video.id == best.0.id ? .original : .edited)
         }
+        let id = videos.map(\.id).sorted().joined(separator: "|")
         return CopyGroup(id: id, members: members, confident: true)
     }
 
@@ -619,19 +753,44 @@ fileprivate enum CopyScanner {
         abs(lhs - rhs) <= max(0.5, 0.03 * max(lhs, rhs))
     }
 
+    private static func sameLocalDay(_ lhs: Date?, _ rhs: Date?) -> Bool {
+        guard let lhs, let rhs else { return false }
+        return Calendar.current.isDate(lhs, inSameDayAs: rhs)
+    }
+
+    private static func localDayStart(_ date: Date?) -> Date? {
+        guard let date else { return nil }
+        return Calendar.current.startOfDay(for: date)
+    }
+
+    /// Every pair in the group has to match on its own. A chain of loose matches is not shown.
+    private static func pairsMatch(_ videos: [CopyVideo], prints: [String: CachedPrint]) -> Bool {
+        guard videos.count > 1 else { return false }
+        for leftIndex in videos.indices {
+            for rightIndex in (leftIndex + 1)..<videos.count {
+                let leftVideo = videos[leftIndex]
+                let rightVideo = videos[rightIndex]
+                guard let left = prints[leftVideo.id]?.print,
+                      let right = prints[rightVideo.id]?.print,
+                      videosMatch(left, right, leftVideo.creationDate, rightVideo.creationDate) else {
+                    return false
+                }
+            }
+        }
+        return true
+    }
+
     private static func videosMatch(_ lhs: VideoPrint, _ rhs: VideoPrint, _ leftDate: Date?, _ rightDate: Date?) -> Bool {
+        guard sameLocalDay(leftDate, rightDate) else { return false }
         let count = min(lhs.frames.count, rhs.frames.count)
-        guard count >= 2 else { return false }
-        var total = 0.0
+        guard count >= 3 else { return false }
+        var strong = 0
         for index in 0..<count {
-            total += frameScore(lhs.frames[index], rhs.frames[index])
+            if frameScore(lhs.frames[index], rhs.frames[index]) >= 0.80 {
+                strong += 1
+            }
         }
-        let score = total / Double(count)
-        if score >= 0.72 { return true }
-        if score >= 0.58, let leftDate, let rightDate, abs(leftDate.timeIntervalSince(rightDate)) <= 3 * 86400 {
-            return true
-        }
-        return false
+        return strong >= 3 && strong * 4 >= count * 3
     }
 
     private static func frameScore(_ lhs: FramePrint, _ rhs: FramePrint) -> Double {
@@ -644,7 +803,7 @@ fileprivate enum CopyScanner {
             compared += 1
             let distance = (left.hash ^ right.hash).nonzeroBitCount
             let meanGap = abs(Int(left.mean) - Int(right.mean))
-            if distance <= 16 || meanGap <= 18 { similar += 1 }
+            if distance <= 16 && meanGap <= 36 { similar += 1 }
         }
         guard compared >= 6 else { return 0 }
         return Double(similar) / Double(compared)
