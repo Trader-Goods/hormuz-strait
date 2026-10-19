@@ -875,7 +875,7 @@ fileprivate enum CopyScanner {
     static func debugSummary(records: [CopyVideo], candidates: [CopyVideo], prints: [String: CachedPrint]) -> String {
         let described = records.prefix(8).map { video in
             let frames = prints[video.id]?.print.frames.count ?? 0
-            let day = video.creationDate == nil ? "nodate" : "dated"
+            let day = video.creationDate.map { String(format: "%.0f", $0.timeIntervalSince1970) } ?? "nil"
             return "\(video.filename) \(String(format: "%.2f", video.duration))s \(video.pixelWidth)x\(video.pixelHeight) \(day) loc=\(video.hasLocation) cam=\(video.cameraLikeName) frames=\(frames)"
         }
         var match = ""

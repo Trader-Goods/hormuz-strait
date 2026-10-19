@@ -35,14 +35,21 @@ struct GenerateMedia {
         }
         let original = render(style: 0, edited: false, width: videoSize.width, height: videoSize.height)
         let edited = render(style: 0, edited: true, width: videoSize.width, height: videoSize.height)
-        let now = Date()
+        var components = DateComponents()
+        components.calendar = Calendar(identifier: .gregorian)
+        components.timeZone = TimeZone(secondsFromGMT: 0)
+        components.year = 2026
+        components.month = 10
+        components.day = 19
+        components.hour = 15
+        let created = components.date ?? Date()
         try writeVideo(
             to: output.appendingPathComponent("IMG_2041.MOV"),
             width: videoSize.width,
             height: videoSize.height,
             frames: 24,
             codec: .h264,
-            created: now.addingTimeInterval(-300),
+            created: created,
             locationISO6709: "+37.8199-122.4783/"
         ) { _ in original }
         try writeVideo(
@@ -51,7 +58,7 @@ struct GenerateMedia {
             height: videoSize.height,
             frames: 24,
             codec: .h264,
-            created: now.addingTimeInterval(-120)
+            created: created.addingTimeInterval(-180)
         ) { _ in edited }
         fputs("wrote sample media to \(output.path)\n", stdout)
     }
