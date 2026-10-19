@@ -1,9 +1,6 @@
 name: Live to Still
 
 on:
-  push:
-    branches:
-      - livetostill-app
   workflow_dispatch:
 
 jobs:
