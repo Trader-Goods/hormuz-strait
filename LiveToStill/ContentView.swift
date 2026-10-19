@@ -45,7 +45,7 @@ struct ContentView: View {
                             .navigationBarTitleDisplayMode(.large)
                             .toolbar {
                                 ToolbarItem(placement: .navigationBarTrailing) {
-                                    Button(model.allSelected ? "Clear" : "Select All") {
+                                    Button(model.allSelected ? "Cancel" : "Select All") {
                                         model.toggleAll()
                                     }
                                     .disabled(model.items.isEmpty || model.scanning || model.progress != nil)
@@ -62,7 +62,7 @@ struct ContentView: View {
                             .navigationBarTitleDisplayMode(.large)
                             .toolbar {
                                 ToolbarItem(placement: .navigationBarTrailing) {
-                                    Button(model.allClipsSelected ? "Clear" : "Select All") {
+                                    Button(model.allClipsSelected ? "Cancel" : "Select All") {
                                         model.toggleAllClips()
                                     }
                                     .disabled(model.clips.isEmpty || model.clipsLoading || model.progress != nil)
@@ -266,7 +266,7 @@ private struct LibraryScreen: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             HStack(spacing: 10) {
-                Button(model.allSelected ? "Clear" : "Select All") {
+                Button(model.allSelected ? "Cancel" : "Select All") {
                     model.toggleAll()
                 }
                 .buttonStyle(.bordered)
@@ -360,7 +360,7 @@ private struct ClipsScreen: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 10) {
-                    Button(model.allClipsSelected ? "Clear" : "Select All") {
+                    Button(model.allClipsSelected ? "Cancel" : "Select All") {
                         model.toggleAllClips()
                     }
                     .buttonStyle(.bordered)
