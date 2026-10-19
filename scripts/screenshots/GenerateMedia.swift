@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreGraphics
+import CoreMedia
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
@@ -18,14 +19,16 @@ struct GenerateMedia {
         let photoSize = (width: 1080, height: 1440)
         let videoSize = (width: 1080, height: 1920)
         for index in 1...6 {
+            let assetID = UUID().uuidString
             let image = render(style: index, edited: false, width: photoSize.width, height: photoSize.height)
-            try writeJPEG(image, to: output.appendingPathComponent("live-\(index).jpg"))
+            try writeJPEG(image, to: output.appendingPathComponent("live-\(index).jpg"), assetIdentifier: assetID)
             try writeVideo(
                 to: output.appendingPathComponent("live-\(index).mov"),
                 width: photoSize.width,
                 height: photoSize.height,
                 frames: 8,
-                codec: .h264
+                codec: .h264,
+                assetIdentifier: assetID
             ) { frame in
                 render(style: index, edited: false, width: photoSize.width, height: photoSize.height, shift: CGFloat(frame) * 6)
             }
@@ -124,11 +127,15 @@ private func fill(_ color: RGB) -> CGColor {
     CGColor(red: color.r, green: color.g, blue: color.b, alpha: 1)
 }
 
-private func writeJPEG(_ image: CGImage, to url: URL) throws {
+private func writeJPEG(_ image: CGImage, to url: URL, assetIdentifier: String? = nil) throws {
     guard let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else {
         throw CocoaError(.fileWriteUnknown)
     }
-    CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.9] as CFDictionary)
+    var properties: [CFString: Any] = [kCGImageDestinationLossyCompressionQuality: 0.9]
+    if let assetIdentifier {
+        properties[kCGImagePropertyMakerAppleDictionary] = ["17": assetIdentifier]
+    }
+    CGImageDestinationAddImage(destination, image, properties as CFDictionary)
     guard CGImageDestinationFinalize(destination) else { throw CocoaError(.fileWriteUnknown) }
 }
 
@@ -136,7 +143,7 @@ private enum MovieCodec {
     case h264
 }
 
-private func writeVideo(to url: URL, width: Int, height: Int, frames: Int, codec: MovieCodec, frame: (Int) -> CGImage) throws {
+private func writeVideo(to url: URL, width: Int, height: Int, frames: Int, codec: MovieCodec, assetIdentifier: String? = nil, frame: (Int) -> CGImage) throws {
     if FileManager.default.fileExists(atPath: url.path) {
         try FileManager.default.removeItem(at: url)
     }
@@ -162,8 +169,17 @@ private func writeVideo(to url: URL, width: Int, height: Int, frames: Int, codec
     ])
     guard writer.canAdd(input) else { throw CocoaError(.fileWriteUnknown) }
     writer.add(input)
+    let stillAdaptor = try stillImageAdaptor(for: assetIdentifier)
+    if let stillAdaptor {
+        guard writer.canAdd(stillAdaptor.assetWriterInput) else { throw CocoaError(.fileWriteUnknown) }
+        writer.add(stillAdaptor.assetWriterInput)
+        writer.metadata = [contentIdentifier(assetIdentifier ?? "")]
+    }
     guard writer.startWriting() else { throw writer.error ?? CocoaError(.fileWriteUnknown) }
     writer.startSession(atSourceTime: .zero)
+    if let stillAdaptor {
+        try appendStillImageTime(to: stillAdaptor, writer: writer)
+    }
     for index in 0..<frames {
         let deadline = Date().addingTimeInterval(15)
         while !input.isReadyForMoreMediaData {
@@ -177,10 +193,56 @@ private func writeVideo(to url: URL, width: Int, height: Int, frames: Int, codec
         }
     }
     input.markAsFinished()
+    stillAdaptor?.assetWriterInput.markAsFinished()
     let finished = DispatchSemaphore(value: 0)
     writer.finishWriting { finished.signal() }
     finished.wait()
     guard writer.status == .completed else { throw writer.error ?? CocoaError(.fileWriteUnknown) }
+}
+
+private func contentIdentifier(_ assetIdentifier: String) -> AVMetadataItem {
+    let item = AVMutableMetadataItem()
+    item.identifier = .quickTimeMetadataContentIdentifier
+    item.value = assetIdentifier as NSString
+    item.dataType = kCMMetadataBaseDataType_UTF8 as String
+    return item
+}
+
+private func stillImageAdaptor(for assetIdentifier: String?) throws -> AVAssetWriterInputMetadataAdaptor? {
+    guard assetIdentifier != nil else { return nil }
+    let specification: NSDictionary = [
+        kCMMetadataFormatDescriptionMetadataSpecificationKey_Identifier: "mdta/com.apple.quicktime.still-image-time",
+        kCMMetadataFormatDescriptionMetadataSpecificationKey_DataType: kCMMetadataBaseDataType_SInt8,
+    ]
+    var description: CMFormatDescription?
+    let status = CMMetadataFormatDescriptionCreateWithMetadataSpecifications(
+        allocator: kCFAllocatorDefault,
+        metadataType: kCMMetadataFormatType_Boxed,
+        metadataSpecifications: [specification] as CFArray,
+        formatDescriptionOut: &description
+    )
+    guard status == noErr, let description else { throw CocoaError(.fileWriteUnknown) }
+    let input = AVAssetWriterInput(mediaType: .metadata, outputSettings: nil, sourceFormatHint: description)
+    input.expectsMediaDataInRealTime = false
+    return AVAssetWriterInputMetadataAdaptor(assetWriterInput: input)
+}
+
+private func appendStillImageTime(to adaptor: AVAssetWriterInputMetadataAdaptor, writer: AVAssetWriter) throws {
+    let item = AVMutableMetadataItem()
+    item.key = "com.apple.quicktime.still-image-time" as (NSCopying & NSObjectProtocol)
+    item.keySpace = .quickTimeMetadata
+    item.value = NSNumber(value: 0)
+    item.dataType = kCMMetadataBaseDataType_SInt8 as String
+    let group = AVTimedMetadataGroup(
+        items: [item],
+        timeRange: CMTimeRange(start: .zero, duration: CMTime(value: 1, timescale: 8))
+    )
+    let deadline = Date().addingTimeInterval(15)
+    while !adaptor.assetWriterInput.isReadyForMoreMediaData {
+        if Date() > deadline { throw writer.error ?? CocoaError(.fileWriteUnknown) }
+        Thread.sleep(forTimeInterval: 0.01)
+    }
+    guard adaptor.append(group) else { throw writer.error ?? CocoaError(.fileWriteUnknown) }
 }
 
 private func pixelBuffer(from image: CGImage, width: Int, height: Int) throws -> CVPixelBuffer {

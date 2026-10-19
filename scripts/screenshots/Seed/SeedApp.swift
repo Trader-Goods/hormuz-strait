@@ -42,26 +42,19 @@ private enum Seed {
             let status = await authorize(initial)
             guard status == .authorized else {
                 try "authorization \(status.rawValue)".write(to: report, atomically: true, encoding: .utf8)
-                exit(1)
+                return
             }
             let media = Bundle.main.url(forResource: "SampleMedia", withExtension: nil)
                 ?? Bundle.main.resourceURL?.appendingPathComponent("SampleMedia")
             guard let media, FileManager.default.fileExists(atPath: media.path) else {
                 try "missing SampleMedia bundle folder".write(to: report, atomically: true, encoding: .utf8)
-                exit(1)
+                return
             }
             let (originalDate, editedDate) = sampleDates()
-            var livePairs: [(Data, Data, Int)] = []
             for index in 1...6 {
                 let photo = try Data(contentsOf: media.appendingPathComponent("live-\(index).jpg"))
                 let video = try Data(contentsOf: media.appendingPathComponent("live-\(index).mov"))
-                livePairs.append((photo, video, index))
-            }
-            let originalVideo = try Data(contentsOf: media.appendingPathComponent("original.mov"))
-            let editedVideo = try Data(contentsOf: media.appendingPathComponent("edited.mov"))
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                PHPhotoLibrary.shared().performChanges {
-                for (photo, video, index) in livePairs {
+                try await performSave("live-\(index)") {
                     let request = PHAssetCreationRequest.forAsset()
                     let still = PHAssetResourceCreationOptions()
                     still.originalFilename = String(format: "IMG_%04d.JPG", 1200 + index)
@@ -72,28 +65,40 @@ private enum Seed {
                     request.creationDate = editedDate.addingTimeInterval(TimeInterval(-index * 90))
                     request.location = CLLocation(latitude: 37.8199, longitude: -122.4783)
                 }
+            }
+            let originalVideo = try Data(contentsOf: media.appendingPathComponent("original.mov"))
+            let editedVideo = try Data(contentsOf: media.appendingPathComponent("edited.mov"))
+            try await performSave("original") {
                 addVideo(originalVideo, filename: "IMG_2041.MOV", date: originalDate, location: CLLocation(latitude: 37.8199, longitude: -122.4783))
+            }
+            try await performSave("edited") {
                 addVideo(editedVideo, filename: "SNAP_edit.MOV", date: editedDate, location: nil)
-                }
-            completionHandler: { success, error in
+            }
+            let summary = inventory()
+            print(summary)
+            try summary.write(to: report, atomically: true, encoding: .utf8)
+        } catch {
+            let message = "failed \(error)"
+            print(message)
+            try? message.write(to: report, atomically: true, encoding: .utf8)
+        }
+    }
+
+    static func performSave(_ name: String, _ changes: @escaping () -> Void) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            PHPhotoLibrary.shared().performChanges(changes) { success, error in
                 if let error {
-                    continuation.resume(throwing: error)
+                    continuation.resume(throwing: NSError(
+                        domain: (error as NSError).domain,
+                        code: (error as NSError).code,
+                        userInfo: [NSLocalizedDescriptionKey: "\(name) \(error.localizedDescription)"]
+                    ))
                 } else if success {
                     continuation.resume()
                 } else {
                     continuation.resume(throwing: CocoaError(.userCancelled))
                 }
             }
-            }
-            let summary = inventory()
-            print(summary)
-            try summary.write(to: report, atomically: true, encoding: .utf8)
-            exit(0)
-        } catch {
-            let message = "failed \(error)"
-            print(message)
-            try? message.write(to: report, atomically: true, encoding: .utf8)
-            exit(1)
         }
     }
 
