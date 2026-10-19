@@ -127,6 +127,20 @@ def sign_and_install(udid, app):
     run(["xcrun", "simctl", "install", udid, str(app)])
 
 
+def collect_simulator_screenshots(udid):
+    root = Path.home() / "Library" / "Developer" / "CoreSimulator" / "Devices" / udid
+    if not root.exists():
+        log(f"simulator data missing at {root}")
+        return
+    for path in root.rglob("*.png"):
+        if path.name not in EXPECTED:
+            continue
+        destination = SHOT_DIR / path.name
+        if not destination.exists() or path.stat().st_mtime >= destination.stat().st_mtime:
+            shutil.copy2(path, destination)
+            log(f"collected {path} -> {destination}")
+
+
 def grant_photos(udid, bundle_id):
     for service in ("photos", "photos-add"):
         result = subprocess.run(
@@ -231,6 +245,7 @@ def main():
             timeout=900,
         )
     finally:
+        collect_simulator_screenshots(udid)
         for name in EXPECTED:
             source = SHOT_DIR / name
             if source.exists():

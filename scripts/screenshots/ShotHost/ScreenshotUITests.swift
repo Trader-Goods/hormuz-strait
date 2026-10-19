@@ -9,21 +9,6 @@ final class ScreenshotUITests: XCTestCase {
     }
 
     func testCapture() throws {
-        let status = Process()
-        status.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-        status.arguments = [
-            "simctl", "status_bar", "booted", "override",
-            "--time", "9:41",
-            "--batteryState", "charged",
-            "--batteryLevel", "100",
-            "--wifiMode", "active",
-            "--wifiBars", "3",
-            "--cellularMode", "active",
-            "--cellularBars", "4",
-        ]
-        try? status.run()
-        status.waitUntilExit()
-
         let seed = XCUIApplication(bundleIdentifier: "com.tradergoods.screenshotseed")
         seed.launch()
         allowPhotos(in: seed)
@@ -177,27 +162,20 @@ final class ScreenshotUITests: XCTestCase {
     }
 
     private func capture(_ name: String) {
-        let directory = "/tmp/appstore-screenshots"
-        try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
-        let path = "\(directory)/\(name).png"
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-        process.arguments = ["simctl", "io", "booted", "screenshot", path]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = pipe
-        do {
-            try process.run()
-            process.waitUntilExit()
-            let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            print("CAPTURE \(name) exit \(process.terminationStatus) \(output)")
-        } catch {
-            print("CAPTURE \(name) process error \(error)")
-        }
-        if !FileManager.default.fileExists(atPath: path) {
-            let data = XCUIScreen.main.screenshot().pngRepresentation
-            try? data.write(to: URL(fileURLWithPath: path))
-            print("CAPTURE \(name) used XCUIScreen \(data.count) bytes")
+        let data = XCUIScreen.main.screenshot().pngRepresentation
+        let file = "\(name).png"
+        let folders = [
+            FileManager.default.temporaryDirectory,
+            FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0],
+        ]
+        for folder in folders {
+            let url = folder.appendingPathComponent(file)
+            do {
+                try data.write(to: url)
+                print("CAPTURE \(url.path) \(data.count) bytes")
+            } catch {
+                print("CAPTURE failed \(url.path) \(error)")
+            }
         }
     }
 
