@@ -23,7 +23,7 @@ function saveAll(){try{localStorage.setItem('hzOil',oil);localStorage.setItem('h
 const curHull=()=>HULLS.find(h=>h.id===shop.hull)||HULLS[0],curWake=()=>WAKES.find(w=>w.id===shop.wake)||WAKES[0];
 function gainOil(n,big){if(big)SFX.chime();else SFX.level(lastSc);runOil+=n;oil+=n;saveAll();pops.push({s:big?'+'+n+' OIL':'+'+n,big,f:0})}
 const TYPES=['destroyer','sub','tanker','checkpoint'];
-function speedFor(s){return s<=1?S0:s<40?S0*(1+1.5*(s-1)/39):s<=50?2.5*S0:s>=100?S0*(3+.5*Math.min(1,(s-100)/100)):s>=75?3.75*S0:2.5*S0*(1+.5*(s-50)/25)}
+function speedFor(s){return s<=1?S0:s<40?S0*(1+1.5*(s-1)/39):s<=50?2.5*S0:s>=200?3.75*S0:2.5*S0*(1+.5*(s-50)/150)}
 let cf,op,lastG=null,msls=[],puffs=[];
 function reset(){runFrames=0;op={done:false,active:false,acc:0,banner:0};cf={done:false,active:false,target:0,acc:0,banner:0,resume:0};lastG=null;msls=[];puffs=[];b={y:300,v:0};obs=[];sc=0;sp=S0;t=0;foam=[];runOil=0;lastSc=0;pops=[];}
 reset();
@@ -195,8 +195,7 @@ function bg(){x.fillStyle=lg(0,SEA,['#2b3a67','#c86b6b','#f6b26b']);x.fillRect(0
  x.fillStyle='rgba(255,220,160,.25)';for(let i=0;i<10;i++){const yy=SEA+4+i*7;x.fillRect(270-30+Math.sin(t/20+i)*6+i*1.5-i*3,yy,60-i*4,1.5)}
  for(let L=0;L<9;L++){const r=SEA+18+L*55,par=.5+L*.08,a=.08+L*.02;x.strokeStyle='rgba(255,255,255,'+a+')';x.lineWidth=1.5;x.beginPath();
   for(let i=0;i<=W;i+=8)x.lineTo(i,r+Math.sin((i+dist*par)/22+L)*3+Math.sin((i+t)/9)*1);x.stroke()}
- x.fillStyle=lg(BED,H,['#d6b977','#a88a4d']);x.fillRect(0,BED,W,H-BED);x.fillStyle='rgba(255,255,255,.35)';
- for(let i=0;i<W;i+=6)x.fillRect(i,BED-1+Math.sin((i+t*1.5)/10)*1.5,4,2)}
+ x.fillStyle=lg(BED,H,['#d6b977','#a88a4d']);x.fillRect(0,BED,W,H-BED);}
 // ---- player tanker
 function wake(){const n=foam.length;if(n<3)return;x.save();x.lineCap='butt';x.lineJoin='round';
  for(let i=n-1;i>1;i--){const p0=foam[i],p1=foam[i-1],p2=foam[i-2],age=i/n;
@@ -295,7 +294,7 @@ function shopUI(){x.fillStyle='rgba(7,26,43,.88)';x.fillRect(0,0,W,H);txt('SHOP'
 function hudOil(){x.fillStyle='rgba(7,26,43,.55)';rr(10,18,70,30,12);x.fill();drop(26,35,6);x.font='bold 17px '+F;x.textAlign='left';x.fillStyle='#ffe28a';x.fillText(runOil,38,40);x.textAlign='center';
  for(const q of pops){const a=Math.max(0,1-q.f/(q.big?110:45));x.save();x.globalAlpha=a;if(q.big)txt(q.s,210-q.f*.4,30,'#ffd23f','#3a2600');else{x.font='bold 14px '+F;x.fillStyle='#ffe28a';x.fillText(q.s,PX,b.y-22-q.f*.6)}x.restore()}}
 function ui(){if(lbMsg){x.save();x.globalAlpha=Math.min(1,lbMsg/20);txt(lbMsgT,H-20,15,lbMsgT.includes('submitted')?'#7fe08a':'#ff9a8a');x.restore()}if(st==='lb'){lbUI();muteIcon();return}if(st==='shop'){shopUI();muteIcon();return}muteIcon();if(st==='play')hudOil();
- if(st==='win'){panel(170,300);txt('STRAIT REOPENED',225,30,'#7fe08a');txt('YOU MADE IT!',268,26,'#fff');txt('SCORE  '+sc,318,22,'#ffe28a');txt('OIL EARNED',356,14,'#cfe3f1');oilTxt(runOil,388,24);txt('Total oil: '+oil,418,14,'#cfe3f1');if(winT>60)txt('Tap to return',450,16,'#fff')}if(st==='play')cfBanner();if(st==='play'||st==='win'){x.fillStyle='rgba(7,26,43,.55)';rr(W/2-38,12,76,48,14);x.fill();txt(sc,50,34,'#ffe28a')}
+ if(st==='win'){panel(170,300);txt('STRAIT REOPENED',225,30,'#7fe08a');txt('YOU MADE IT!',268,26,'#fff');txt('SCORE  '+sc,318,22,'#ffe28a');txt('OIL EARNED',356,14,'#cfe3f1');oilTxt(runOil,388,24);txt('Total oil: '+oil,418,14,'#cfe3f1');if(winT>60)txt('Tap to return',450,16,'#fff')}if(st==='play')cfBanner();if(st==='play'||st==='win'){x.fillStyle='rgba(7,26,43,.55)';rr(W/2-38,52,76,48,14);x.fill();txt(sc,90,34,'#ffe28a')}
  if(st==='start'){panel(170,290);txt('HORMUZ',232,46,'#ffe28a');txt('STRAIT',280,46,'#fff');txt('Steer the tanker through the blockade',318,13,'#cfe3f1');
   txt((t>>5)%2?'TAP / SPACE TO SAIL':'',380,20,'#fff');txt('BEST  '+best,416,18,'#ffe28a');oilTxt(oil,446,18);btn(SHOPBTN,'SHOP');btn(LBBTN,'LEADERBOARD',undefined,15)}
  if(st==='over'){panel(180,260);txt('BREAKING NEWS',214,13,'#ff6b5a');txt(MSG,252,MSG.length>18?20:24,'#fff');
