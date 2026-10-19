@@ -1,0 +1,271 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		7A1E0C17A1B2C3D4E5F60718 /* LiveToStillApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1E0C13A1B2C3D4E5F60718 /* LiveToStillApp.swift */; };
+		7A1E0C18A1B2C3D4E5F60718 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1E0C14A1B2C3D4E5F60718 /* ContentView.swift */; };
+		7A1E0C19A1B2C3D4E5F60718 /* LivePhotoLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1E0C15A1B2C3D4E5F60718 /* LivePhotoLibrary.swift */; };
+		7A1E0C1AA1B2C3D4E5F60718 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7A1E0C16A1B2C3D4E5F60718 /* Assets.xcassets */; };
+		7A1E0C2CA1B2C3D4E5F60718 /* ResourceSize.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A1E0C29A1B2C3D4E5F60718 /* ResourceSize.m */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		7A1E0C13A1B2C3D4E5F60718 /* LiveToStillApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveToStillApp.swift; sourceTree = "<group>"; };
+		7A1E0C14A1B2C3D4E5F60718 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		7A1E0C15A1B2C3D4E5F60718 /* LivePhotoLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePhotoLibrary.swift; sourceTree = "<group>"; };
+		7A1E0C16A1B2C3D4E5F60718 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		7A1E0C21A1B2C3D4E5F60718 /* LiveToStill.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LiveToStill.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		7A1E0C28A1B2C3D4E5F60718 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		7A1E0C29A1B2C3D4E5F60718 /* ResourceSize.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ResourceSize.m; sourceTree = "<group>"; };
+		7A1E0C2AA1B2C3D4E5F60718 /* ResourceSize.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ResourceSize.h; sourceTree = "<group>"; };
+		7A1E0C2BA1B2C3D4E5F60718 /* LiveToStill-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "LiveToStill-Bridging-Header.h"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		7A1E0C1DA1B2C3D4E5F60718 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		7A1E0C1EA1B2C3D4E5F60718 = {
+			isa = PBXGroup;
+			children = (
+				7A1E0C1FA1B2C3D4E5F60718 /* LiveToStill */,
+				7A1E0C20A1B2C3D4E5F60718 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		7A1E0C1FA1B2C3D4E5F60718 /* LiveToStill */ = {
+			isa = PBXGroup;
+			children = (
+				7A1E0C13A1B2C3D4E5F60718 /* LiveToStillApp.swift */,
+				7A1E0C14A1B2C3D4E5F60718 /* ContentView.swift */,
+				7A1E0C15A1B2C3D4E5F60718 /* LivePhotoLibrary.swift */,
+				7A1E0C29A1B2C3D4E5F60718 /* ResourceSize.m */,
+				7A1E0C2AA1B2C3D4E5F60718 /* ResourceSize.h */,
+				7A1E0C2BA1B2C3D4E5F60718 /* LiveToStill-Bridging-Header.h */,
+				7A1E0C16A1B2C3D4E5F60718 /* Assets.xcassets */,
+				7A1E0C28A1B2C3D4E5F60718 /* Info.plist */,
+			);
+			path = LiveToStill;
+			sourceTree = "<group>";
+		};
+		7A1E0C20A1B2C3D4E5F60718 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				7A1E0C21A1B2C3D4E5F60718 /* LiveToStill.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		7A1E0C11A1B2C3D4E5F60718 /* LiveToStill */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7A1E0C23A1B2C3D4E5F60718 /* Build configuration list for PBXNativeTarget "LiveToStill" */;
+			buildPhases = (
+				7A1E0C1BA1B2C3D4E5F60718 /* Sources */,
+				7A1E0C1DA1B2C3D4E5F60718 /* Frameworks */,
+				7A1E0C1CA1B2C3D4E5F60718 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LiveToStill;
+			productName = LiveToStill;
+			productReference = 7A1E0C21A1B2C3D4E5F60718 /* LiveToStill.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		7A1E0C12A1B2C3D4E5F60718 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				ORGANIZATIONNAME = "Trader Goods";
+				TargetAttributes = {
+					7A1E0C11A1B2C3D4E5F60718 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = 7A1E0C22A1B2C3D4E5F60718 /* Build configuration list for PBXProject "LiveToStill" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 7A1E0C1EA1B2C3D4E5F60718;
+			productRefGroup = 7A1E0C20A1B2C3D4E5F60718 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				7A1E0C11A1B2C3D4E5F60718 /* LiveToStill */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		7A1E0C1CA1B2C3D4E5F60718 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A1E0C1AA1B2C3D4E5F60718 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		7A1E0C1BA1B2C3D4E5F60718 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7A1E0C17A1B2C3D4E5F60718 /* LiveToStillApp.swift in Sources */,
+				7A1E0C18A1B2C3D4E5F60718 /* ContentView.swift in Sources */,
+				7A1E0C19A1B2C3D4E5F60718 /* LivePhotoLibrary.swift in Sources */,
+				7A1E0C2CA1B2C3D4E5F60718 /* ResourceSize.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		7A1E0C24A1B2C3D4E5F60718 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		7A1E0C25A1B2C3D4E5F60718 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		7A1E0C26A1B2C3D4E5F60718 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 35734G7ZCQ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LiveToStill/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tradergoods.livetostill;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_OBJC_BRIDGING_HEADER = "LiveToStill/LiveToStill-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				USER_HEADER_SEARCH_PATHS = LiveToStill;
+			};
+			name = Debug;
+		};
+		7A1E0C27A1B2C3D4E5F60718 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 35734G7ZCQ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LiveToStill/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tradergoods.livetostill;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Live to Still CI";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_OBJC_BRIDGING_HEADER = "LiveToStill/LiveToStill-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				USER_HEADER_SEARCH_PATHS = LiveToStill;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		7A1E0C22A1B2C3D4E5F60718 /* Build configuration list for PBXProject "LiveToStill" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7A1E0C24A1B2C3D4E5F60718 /* Debug */,
+				7A1E0C25A1B2C3D4E5F60718 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7A1E0C23A1B2C3D4E5F60718 /* Build configuration list for PBXNativeTarget "LiveToStill" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7A1E0C26A1B2C3D4E5F60718 /* Debug */,
+				7A1E0C27A1B2C3D4E5F60718 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 7A1E0C12A1B2C3D4E5F60718 /* Project object */;
+}
