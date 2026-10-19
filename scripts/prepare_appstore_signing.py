@@ -91,7 +91,9 @@ def api(method, path, auth, body=None):
             payload = {}
         for item in payload.get("errors", []):
             print(item.get("status"), item.get("code"), item.get("title"), item.get("detail"))
-        raise SystemExit(1)
+        failure = SystemExit(1)
+        failure.code = error.code
+        raise failure
 
 
 def set_env(key, value):
@@ -137,7 +139,42 @@ def export_p12(key_path, pem_path, p12_path, password, legacy):
     quiet(cmd, env)
 
 
-def distribution_certificate(auth, work):
+def certificate_label(item):
+    attributes = item.get("attributes", {})
+    return " ".join(
+        part
+        for part in (attributes.get("certificateType"), attributes.get("name"), attributes.get("displayName"), attributes.get("expirationDate"))
+        if part
+    )
+
+
+def list_distribution_certificates(auth):
+    found = []
+    for kind in ("IOS_DISTRIBUTION", "DISTRIBUTION"):
+        query = urllib.parse.urlencode({"filter[certificateType]": kind, "limit": 20})
+        found.extend(api("GET", "/v1/certificates?" + query, auth).get("data", []))
+    return found
+
+
+def revoke_one_distribution_certificate(auth):
+    candidates = list_distribution_certificates(auth)
+    for item in candidates:
+        print("existing distribution certificate", certificate_label(item))
+    if not candidates:
+        raise SystemExit("no distribution certificate available to replace")
+    own = [
+        item for item in candidates
+        if "Live to Still" in certificate_label(item)
+    ]
+    pool = own or candidates
+    pool.sort(key=lambda item: item.get("attributes", {}).get("expirationDate") or "")
+    chosen = pool[0]
+    print("revoking distribution certificate", certificate_label(chosen))
+    api("DELETE", "/v1/certificates/" + chosen["id"], auth)
+    print("revoked distribution certificate")
+
+
+def distribution_certificate(auth, work, replaced=False):
     key_path = os.path.join(work, "dist.key")
     csr_path = os.path.join(work, "dist.csr")
     cer_path = os.path.join(work, "dist.cer")
@@ -150,6 +187,7 @@ def distribution_certificate(auth, work):
     ])
     csr = open(csr_path, encoding="utf-8").read()
     created = None
+    blocked = False
     for certificate_type in ("IOS_DISTRIBUTION", "DISTRIBUTION"):
         try:
             created = api("POST", "/v1/certificates", auth, {
@@ -160,9 +198,14 @@ def distribution_certificate(auth, work):
             })
             print("distribution certificate created")
             break
-        except SystemExit:
+        except SystemExit as error:
             print("certificate type was not accepted")
+            if getattr(error, "code", None) == 409:
+                blocked = True
             created = None
+    if created is None and blocked and not replaced:
+        revoke_one_distribution_certificate(auth)
+        return distribution_certificate(auth, work, replaced=True)
     if created is None:
         raise SystemExit("could not create a distribution certificate")
     content = created["data"]["attributes"]["certificateContent"]
