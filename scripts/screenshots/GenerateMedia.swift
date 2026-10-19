@@ -32,8 +32,8 @@ struct GenerateMedia {
         }
         let original = render(style: 0, edited: false, width: videoSize.width, height: videoSize.height)
         let edited = render(style: 0, edited: true, width: videoSize.width, height: videoSize.height)
-        try writeVideo(to: output.appendingPathComponent("original.mov"), width: videoSize.width, height: videoSize.height, frames: 24, codec: .jpeg) { _ in original }
-        try writeVideo(to: output.appendingPathComponent("edited.mov"), width: videoSize.width, height: videoSize.height, frames: 24, codec: .jpeg) { _ in edited }
+        try writeVideo(to: output.appendingPathComponent("original.mov"), width: videoSize.width, height: videoSize.height, frames: 24, codec: .h264) { _ in original }
+        try writeVideo(to: output.appendingPathComponent("edited.mov"), width: videoSize.width, height: videoSize.height, frames: 24, codec: .h264) { _ in edited }
         fputs("wrote sample media to \(output.path)\n", stdout)
     }
 }
@@ -134,7 +134,6 @@ private func writeJPEG(_ image: CGImage, to url: URL) throws {
 
 private enum MovieCodec {
     case h264
-    case jpeg
 }
 
 private func writeVideo(to url: URL, width: Int, height: Int, frames: Int, codec: MovieCodec, frame: (Int) -> CGImage) throws {
@@ -142,17 +141,16 @@ private func writeVideo(to url: URL, width: Int, height: Int, frames: Int, codec
         try FileManager.default.removeItem(at: url)
     }
     let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
-    let codecKey: AVVideoCodecType = codec == .jpeg ? .jpeg : .h264
-    var settings: [String: Any] = [
-        AVVideoCodecKey: codecKey,
+    let settings: [String: Any] = [
+        AVVideoCodecKey: AVVideoCodecType.h264,
         AVVideoWidthKey: width,
         AVVideoHeightKey: height,
+        AVVideoCompressionPropertiesKey: [
+            AVVideoAverageBitRateKey: 30_000_000,
+            AVVideoMaxKeyFrameIntervalKey: 1,
+            AVVideoAllowFrameReorderingKey: false,
+        ],
     ]
-    if codec == .jpeg {
-        settings[AVVideoQualityKey] = 0.92
-    } else {
-        settings[AVVideoCompressionPropertiesKey] = [AVVideoAverageBitRateKey: 6_000_000]
-    }
     let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
     input.expectsMediaDataInRealTime = false
     let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
