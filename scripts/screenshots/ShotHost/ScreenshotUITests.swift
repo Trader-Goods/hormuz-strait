@@ -70,8 +70,17 @@ final class ScreenshotUITests: XCTestCase {
             let button = buttons.element(boundBy: index)
             guard button.exists, button.isHittable else { continue }
             button.tap()
-            if disappeared(message, timeout: 3) { return }
+            let end = Date().addingTimeInterval(8)
+            while Date() < end {
+                dismissSystemAlerts()
+                if app.staticTexts["Waiting for deletion confirmation"].exists || app.staticTexts["In Recently Deleted"].exists {
+                    return
+                }
+                if !message.exists { return }
+                Thread.sleep(forTimeInterval: 0.3)
+            }
         }
+        if app.staticTexts["Waiting for deletion confirmation"].exists { return }
         dumpUI("convert confirmation stayed open")
         XCTFail("could not confirm convert")
     }
