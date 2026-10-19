@@ -51,23 +51,8 @@ private enum Seed {
                 return
             }
             let (originalDate, editedDate) = sampleDates()
-            for index in 1...6 {
-                let photo = try Data(contentsOf: media.appendingPathComponent("live-\(index).jpg"))
-                let video = try Data(contentsOf: media.appendingPathComponent("live-\(index).mov"))
-                try await performSave("live-\(index)") {
-                    let request = PHAssetCreationRequest.forAsset()
-                    let still = PHAssetResourceCreationOptions()
-                    still.originalFilename = String(format: "IMG_%04d.JPG", 1200 + index)
-                    request.addResource(with: .photo, data: photo, options: still)
-                    let motion = PHAssetResourceCreationOptions()
-                    motion.originalFilename = String(format: "IMG_%04d.MOV", 1200 + index)
-                    request.addResource(with: .pairedVideo, data: video, options: motion)
-                    request.creationDate = editedDate.addingTimeInterval(TimeInterval(-index * 90))
-                    request.location = CLLocation(latitude: 37.8199, longitude: -122.4783)
-                }
-            }
-            let originalVideo = try Data(contentsOf: media.appendingPathComponent("original.mov"))
-            let editedVideo = try Data(contentsOf: media.appendingPathComponent("edited.mov"))
+            let originalVideo = try Data(contentsOf: media.appendingPathComponent("IMG_2041.MOV"))
+            let editedVideo = try Data(contentsOf: media.appendingPathComponent("SNAP_edit.MOV"))
             try await performSave("original") {
                 addVideo(originalVideo, filename: "IMG_2041.MOV", date: originalDate, location: CLLocation(latitude: 37.8199, longitude: -122.4783))
             }

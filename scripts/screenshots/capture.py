@@ -173,15 +173,6 @@ def add_library_media(udid):
         for path in (photo, video):
             piece = subprocess.run(["xcrun", "simctl", "addmedia", udid, path], text=True, capture_output=True)
             log(f"addmedia alone {Path(path).name} -> {piece.returncode} {piece.stdout} {piece.stderr}")
-    now = time.time()
-    for name, age in (("IMG_2041.MOV", 300), ("SNAP_edit.MOV", 120)):
-        path = MEDIA_DIR / name
-        os.utime(path, (now - age, now - age))
-        path = str(path)
-        result = subprocess.run(["xcrun", "simctl", "addmedia", udid, path], text=True, capture_output=True)
-        log(f"addmedia {name} -> {result.returncode} {result.stdout} {result.stderr}")
-        if result.returncode != 0:
-            failures.append(name)
     if failures:
         raise SystemExit("could not add sample media: " + ", ".join(failures))
 
@@ -252,13 +243,21 @@ def main():
     ]
     destination = f"platform=iOS Simulator,id={udid}"
     run_logged(
+        ["xcodebuild", "-project", "scripts/screenshots/Seed.xcodeproj", "-scheme", "Seed", "-configuration", "Debug", "-destination", destination, "-derivedDataPath", "artifacts/derived-seed", *sign, "build"],
+        LOG_DIR / "seed-build.log",
+        timeout=900,
+    )
+    run_logged(
         ["xcodebuild", "-project", "LiveToStill.xcodeproj", "-scheme", "LiveToStill", "-configuration", "Debug", "-destination", destination, "-derivedDataPath", "artifacts/derived-app", *sign, "build"],
         LOG_DIR / "app-build.log",
         timeout=900,
     )
+    seed_app = ROOT / "artifacts" / "derived-seed" / "Build" / "Products" / "Debug-iphonesimulator" / "Seed.app"
     live_app = ROOT / "artifacts" / "derived-app" / "Build" / "Products" / "Debug-iphonesimulator" / "LiveToStill.app"
-    if not live_app.exists():
-        raise SystemExit("missing built Live to Still app")
+    if not seed_app.exists() or not live_app.exists():
+        raise SystemExit(f"missing built app seed={seed_app.exists()} live={live_app.exists()}")
+    sign_and_install(udid, seed_app)
+    grant_photos(udid, "com.tradergoods.screenshotseed")
     sign_and_install(udid, live_app)
     grant_photos(udid, "com.tradergoods.livetostill")
     subprocess.run(
