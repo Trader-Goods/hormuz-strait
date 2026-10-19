@@ -198,6 +198,14 @@ private struct LibraryScreen: View {
                 .fontWeight(.semibold)
             Text(summaryLine)
                 .foregroundStyle(.secondary)
+            NavigationLink {
+                AttachmentsScreen()
+            } label: {
+                Label("Saved Attachments", systemImage: "paperclip")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
             EmptyRecentlyDeletedButton()
             Toggle("Keep video clips", isOn: $model.keepVideoClips)
                 .font(.subheadline)
