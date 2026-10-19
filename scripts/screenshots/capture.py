@@ -173,8 +173,11 @@ def add_library_media(udid):
         for path in (photo, video):
             piece = subprocess.run(["xcrun", "simctl", "addmedia", udid, path], text=True, capture_output=True)
             log(f"addmedia alone {Path(path).name} -> {piece.returncode} {piece.stdout} {piece.stderr}")
-    for name in ("original.mov", "edited.mov"):
-        path = str(MEDIA_DIR / name)
+    now = time.time()
+    for name, age in (("IMG_2041.MOV", 300), ("SNAP_edit.MOV", 120)):
+        path = MEDIA_DIR / name
+        os.utime(path, (now - age, now - age))
+        path = str(path)
         result = subprocess.run(["xcrun", "simctl", "addmedia", udid, path], text=True, capture_output=True)
         log(f"addmedia {name} -> {result.returncode} {result.stdout} {result.stderr}")
         if result.returncode != 0:

@@ -35,8 +35,24 @@ struct GenerateMedia {
         }
         let original = render(style: 0, edited: false, width: videoSize.width, height: videoSize.height)
         let edited = render(style: 0, edited: true, width: videoSize.width, height: videoSize.height)
-        try writeVideo(to: output.appendingPathComponent("original.mov"), width: videoSize.width, height: videoSize.height, frames: 24, codec: .h264) { _ in original }
-        try writeVideo(to: output.appendingPathComponent("edited.mov"), width: videoSize.width, height: videoSize.height, frames: 24, codec: .h264) { _ in edited }
+        let now = Date()
+        try writeVideo(
+            to: output.appendingPathComponent("IMG_2041.MOV"),
+            width: videoSize.width,
+            height: videoSize.height,
+            frames: 24,
+            codec: .h264,
+            created: now.addingTimeInterval(-300),
+            locationISO6709: "+37.8199-122.4783/"
+        ) { _ in original }
+        try writeVideo(
+            to: output.appendingPathComponent("SNAP_edit.MOV"),
+            width: videoSize.width,
+            height: videoSize.height,
+            frames: 24,
+            codec: .h264,
+            created: now.addingTimeInterval(-120)
+        ) { _ in edited }
         fputs("wrote sample media to \(output.path)\n", stdout)
     }
 }
@@ -143,7 +159,7 @@ private enum MovieCodec {
     case h264
 }
 
-private func writeVideo(to url: URL, width: Int, height: Int, frames: Int, codec: MovieCodec, assetIdentifier: String? = nil, frame: (Int) -> CGImage) throws {
+private func writeVideo(to url: URL, width: Int, height: Int, frames: Int, codec: MovieCodec, assetIdentifier: String? = nil, created: Date? = nil, locationISO6709: String? = nil, frame: (Int) -> CGImage) throws {
     if FileManager.default.fileExists(atPath: url.path) {
         try FileManager.default.removeItem(at: url)
     }
@@ -173,7 +189,10 @@ private func writeVideo(to url: URL, width: Int, height: Int, frames: Int, codec
     if let stillAdaptor {
         guard writer.canAdd(stillAdaptor.assetWriterInput) else { throw CocoaError(.fileWriteUnknown) }
         writer.add(stillAdaptor.assetWriterInput)
-        writer.metadata = [contentIdentifier(assetIdentifier ?? "")]
+    }
+    let metadata = movieMetadata(assetIdentifier: assetIdentifier, created: created, locationISO6709: locationISO6709)
+    if !metadata.isEmpty {
+        writer.metadata = metadata
     }
     guard writer.startWriting() else { throw writer.error ?? CocoaError(.fileWriteUnknown) }
     writer.startSession(atSourceTime: .zero)
@@ -198,6 +217,32 @@ private func writeVideo(to url: URL, width: Int, height: Int, frames: Int, codec
     writer.finishWriting { finished.signal() }
     finished.wait()
     guard writer.status == .completed else { throw writer.error ?? CocoaError(.fileWriteUnknown) }
+}
+
+private func movieMetadata(assetIdentifier: String?, created: Date?, locationISO6709: String?) -> [AVMetadataItem] {
+    var items: [AVMetadataItem] = []
+    if let assetIdentifier {
+        items.append(contentIdentifier(assetIdentifier))
+    }
+    if let created {
+        let formatter = ISO8601DateFormatter()
+        let text = formatter.string(from: created)
+        let common = AVMutableMetadataItem()
+        common.identifier = .commonIdentifierCreationDate
+        common.value = text as NSString
+        items.append(common)
+        let quickTime = AVMutableMetadataItem()
+        quickTime.identifier = .quickTimeMetadataCreationDate
+        quickTime.value = text as NSString
+        items.append(quickTime)
+    }
+    if let locationISO6709 {
+        let location = AVMutableMetadataItem()
+        location.identifier = .quickTimeMetadataLocationISO6709
+        location.value = locationISO6709 as NSString
+        items.append(location)
+    }
+    return items
 }
 
 private func contentIdentifier(_ assetIdentifier: String) -> AVMetadataItem {
