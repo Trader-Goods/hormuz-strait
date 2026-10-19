@@ -39,7 +39,7 @@ final class ScreenshotUITests: XCTestCase {
         XCTAssertTrue(scan.waitForExistence(timeout: 8), "scan button missing")
         scan.tap()
         waitUntil(120, "copy match") {
-            self.app.staticTexts["Original"].exists && self.app.staticTexts["Edited"].exists && self.app.buttons["DELETE"].exists
+            self.app.staticTexts["Original"].exists && self.app.staticTexts["Edited"].exists && self.app.buttons["Delete this video"].exists
         }
         Thread.sleep(forTimeInterval: 2)
         capture("03-delete-copies-keep-edited")
