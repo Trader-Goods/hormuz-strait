@@ -9,7 +9,7 @@ on:
 jobs:
   testflight:
     name: Build, sign and upload to TestFlight
-    runs-on: macos-latest
+    runs-on: macos-15-intel
     env:
       TEAM_ID: 35734G7ZCQ
       BUNDLE_ID: com.tradergoods.livetostill

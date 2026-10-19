@@ -68,7 +68,7 @@ private struct LibraryScreen: View {
                 if model.access == .limited {
                     limitedBanner
                 }
-                Text("Converting saves the full-quality still photo, including its date, location, favorite flag, and regular albums. iOS then asks once to delete the Live Photos. They stay in Recently Deleted for 30 days. Photos that are not stored on this iPhone are skipped, because nothing is downloaded.")
+                Text("Converting copies the full-size photo file unchanged, including edits, format, and embedded details, plus its date, location, favorite flag, and regular albums. Only the Live Photo video is removed. iOS then asks once to delete the Live Photos. They stay in Recently Deleted for 30 days. Photos that are not stored on this iPhone are skipped, because nothing is downloaded.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 if model.scanning && model.items.isEmpty {

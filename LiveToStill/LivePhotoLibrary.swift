@@ -258,21 +258,23 @@ final class LibraryModel: ObservableObject {
     nonisolated static func convert(localIdentifier: String) async throws {
         let fetch = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil)
         guard let asset = fetch.firstObject else { throw ConvertError.missing }
-        guard let resource = stillResource(for: asset) else { throw ConvertError.unavailable }
+        let resource = try stillResource(for: asset)
         let url = temporaryURL(for: resource)
         defer { try? FileManager.default.removeItem(at: url) }
         try await write(resource, to: url)
+        try assertCopiedSize(of: resource, at: url)
         let albums = userAlbums(containing: asset)
         let creationDate = asset.creationDate
         let location = asset.location
         let favorite = asset.isFavorite
+        let filename = resource.originalFilename
         if albums.isEmpty {
-            try await save(fileURL: url, creationDate: creationDate, location: location, favorite: favorite, albums: [])
+            try await save(fileURL: url, originalFilename: filename, creationDate: creationDate, location: location, favorite: favorite, albums: [])
         } else {
             do {
-                try await save(fileURL: url, creationDate: creationDate, location: location, favorite: favorite, albums: albums)
+                try await save(fileURL: url, originalFilename: filename, creationDate: creationDate, location: location, favorite: favorite, albums: albums)
             } catch {
-                try await save(fileURL: url, creationDate: creationDate, location: location, favorite: favorite, albums: [])
+                try await save(fileURL: url, originalFilename: filename, creationDate: creationDate, location: location, favorite: favorite, albums: [])
             }
         }
     }
@@ -285,12 +287,30 @@ final class LibraryModel: ObservableObject {
         }
     }
 
-    nonisolated private static func stillResource(for asset: PHAsset) -> PHAssetResource? {
+    /// The still file to copy. Edited Live Photos use the full-size rendered photo so the
+    /// adjustment stays. Unedited ones use the original photo resource. Either way the
+    /// bytes are copied as stored; nothing is decoded or resized.
+    nonisolated private static func stillResource(for asset: PHAsset) throws -> PHAssetResource {
         let resources = PHAssetResource.assetResources(for: asset)
-        if let photo = resources.first(where: { $0.type == .photo }) {
-            return photo
+        if asset.hasAdjustments {
+            guard let rendered = resources.first(where: { $0.type == .fullSizePhoto }) else {
+                throw ConvertError.unavailable
+            }
+            return rendered
         }
-        return resources.first(where: { $0.type == .fullSizePhoto })
+        guard let original = resources.first(where: { $0.type == .photo }) else {
+            throw ConvertError.unavailable
+        }
+        return original
+    }
+
+    nonisolated private static func assertCopiedSize(of resource: PHAssetResource, at url: URL) throws {
+        let expected = LiveResourceFileSize(resource)
+        guard expected > 0 else { return }
+        let values = try url.resourceValues(forKeys: [.fileSizeKey])
+        guard let actual = values.fileSize, Int64(actual) == expected else {
+            throw ConvertError.unavailable
+        }
     }
 
     nonisolated private static func temporaryURL(for resource: PHAssetResource) -> URL {
@@ -328,6 +348,7 @@ final class LibraryModel: ObservableObject {
 
     nonisolated private static func save(
         fileURL: URL,
+        originalFilename: String,
         creationDate: Date?,
         location: CLLocation?,
         favorite: Bool,
@@ -335,7 +356,10 @@ final class LibraryModel: ObservableObject {
     ) async throws {
         try await PHPhotoLibrary.shared().performChanges {
             let request = PHAssetCreationRequest.forAsset()
-            request.addResource(with: .photo, fileURL: fileURL, options: nil)
+            let options = PHAssetResourceCreationOptions()
+            options.originalFilename = originalFilename
+            options.shouldMoveFile = false
+            request.addResource(with: .photo, fileURL: fileURL, options: options)
             request.creationDate = creationDate
             request.location = location
             request.isFavorite = favorite
