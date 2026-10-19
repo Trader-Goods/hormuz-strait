@@ -24,8 +24,14 @@ final class ScreenshotUITests: XCTestCase {
         try? status.run()
         status.waitUntilExit()
 
+        let seed = XCUIApplication(bundleIdentifier: "com.tradergoods.screenshotseed")
+        seed.launch()
+        allowPhotos(in: seed)
+        XCTAssertTrue(seed.staticTexts["Seeded"].waitForExistence(timeout: 90), "sample photos were not added")
+
         app.launch()
         dismissSystemAlerts()
+        allowPhotos(in: app)
         waitUntil(90, "live photo scan") {
             self.app.staticTexts["6 Live Photos"].exists && !self.app.staticTexts["Scanning your photo library…"].exists
         }
@@ -104,6 +110,32 @@ final class ScreenshotUITests: XCTestCase {
         }
         dumpUI("timed out waiting for conversion result")
         XCTFail("conversion result did not appear")
+    }
+
+    private func allowPhotos(in application: XCUIApplication) {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let labels = ["Allow Full Access", "Allow Access to All Photos"]
+        let end = Date().addingTimeInterval(8)
+        while Date() < end {
+            if application.staticTexts["Seeded"].exists { return }
+            for source in [application, springboard] {
+                for label in labels {
+                    let button = source.alerts.buttons[label]
+                    if button.exists {
+                        print("TAP PHOTO \(label)")
+                        button.tap()
+                        return
+                    }
+                    let plain = source.buttons[label]
+                    if plain.exists && plain.isHittable {
+                        print("TAP PHOTO BUTTON \(label)")
+                        plain.tap()
+                        return
+                    }
+                }
+            }
+            Thread.sleep(forTimeInterval: 0.4)
+        }
     }
 
     private func dismissSystemAlerts() {

@@ -217,7 +217,6 @@ def main():
         raise SystemExit(f"missing built app seed={seed_app.exists()} live={live_app.exists()}")
     sign_and_install(udid, seed_app)
     grant_photos(udid, "com.tradergoods.screenshotseed")
-    wait_for_seed(udid)
 
     sign_and_install(udid, live_app)
     grant_photos(udid, "com.tradergoods.livetostill")

@@ -6,13 +6,28 @@ import SwiftUI
 struct SeedApp: App {
     var body: some Scene {
         WindowGroup {
-            Text("Adding sample photos")
-                .task {
-                    Task.detached(priority: .userInitiated) {
-                        await Seed.run()
-                    }
-                }
+            SeedRoot()
         }
+    }
+}
+
+private struct SeedRoot: View {
+    @State private var message = "Adding sample photos"
+
+    var body: some View {
+        Text(message)
+            .task {
+                Task.detached(priority: .userInitiated) {
+                    await Seed.run()
+                }
+                let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                let report = documents.appendingPathComponent("seed-result.txt")
+                while !FileManager.default.fileExists(atPath: report.path) {
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                }
+                let text = (try? String(contentsOf: report, encoding: .utf8)) ?? ""
+                message = text.hasPrefix("ok") ? "Seeded" : "Seed failed"
+            }
     }
 }
 
