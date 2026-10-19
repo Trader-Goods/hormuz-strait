@@ -9,15 +9,6 @@ final class ScreenshotUITests: XCTestCase {
     }
 
     func testCapture() throws {
-        let seed = XCUIApplication(bundleIdentifier: "com.tradergoods.screenshotseed")
-        seed.launch()
-        allowPhotos(in: seed)
-        let seeded = seed.staticTexts["Seeded"].waitForExistence(timeout: 90)
-        if !seeded {
-            dumpUI("sample photos were not added", application: seed)
-            XCTFail("sample photos were not added")
-        }
-
         app.launch()
         dismissSystemAlerts()
         allowPhotos(in: app)

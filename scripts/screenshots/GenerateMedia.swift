@@ -203,6 +203,8 @@ private func writeVideo(to url: URL, width: Int, height: Int, frames: Int, codec
 private func contentIdentifier(_ assetIdentifier: String) -> AVMetadataItem {
     let item = AVMutableMetadataItem()
     item.identifier = .quickTimeMetadataContentIdentifier
+    item.key = "com.apple.quicktime.content.identifier" as (NSCopying & NSObjectProtocol)
+    item.keySpace = .quickTimeMetadata
     item.value = assetIdentifier as NSString
     item.dataType = kCMMetadataBaseDataType_UTF8 as String
     return item

@@ -151,6 +151,38 @@ def grant_photos(udid, bundle_id):
         log(f"privacy grant {service} {bundle_id} -> {result.returncode} {result.stdout} {result.stderr}")
 
 
+def add_library_media(udid):
+    help_text = subprocess.run(["xcrun", "simctl", "help", "addmedia"], text=True, capture_output=True)
+    log("addmedia help")
+    log(help_text.stdout)
+    log(help_text.stderr)
+    failures = []
+    for index in range(1, 7):
+        photo = str(MEDIA_DIR / f"live-{index}.jpg")
+        video = str(MEDIA_DIR / f"live-{index}.mov")
+        added = False
+        for args in ([photo, video], [video, photo]):
+            result = subprocess.run(["xcrun", "simctl", "addmedia", udid, *args], text=True, capture_output=True)
+            log(f"addmedia live-{index} {' '.join(Path(item).name for item in args)} -> {result.returncode} {result.stdout} {result.stderr}")
+            if result.returncode == 0:
+                added = True
+                break
+        if added:
+            continue
+        failures.append(f"live-{index}")
+        for path in (photo, video):
+            piece = subprocess.run(["xcrun", "simctl", "addmedia", udid, path], text=True, capture_output=True)
+            log(f"addmedia alone {Path(path).name} -> {piece.returncode} {piece.stdout} {piece.stderr}")
+    for name in ("original.mov", "edited.mov"):
+        path = str(MEDIA_DIR / name)
+        result = subprocess.run(["xcrun", "simctl", "addmedia", udid, path], text=True, capture_output=True)
+        log(f"addmedia {name} -> {result.returncode} {result.stdout} {result.stderr}")
+        if result.returncode != 0:
+            failures.append(name)
+    if failures:
+        raise SystemExit("could not add sample media: " + ", ".join(failures))
+
+
 def wait_for_seed(udid):
     launched = subprocess.run(
         ["xcrun", "simctl", "launch", udid, "com.tradergoods.screenshotseed"],
@@ -206,6 +238,7 @@ def main():
         "-o", "/tmp/generate-media",
     ])
     run(["/tmp/generate-media", str(MEDIA_DIR)])
+    add_library_media(udid)
 
     sign = [
         "CODE_SIGN_IDENTITY=-",
@@ -216,22 +249,13 @@ def main():
     ]
     destination = f"platform=iOS Simulator,id={udid}"
     run_logged(
-        ["xcodebuild", "-project", "scripts/screenshots/Seed.xcodeproj", "-scheme", "Seed", "-configuration", "Debug", "-destination", destination, "-derivedDataPath", "artifacts/derived-seed", *sign, "build"],
-        LOG_DIR / "seed-build.log",
-        timeout=900,
-    )
-    run_logged(
         ["xcodebuild", "-project", "LiveToStill.xcodeproj", "-scheme", "LiveToStill", "-configuration", "Debug", "-destination", destination, "-derivedDataPath", "artifacts/derived-app", *sign, "build"],
         LOG_DIR / "app-build.log",
         timeout=900,
     )
-    seed_app = ROOT / "artifacts" / "derived-seed" / "Build" / "Products" / "Debug-iphonesimulator" / "Seed.app"
     live_app = ROOT / "artifacts" / "derived-app" / "Build" / "Products" / "Debug-iphonesimulator" / "LiveToStill.app"
-    if not seed_app.exists() or not live_app.exists():
-        raise SystemExit(f"missing built app seed={seed_app.exists()} live={live_app.exists()}")
-    sign_and_install(udid, seed_app)
-    grant_photos(udid, "com.tradergoods.screenshotseed")
-
+    if not live_app.exists():
+        raise SystemExit("missing built Live to Still app")
     sign_and_install(udid, live_app)
     grant_photos(udid, "com.tradergoods.livetostill")
     subprocess.run(
