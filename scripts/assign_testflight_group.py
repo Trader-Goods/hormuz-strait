@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Add the uploaded build to the internal TestFlight group named Me.
+"""Make the uploaded build available to the internal TestFlight group Me.
 
-Does not submit the app for App Store review.
+Does not submit the app for beta review or App Store review.
 """
 
 import os
@@ -14,11 +14,19 @@ from prepare_appstore_signing import api, token
 
 GROUP_NAME = "Me"
 WAIT_SECONDS = 20 * 60
+API_HOST = "https://api.appstoreconnect.apple.com"
 
 
 def require(name):
     if not os.environ.get(name):
         raise SystemExit(f"missing {name}")
+
+
+def next_path(page):
+    link = (page.get("links") or {}).get("next")
+    if not link or not link.startswith(API_HOST):
+        return None
+    return link[len(API_HOST):]
 
 
 def app_id(auth, bundle):
@@ -31,7 +39,7 @@ def app_id(auth, bundle):
     raise SystemExit("app not found")
 
 
-def group_id(auth, app):
+def find_group(auth, app):
     query = urllib.parse.urlencode({"filter[app]": app, "limit": 50})
     found = api("GET", "/v1/betaGroups?" + query, auth).get("data", [])
     names = []
@@ -45,6 +53,13 @@ def group_id(auth, app):
     print("internal group Me was not found")
     print("groups:", ", ".join(names) if names else "(none)")
     raise SystemExit(1)
+
+
+def group_access(auth, group):
+    attributes = api("GET", f"/v1/betaGroups/{group}", auth)["data"].get("attributes", {})
+    access = attributes.get("hasAccessToAllBuilds")
+    print(f"hasAccessToAllBuilds {access}")
+    return access is True
 
 
 def find_build(auth, app, number):
@@ -62,19 +77,83 @@ def find_build(auth, app, number):
     return None, None
 
 
-def assign(auth, group, build):
-    # Internal groups are added from the build. The reverse call is rejected
-    # with "Cannot add internal group to a build."
+def beta_state(auth, build):
+    payload = api("GET", f"/v1/builds/{build}?include=buildBetaDetail", auth)
+    for item in payload.get("included", []):
+        if item.get("type") == "buildBetaDetails":
+            return item.get("attributes", {}).get("internalBuildState")
+    return None
+
+
+def answer_export(auth, build):
+    api("PATCH", f"/v1/builds/{build}", auth, {
+        "data": {
+            "type": "builds",
+            "id": build,
+            "attributes": {"usesNonExemptEncryption": False},
+        },
+    })
+    print("export compliance answered")
+
+
+def group_has_build(auth, group, build):
+    path = f"/v1/betaGroups/{group}/relationships/builds?limit=200"
+    while path:
+        page = api("GET", path, auth)
+        for item in page.get("data", []):
+            if item.get("id") == build:
+                return True
+        path = next_path(page)
+    return False
+
+
+def build_has_group(auth, build, group):
+    path = f"/v1/builds/{build}/relationships/betaGroups?limit=50"
+    while path:
+        page = api("GET", path, auth)
+        for item in page.get("data", []):
+            if item.get("id") == group:
+                return True
+        path = next_path(page)
+    return False
+
+
+def enable_automatic(auth, group):
+    api("PATCH", f"/v1/betaGroups/{group}", auth, {
+        "data": {
+            "type": "betaGroups",
+            "id": group,
+            "attributes": {"hasAccessToAllBuilds": True},
+        },
+    })
+    print("automatic distribution enabled for internal group Me")
+
+
+def link_group(auth, build, group):
     try:
         api("POST", f"/v1/builds/{build}/relationships/betaGroups", auth, {
             "data": [{"type": "betaGroups", "id": group}],
         })
     except SystemExit as error:
-        if getattr(error, "code", None) == 409:
+        code = getattr(error, "code", None)
+        if code == 409:
             print("build already in the internal group")
+            return
+        if code == 422:
             return
         raise
     print("build added to internal group Me")
+
+
+def assigned(auth, group, build, automatic):
+    if group_has_build(auth, group, build) or build_has_group(auth, build, group):
+        print("build added to internal group Me")
+        return True
+    if automatic:
+        print("build available to internal group Me")
+        print("the group receives every build, so a manual add is rejected")
+        return True
+    return False
 
 
 def main():
@@ -83,7 +162,7 @@ def main():
     number = os.environ["BUILD_NUMBER"]
     auth = token()
     app = app_id(auth, os.environ["BUNDLE_ID"])
-    group = group_id(auth, app)
+    group = find_group(auth, app)
     deadline = time.time() + WAIT_SECONDS
     build_id = None
     while time.time() < deadline:
@@ -93,12 +172,31 @@ def main():
             print(f"build {number} visible, state {state}")
             if state == "INVALID":
                 raise SystemExit("uploaded build is invalid")
-            break
-        print(f"waiting for build {number}")
+            if state == "VALID":
+                break
+        else:
+            print(f"waiting for build {number}")
         time.sleep(20)
     if not build_id:
         raise SystemExit("uploaded build did not appear")
-    assign(auth, group, build_id)
+
+    internal = beta_state(auth, build_id)
+    print(f"internal build state {internal}")
+    if internal == "MISSING_EXPORT_COMPLIANCE":
+        answer_export(auth, build_id)
+
+    if assigned(auth, group, build_id, False):
+        return
+
+    automatic = group_access(auth, group)
+    if not automatic:
+        enable_automatic(auth, group)
+        automatic = True
+
+    link_group(auth, build_id, group)
+    if assigned(auth, group, build_id, automatic):
+        return
+    raise SystemExit("build was not added to internal group Me")
 
 
 if __name__ == "__main__":
