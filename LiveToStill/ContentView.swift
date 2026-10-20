@@ -48,7 +48,7 @@ struct ContentView: View {
                                     Button(model.allSelected ? "Cancel" : "Select All") {
                                         model.toggleAll()
                                     }
-                                    .disabled(model.items.isEmpty || model.scanning || model.progress != nil || model.cloudRunning)
+                                    .disabled(model.items.isEmpty || model.scanning || model.progress != nil)
                                 }
                             }
                     }
@@ -206,14 +206,6 @@ private struct LibraryScreen: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
-            NavigationLink {
-                CloudSpaceScreen(model: model)
-            } label: {
-                Label("Free Up iCloud Space", systemImage: "icloud.and.arrow.down")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
             EmptyRecentlyDeletedButton()
             Toggle("Keep video clips", isOn: $model.keepVideoClips)
                 .font(.subheadline)
@@ -303,174 +295,17 @@ private struct LibraryScreen: View {
                     model.toggleAll()
                 }
                 .buttonStyle(.bordered)
-                .disabled(model.items.isEmpty || model.scanning || model.progress != nil || model.cloudRunning)
+                .disabled(model.items.isEmpty || model.scanning || model.progress != nil)
                 Button("Convert") {
                     confirming = true
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(model.selected.isEmpty || model.scanning || model.progress != nil || model.cloudRunning)
+                .disabled(model.selected.isEmpty || model.scanning || model.progress != nil)
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.ultraThinMaterial)
-    }
-}
-
-private struct CloudSpaceScreen: View {
-    @ObservedObject var model: LibraryModel
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                summary
-                if model.progress != nil || model.storagePause != nil {
-                    Text("A conversion is already running. This starts after that conversion finishes.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } else if model.cloudScanning || !model.cloudScanFinished {
-                    HStack(spacing: 10) {
-                        ProgressView()
-                        Text(scanningText)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                } else if model.cloudItems.isEmpty && model.cloudResult == nil {
-                    Text("No Live Photos were found. This includes every photo that still has a paired video, with Live on or off, whether the files are on this iPhone, only in iCloud, or both. If iCloud Photos is off, pictures that exist only in iCloud are not in this library. If you already converted them, the video is gone and there is nothing left to free.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    EmptyRecentlyDeletedButton()
-                } else if !model.cloudItems.isEmpty {
-                    Text("Every Live Photo is included, including ones already on this iPhone and ones with Live turned off. The photo file is saved unchanged. When it is not on this iPhone, only that photo is downloaded, never the paired video. Deleting the original syncs, so iCloud storage is freed after Recently Deleted is emptied. One photo is handled at a time so the download has room. Photos that cannot be read stay in the library and can be tried again later.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    Button("Free Up iCloud Space") {
-                        Task { await model.convertCloud() }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .frame(maxWidth: .infinity)
-                    .disabled(model.cloudScanning || model.cloudRunning || model.cloudProgress != nil || model.progress != nil || model.storagePause != nil)
-                    EmptyRecentlyDeletedButton()
-                }
-            }
-            .padding(16)
-        }
-        .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("Free Up iCloud Space")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(model.cloudRunning || model.cloudProgress != nil)
-        .refreshable {
-            if model.cloudProgress == nil && model.cloudStoragePause == nil && !model.cloudRunning {
-                await model.scanCloud()
-            }
-        }
-        .task {
-            await model.scanCloud()
-        }
-        .onChange(of: model.progress == nil && model.storagePause == nil) { ready in
-            if ready {
-                Task { await model.scanCloud() }
-            }
-        }
-        .overlay {
-            if let progress = model.cloudProgress {
-                WorkOverlay(progress: progress) {
-                    model.requestCloudCancel()
-                }
-            }
-        }
-        .sheet(item: $model.cloudResult, onDismiss: {
-            Task { await model.scanCloud() }
-        }) { result in
-            PostDeleteSummary(
-                title: resultTitle(result),
-                message: resultMessage(result),
-                footnote: result.skipped > 0
-                    ? "\(result.skipped.formatted()) Live Photos were skipped because the photo could not be downloaded. They stay in your library and can be tried again later."
-                    : nil,
-                dismiss: { model.cloudResult = nil }
-            )
-        }
-        .fullScreenCover(item: $model.cloudStoragePause) { pause in
-            OutOfSpaceScreen(
-                converted: pause.converted,
-                remaining: pause.remaining,
-                onContinue: { Task { await model.resumeCloudAfterStoragePause() } },
-                onStop: model.stopCloudForNow
-            )
-            .interactiveDismissDisabled()
-        }
-    }
-
-    private var summary: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("\((model.cloudScanning ? model.cloudFound : model.cloudItems.count).formatted()) Live Photos")
-                .font(.title2)
-                .fontWeight(.semibold)
-            if model.cloudScanFinished && !model.cloudScanning {
-                Text("\(model.cloudOnDevice.formatted()) on this iPhone")
-                    .foregroundStyle(.secondary)
-                Text("\(model.cloudOnlyCount.formatted()) only in iCloud")
-                    .foregroundStyle(.secondary)
-                Text("\(model.cloudItems.count.formatted()) will be converted")
-                    .foregroundStyle(.secondary)
-            }
-            Text(summaryLine)
-                .foregroundStyle(.secondary)
-            if model.cloudScanning && model.cloudScanTotal > 0 {
-                Text(scanningText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(pine.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-
-    private var scanningText: String {
-        if model.cloudScanTotal == 0 {
-            return "Scanning your photo library…"
-        }
-        return "Checked \(model.cloudChecked.formatted()) of \(model.cloudScanTotal.formatted()) photos"
-    }
-
-    private var summaryLine: String {
-        if model.cloudScanning || !model.cloudScanFinished {
-            return "Paired video size appears as the library is measured"
-        }
-        if model.cloudItems.isEmpty {
-            return "Nothing with a paired video is left to convert"
-        }
-        guard model.cloudTotalBytes > 0 else {
-            return "Paired video size is unavailable"
-        }
-        return "About \(ByteText.string(model.cloudTotalBytes)) of paired video can be freed in iCloud"
-    }
-
-    private func resultTitle(_ result: ConversionResult) -> String {
-        if result.deleted {
-            return "In Recently Deleted"
-        }
-        if result.undeletedSaves > 0 {
-            return "Originals kept"
-        }
-        return "Nothing saved"
-    }
-
-    private func resultMessage(_ result: ConversionResult) -> String {
-        let waiting = result.remaining > 0 ? " \(result.remaining.formatted()) are left for another run." : ""
-        if result.deleted {
-            let stillWaiting = result.undeletedSaves > 0
-                ? " \(result.undeletedSaves.formatted()) still photos were saved, but those Live Photos were not deleted. Run this again to delete them without downloading again."
-                : ""
-            return "Saved \(result.converted.formatted()) still photos. The Live Photos are in Recently Deleted. About \(ByteText.string(result.freedBytes)) of paired video stays used on this iPhone and in iCloud until you empty Recently Deleted. Emptying it frees that space in iCloud too.\(stillWaiting)\(waiting)"
-        }
-        if result.undeletedSaves > 0 {
-            return "Saved \(result.undeletedSaves.formatted()) still photos, but the Live Photos were not deleted, so their space is still in use in iCloud. Run this again to delete them without downloading again.\(waiting)"
-        }
-        return "No still photos were saved, so nothing was deleted.\(waiting)"
     }
 }
 
@@ -710,36 +545,28 @@ private struct AccessNotice: View {
 
 private struct WorkOverlay: View {
     let progress: WorkProgress
-    var onCancel: (() -> Void)? = nil
 
     var body: some View {
         ZStack {
             Color.black.opacity(0.28).ignoresSafeArea()
             VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(progress.title)
-                        .font(.headline)
-                    ProgressView(value: Double(progress.completed), total: Double(max(progress.total, 1)))
-                        .tint(pine)
-                    Text("\(progress.completed.formatted()) of \(progress.total.formatted())")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Text(progress.detail)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                .accessibilityElement(children: .combine)
-                if let onCancel {
-                    Button("Cancel", action: onCancel)
-                        .buttonStyle(.bordered)
-                        .frame(maxWidth: .infinity)
-                }
+                Text(progress.title)
+                    .font(.headline)
+                ProgressView(value: Double(progress.completed), total: Double(max(progress.total, 1)))
+                    .tint(pine)
+                Text("\(progress.completed.formatted()) of \(progress.total.formatted())")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text(progress.detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             .padding(20)
             .frame(maxWidth: 360)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .padding(24)
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
