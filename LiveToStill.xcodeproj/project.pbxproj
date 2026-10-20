@@ -13,6 +13,7 @@
 		7A1E0C1AA1B2C3D4E5F60718 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7A1E0C16A1B2C3D4E5F60718 /* Assets.xcassets */; };
 		7A1E0C2CA1B2C3D4E5F60718 /* ResourceSize.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A1E0C29A1B2C3D4E5F60718 /* ResourceSize.m */; };
 		7A1E0C2EA1B2C3D4E5F60718 /* DuplicateCopies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1E0C2DA1B2C3D4E5F60718 /* DuplicateCopies.swift */; };
+		7A1E0C32A1B2C3D4E5F60718 /* SizeSort.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1E0C31A1B2C3D4E5F60718 /* SizeSort.swift */; };
 		7A1E0C30A1B2C3D4E5F60718 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 7A1E0C2FA1B2C3D4E5F60718 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
@@ -27,6 +28,7 @@
 		7A1E0C2AA1B2C3D4E5F60718 /* ResourceSize.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ResourceSize.h; sourceTree = "<group>"; };
 		7A1E0C2BA1B2C3D4E5F60718 /* LiveToStill-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "LiveToStill-Bridging-Header.h"; sourceTree = "<group>"; };
 		7A1E0C2DA1B2C3D4E5F60718 /* DuplicateCopies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuplicateCopies.swift; sourceTree = "<group>"; };
+		7A1E0C31A1B2C3D4E5F60718 /* SizeSort.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SizeSort.swift; sourceTree = "<group>"; };
 		7A1E0C2FA1B2C3D4E5F60718 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -56,6 +58,7 @@
 				7A1E0C14A1B2C3D4E5F60718 /* ContentView.swift */,
 				7A1E0C15A1B2C3D4E5F60718 /* LivePhotoLibrary.swift */,
 				7A1E0C2DA1B2C3D4E5F60718 /* DuplicateCopies.swift */,
+				7A1E0C31A1B2C3D4E5F60718 /* SizeSort.swift */,
 				7A1E0C29A1B2C3D4E5F60718 /* ResourceSize.m */,
 				7A1E0C2AA1B2C3D4E5F60718 /* ResourceSize.h */,
 				7A1E0C2BA1B2C3D4E5F60718 /* LiveToStill-Bridging-Header.h */,
@@ -149,6 +152,7 @@
 				7A1E0C18A1B2C3D4E5F60718 /* ContentView.swift in Sources */,
 				7A1E0C19A1B2C3D4E5F60718 /* LivePhotoLibrary.swift in Sources */,
 				7A1E0C2EA1B2C3D4E5F60718 /* DuplicateCopies.swift in Sources */,
+				7A1E0C32A1B2C3D4E5F60718 /* SizeSort.swift in Sources */,
 				7A1E0C2CA1B2C3D4E5F60718 /* ResourceSize.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

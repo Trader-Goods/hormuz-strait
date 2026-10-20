@@ -99,6 +99,7 @@ private struct LibraryScreen: View {
     @StateObject private var thumbnails = ThumbnailKeeper()
     @Environment(\.displayScale) private var displayScale
     @State private var confirming = false
+    @State private var showingSizes = false
     private let columns = [GridItem(.adaptive(minimum: 108, maximum: 160), spacing: 6)]
 
     var body: some View {
@@ -189,6 +190,9 @@ private struct LibraryScreen: View {
             )
             .interactiveDismissDisabled()
         }
+        .navigationDestination(isPresented: $showingSizes) {
+            SizeSortScreen()
+        }
     }
 
     private var summary: some View {
@@ -199,6 +203,14 @@ private struct LibraryScreen: View {
             Text(summaryLine)
                 .foregroundStyle(.secondary)
             EmptyRecentlyDeletedButton()
+            Button {
+                showingSizes = true
+            } label: {
+                Label("Sort by Size", systemImage: "arrow.up.arrow.down")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
             Toggle("Keep video clips", isOn: $model.keepVideoClips)
                 .font(.subheadline)
             Text(model.keepVideoClips
@@ -535,7 +547,7 @@ private struct AccessNotice: View {
     }
 }
 
-private struct WorkOverlay: View {
+struct WorkOverlay: View {
     let progress: WorkProgress
 
     var body: some View {
