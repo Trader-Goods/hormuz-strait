@@ -26,6 +26,13 @@ struct ConversionResult: Identifiable, Equatable {
     let deleted: Bool
     let keptClips: Bool
     var remaining: Int = 0
+    /// Stills saved in this run whose Live Photos were not deleted.
+    var undeletedSaves: Int = 0
+}
+
+enum CloudTransfer: Sendable {
+    case downloading(Double)
+    case saving
 }
 
 struct ClipDeletionResult: Identifiable, Equatable {
@@ -124,6 +131,17 @@ final class LibraryModel: ObservableObject {
     @Published var clipsLoading = false
     @Published var clipDeletion: ClipDeletionResult?
     @Published var storagePause: StoragePause?
+    @Published var cloudItems: [LiveItem] = []
+    @Published var cloudTotalBytes: Int64 = 0
+    @Published var cloudScanning = false
+    @Published var cloudChecked = 0
+    @Published var cloudScanTotal = 0
+    @Published var cloudFound = 0
+    @Published var cloudProgress: WorkProgress?
+    @Published var cloudResult: ConversionResult?
+    @Published var cloudStoragePause: StoragePause?
+    @Published var cloudRunning = false
+    @Published var cloudScanFinished = false
 
     nonisolated static let clipsAlbumTitle = "Live Photo Clips"
     private static let keepClipsKey = "keepVideoClips"
@@ -138,6 +156,16 @@ final class LibraryModel: ObservableObject {
     private var sessionFreed: Int64 = 0
     private var sessionRetained: Int64 = 0
     private var sessionDeletedAny = false
+    private var cloudScanGeneration = 0
+    private var cloudPending: [LiveItem] = []
+    private var cloudSessionDeleted = 0
+    private var cloudSessionSkipped = 0
+    private var cloudSessionFreed: Int64 = 0
+    private var cloudSessionDeletedAny = false
+    private var cloudUndeletedSaves = 0
+    private var cloudCancelRequested = false
+    private var cloudJobTotal = 0
+    private var cloudActiveItemID: String?
 
     var allClipsSelected: Bool {
         !clips.isEmpty && clipsSelected.count == clips.count
@@ -164,6 +192,7 @@ final class LibraryModel: ObservableObject {
 
     func onForeground() async {
         guard didPrepare, progress == nil, result == nil, storagePause == nil, !conversionActive else { return }
+        guard cloudProgress == nil, cloudStoragePause == nil, !cloudRunning else { return }
         let mapped = Self.map(PHPhotoLibrary.authorizationStatus(for: .readWrite))
         guard mapped != access else { return }
         access = mapped
@@ -175,7 +204,7 @@ final class LibraryModel: ObservableObject {
     }
 
     func scan() async {
-        guard progress == nil, storagePause == nil, !conversionActive else { return }
+        guard progress == nil, storagePause == nil, !conversionActive, !cloudRunning, cloudStoragePause == nil else { return }
         scanGeneration += 1
         let generation = scanGeneration
         scanning = true
@@ -239,8 +268,225 @@ final class LibraryModel: ObservableObject {
         result = sessionResult(keptClips: keepVideoClips)
     }
 
+    func scanCloud() async {
+        guard cloudProgress == nil, cloudStoragePause == nil, !cloudRunning else { return }
+        guard progress == nil, storagePause == nil, !conversionActive else { return }
+        cloudScanGeneration += 1
+        let generation = cloudScanGeneration
+        cloudScanning = true
+        cloudScanFinished = false
+        cloudChecked = 0
+        cloudScanTotal = 0
+        cloudFound = 0
+        cloudItems = []
+        cloudTotalBytes = 0
+        let found: [LiveItem] = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                let items = Self.collectCloudOnly { checked, foundCount, total in
+                    DispatchQueue.main.async {
+                        guard let self, generation == self.cloudScanGeneration else { return }
+                        self.cloudChecked = checked
+                        self.cloudScanTotal = total
+                        self.cloudFound = foundCount
+                    }
+                }
+                continuation.resume(returning: items)
+            }
+        }
+        guard generation == cloudScanGeneration else { return }
+        cloudItems = found
+        cloudFound = found.count
+        cloudTotalBytes = found.reduce(0) { $0 + $1.videoByteCount }
+        cloudScanning = false
+        cloudScanFinished = true
+    }
+
+    func convertCloud() async {
+        await runCloud(resume: false)
+    }
+
+    func resumeCloudAfterStoragePause() async {
+        cloudStoragePause = nil
+        await runCloud(resume: true)
+    }
+
+    func requestCloudCancel() {
+        guard cloudRunning else { return }
+        cloudCancelRequested = true
+        guard var progress = cloudProgress, progress.title != "Waiting for deletion confirmation" else { return }
+        progress.title = "Finishing this photo"
+        progress.detail = "This photo will be saved and its Live Photo deleted. The next download will not start."
+        cloudProgress = progress
+    }
+
+    func stopCloudForNow() {
+        cloudStoragePause = nil
+        cloudProgress = nil
+        cloudRunning = false
+        cloudCancelRequested = false
+        cloudActiveItemID = nil
+        guard cloudSessionDeleted > 0 || cloudSessionSkipped > 0 || cloudUndeletedSaves > 0 else { return }
+        cloudResult = cloudSessionResult()
+    }
+
+    private func runCloud(resume: Bool) async {
+        guard cloudProgress == nil, cloudStoragePause == nil, !cloudRunning else { return }
+        guard progress == nil, storagePause == nil, !conversionActive else { return }
+        if !resume {
+            cloudPending = cloudItems
+            cloudSessionDeleted = 0
+            cloudSessionSkipped = 0
+            cloudSessionFreed = 0
+            cloudSessionDeletedAny = false
+            cloudUndeletedSaves = 0
+            cloudCancelRequested = false
+            cloudJobTotal = cloudPending.count
+        }
+        guard !cloudPending.isEmpty else { return }
+        cloudRunning = true
+
+        while !cloudPending.isEmpty {
+            if cloudCancelRequested {
+                break
+            }
+            if let next = cloudPending.first, savedIDs.contains(next.id) {
+                cloudPending.removeFirst()
+                let deleted = await deleteCloudItem(next)
+                if !deleted {
+                    cloudPending.insert(next, at: 0)
+                    cloudUndeletedSaves += 1
+                    break
+                }
+                continue
+            }
+
+            let item = cloudPending[0]
+            if !StorageCapacity.fits(item, keepingClips: false) {
+                pauseCloudForStorage()
+                return
+            }
+            cloudActiveItemID = item.id
+            let done = cloudSessionDeleted + cloudSessionSkipped
+            cloudProgress = WorkProgress(
+                title: "Downloading the photo",
+                detail: "Downloading the photo file only. The paired video stays in iCloud and is not downloaded.",
+                completed: done,
+                total: max(cloudJobTotal, 1)
+            )
+            do {
+                try await Self.convertFromCloud(localIdentifier: item.id) { [weak self] transfer in
+                    Task { @MainActor in
+                        self?.applyCloudTransfer(transfer, itemID: item.id)
+                    }
+                }
+                savedIDs.insert(item.id)
+                persistSavedIDs()
+                cloudPending.removeAll { $0.id == item.id }
+                cloudActiveItemID = nil
+                let deleted = await deleteCloudItem(item)
+                if !deleted {
+                    cloudPending.insert(item, at: 0)
+                    cloudUndeletedSaves += 1
+                    break
+                }
+            } catch {
+                cloudActiveItemID = nil
+                if Self.isStorageError(error) {
+                    pauseCloudForStorage()
+                    return
+                }
+                cloudSessionSkipped += 1
+                cloudPending.removeAll { $0.id == item.id }
+            }
+        }
+
+        cloudRunning = false
+        cloudProgress = nil
+        cloudCancelRequested = false
+        cloudActiveItemID = nil
+        guard cloudSessionDeleted > 0 || cloudSessionSkipped > 0 || cloudUndeletedSaves > 0 else { return }
+        cloudResult = cloudSessionResult()
+    }
+
+    private func applyCloudTransfer(_ transfer: CloudTransfer, itemID: String) {
+        guard cloudActiveItemID == itemID, cloudRunning else { return }
+        if cloudCancelRequested {
+            cloudProgress = WorkProgress(
+                title: "Finishing this photo",
+                detail: "This photo will be saved and its Live Photo deleted. The next download will not start.",
+                completed: cloudSessionDeleted + cloudSessionSkipped,
+                total: max(cloudJobTotal, 1)
+            )
+            return
+        }
+        let done = cloudSessionDeleted + cloudSessionSkipped
+        switch transfer {
+        case .downloading(let fraction):
+            let percent = Int((min(max(fraction, 0), 1) * 100).rounded())
+            cloudProgress = WorkProgress(
+                title: "Downloading the photo",
+                detail: "Downloading the photo file only, \(percent)%. The paired video stays in iCloud and is not downloaded.",
+                completed: done,
+                total: max(cloudJobTotal, 1)
+            )
+        case .saving:
+            cloudProgress = WorkProgress(
+                title: "Saving the still photo",
+                detail: "The photo file is copied unchanged. The paired video is not downloaded.",
+                completed: done,
+                total: max(cloudJobTotal, 1)
+            )
+        }
+    }
+
+    private func deleteCloudItem(_ item: LiveItem) async -> Bool {
+        cloudProgress = WorkProgress(
+            title: "Waiting for deletion confirmation",
+            detail: "iOS asks once for this Live Photo. It moves to Recently Deleted and still uses space, including in iCloud, until that album is emptied.",
+            completed: cloudSessionDeleted,
+            total: max(cloudJobTotal, 1)
+        )
+        do {
+            try await Self.delete(localIdentifiers: [item.id])
+        } catch {
+            return false
+        }
+        savedIDs.remove(item.id)
+        cloudSessionDeleted += 1
+        cloudSessionFreed += item.videoByteCount
+        cloudSessionDeletedAny = true
+        persistSavedIDs()
+        markRemoved([item])
+        cloudItems.removeAll { $0.id == item.id }
+        cloudFound = cloudItems.count
+        cloudTotalBytes = cloudItems.reduce(0) { $0 + $1.videoByteCount }
+        return true
+    }
+
+    private func pauseCloudForStorage() {
+        cloudCancelRequested = false
+        cloudProgress = nil
+        cloudRunning = false
+        cloudActiveItemID = nil
+        cloudStoragePause = StoragePause(converted: cloudSessionDeleted, remaining: cloudPending.count)
+    }
+
+    private func cloudSessionResult() -> ConversionResult {
+        ConversionResult(
+            freedBytes: cloudSessionDeletedAny ? cloudSessionFreed : 0,
+            retainedClipBytes: 0,
+            converted: cloudSessionDeleted,
+            skipped: cloudSessionSkipped,
+            deleted: cloudSessionDeletedAny,
+            keptClips: false,
+            remaining: cloudPending.count,
+            undeletedSaves: cloudUndeletedSaves
+        )
+    }
+
     private func runConversion(resume: Bool) async {
         guard progress == nil, storagePause == nil, !conversionActive else { return }
+        guard cloudProgress == nil, cloudStoragePause == nil, !cloudRunning else { return }
         let keeping = keepVideoClips
         if !resume {
             pendingItems = items.filter { selected.contains($0.id) }
@@ -564,6 +810,54 @@ final class LibraryModel: ObservableObject {
         return all
     }
 
+    /// Live Photos whose still file is not on this iPhone. The paired-video check
+    /// matches the regular scan. Nothing is downloaded while scanning.
+    nonisolated static func collectCloudOnly(onProgress: @escaping (_ checked: Int, _ found: Int, _ total: Int) -> Void) -> [LiveItem] {
+        let options = PHFetchOptions()
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        let result = PHAsset.fetchAssets(with: .image, options: options)
+        let total = result.count
+        var all: [LiveItem] = []
+        let batchSize = 200
+        var index = 0
+        while index < total {
+            let end = min(index + batchSize, total)
+            autoreleasepool {
+                let indexes = IndexSet(integersIn: index..<end)
+                result.enumerateObjects(at: indexes, options: []) { asset, _, _ in
+                    autoreleasepool {
+                        let resources = PHAssetResource.assetResources(for: asset)
+                        let paired = resources.filter { isReclaimablePairedVideo($0.type) }
+                        guard !paired.isEmpty else { return }
+                        guard stillIsCloudOnly(in: resources, adjusted: asset.hasAdjustments) else { return }
+                        let videoBytes = paired.reduce(Int64(0)) { sum, resource in
+                            sum + max(0, LiveResourceFileSize(resource))
+                        }
+                        all.append(LiveItem(
+                            id: asset.localIdentifier,
+                            videoByteCount: videoBytes,
+                            stillByteCount: displayedStillByteCount(in: resources, adjusted: asset.hasAdjustments)
+                        ))
+                    }
+                }
+            }
+            index = end
+            onProgress(index, all.count, total)
+        }
+        if total == 0 {
+            onProgress(0, 0, 0)
+        }
+        return all
+    }
+
+    /// The still that conversion would copy is not stored on this device.
+    /// A missing still resource is not offered, because there is nothing to download.
+    nonisolated private static func stillIsCloudOnly(in resources: [PHAssetResource], adjusted: Bool) -> Bool {
+        let type: PHAssetResourceType = adjusted ? .fullSizePhoto : .photo
+        guard let resource = resources.first(where: { $0.type == type }) else { return false }
+        return !LiveResourceIsLocal(resource)
+    }
+
     nonisolated private static func displayedStillByteCount(in resources: [PHAssetResource], adjusted: Bool) -> Int64 {
         let type: PHAssetResourceType = adjusted ? .fullSizePhoto : .photo
         guard let resource = resources.first(where: { $0.type == type }) else { return 0 }
@@ -628,6 +922,58 @@ final class LibraryModel: ObservableObject {
                 )
             }
         } else if albums.isEmpty {
+            try await save(
+                fileURL: stillURL,
+                originalFilename: still.originalFilename,
+                creationDate: creationDate,
+                location: location,
+                favorite: favorite,
+                albums: []
+            )
+        } else {
+            do {
+                try await save(
+                    fileURL: stillURL,
+                    originalFilename: still.originalFilename,
+                    creationDate: creationDate,
+                    location: location,
+                    favorite: favorite,
+                    albums: albums
+                )
+            } catch {
+                try await save(
+                    fileURL: stillURL,
+                    originalFilename: still.originalFilename,
+                    creationDate: creationDate,
+                    location: location,
+                    favorite: favorite,
+                    albums: []
+                )
+            }
+        }
+    }
+
+    /// Downloads and saves only the still. The paired video is never requested.
+    /// Clips are not kept. Original bytes, date, location, favorite, and regular albums match the regular convert path.
+    nonisolated static func convertFromCloud(
+        localIdentifier: String,
+        onProgress: @escaping @Sendable (CloudTransfer) -> Void
+    ) async throws {
+        let fetch = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil)
+        guard let asset = fetch.firstObject else { throw ConvertError.missing }
+        let still = try stillResource(for: asset)
+        let stillURL = temporaryURL(for: still, fallback: "jpg")
+        defer { try? FileManager.default.removeItem(at: stillURL) }
+        try await writeAllowingNetwork(still, to: stillURL) { fraction in
+            onProgress(.downloading(fraction))
+        }
+        try assertCopiedSize(of: still, at: stillURL)
+        onProgress(.saving)
+        let albums = userAlbums(containing: asset)
+        let creationDate = asset.creationDate
+        let location = asset.location
+        let favorite = asset.isFavorite
+        if albums.isEmpty {
             try await save(
                 fileURL: stillURL,
                 originalFilename: still.originalFilename,
@@ -768,6 +1114,49 @@ final class LibraryModel: ObservableObject {
                 }
             }
         }
+    }
+
+    /// Network is allowed only for the still resource passed by convertFromCloud.
+    nonisolated private static func writeAllowingNetwork(
+        _ resource: PHAssetResource,
+        to url: URL,
+        onProgress: @escaping @Sendable (Double) -> Void
+    ) async throws {
+        let options = PHAssetResourceRequestOptions()
+        options.isNetworkAccessAllowed = true
+        options.progressHandler = { progress in
+            onProgress(progress)
+        }
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            PHAssetResourceManager.default().writeData(for: resource, toFile: url, options: options) { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    nonisolated private static func isStorageError(_ error: Error) -> Bool {
+        func matches(_ error: NSError) -> Bool {
+            if error.domain == NSCocoaErrorDomain && error.code == NSFileWriteOutOfSpaceError {
+                return true
+            }
+            if error.domain == NSPOSIXErrorDomain && error.code == Int(POSIXError.ENOSPC.rawValue) {
+                return true
+            }
+            if error.domain == PHPhotosErrorDomain, let code = PHPhotosError.Code(rawValue: error.code), code == .notEnoughSpace {
+                return true
+            }
+            return false
+        }
+        let ns = error as NSError
+        if matches(ns) { return true }
+        if let underlying = ns.userInfo[NSUnderlyingErrorKey] as? NSError, matches(underlying) {
+            return true
+        }
+        return false
     }
 
     nonisolated private static func userAlbums(containing asset: PHAsset) -> [PHAssetCollection] {

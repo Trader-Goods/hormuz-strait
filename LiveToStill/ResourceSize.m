@@ -11,3 +11,15 @@ long long LiveResourceFileSize(PHAssetResource *resource) {
     }
     return 0;
 }
+
+BOOL LiveResourceIsLocal(PHAssetResource *resource) {
+    @try {
+        id value = [resource valueForKey:@"locallyAvailable"];
+        if ([value isKindOfClass:[NSNumber class]]) {
+            return [(NSNumber *)value boolValue];
+        }
+    } @catch (NSException *exception) {
+        return YES;
+    }
+    return YES;
+}
