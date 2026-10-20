@@ -63,9 +63,11 @@ def find_build(auth, app, number):
 
 
 def assign(auth, group, build):
+    # Internal groups are added from the build. The reverse call is rejected
+    # with "Cannot add internal group to a build."
     try:
-        api("POST", f"/v1/betaGroups/{group}/relationships/builds", auth, {
-            "data": [{"type": "builds", "id": build}],
+        api("POST", f"/v1/builds/{build}/relationships/betaGroups", auth, {
+            "data": [{"type": "betaGroups", "id": group}],
         })
     except SystemExit as error:
         if getattr(error, "code", None) == 409:

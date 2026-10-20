@@ -9,6 +9,7 @@ on:
 jobs:
   testflight:
     name: Build, sign and upload to TestFlight
+    if: ${{ !contains(github.event.head_commit.message, '[assign-only]') }}
     runs-on: macos-15-intel
     env:
       TEAM_ID: 35734G7ZCQ
@@ -141,3 +142,36 @@ jobs:
           if [ -n "${KEYCHAIN_PATH:-}" ]; then
             security delete-keychain "$KEYCHAIN_PATH" || true
           fi
+
+  assign:
+    name: Add build to internal group Me
+    if: ${{ contains(github.event.head_commit.message, '[assign-only]') }}
+    runs-on: ubuntu-latest
+    env:
+      BUNDLE_ID: com.tradergoods.livetostill
+      BUILD_NUMBER: "20"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write API key
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/private_keys"
+          KEY="$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          BODY=$(printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" | sed -e 's/-----[A-Z ]*-----//g' | tr -d ' \r\n\t')
+          { echo "-----BEGIN PRIVATE KEY-----"; echo "$BODY" | fold -w 64; echo "-----END PRIVATE KEY-----"; } > "$KEY"
+          chmod 600 "$KEY"
+          echo "KEY_PATH=$KEY" >> "$GITHUB_ENV"
+
+      - name: Add build 20 to internal group Me
+        env:
+          KID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISS: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: python3 scripts/assign_testflight_group.py
+
+      - name: Remove signing material
+        if: always()
+        run: rm -rf "$HOME/private_keys"
