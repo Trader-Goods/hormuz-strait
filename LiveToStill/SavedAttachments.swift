@@ -591,7 +591,7 @@ struct AttachmentsScreen: View {
             ForEach(model.devices) { device in
                 Toggle(isOn: Binding(
                     get: { device.isOwn },
-                    set: { model.setOwn(device.id, $0) }
+                    set: { model.setOwn(device.id, own: $0) }
                 )) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(device.name)
