@@ -127,6 +127,13 @@ jobs:
             -authenticationKeyID "$KID" \
             -authenticationKeyIssuerID "$ISS"
 
+      - name: Add build to internal group Me
+        env:
+          KID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISS: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: python3 scripts/assign_testflight_group.py
+
       - name: Remove signing material
         if: always()
         run: |
