@@ -8,21 +8,15 @@ struct AttachmentItem: Identifiable, Equatable, Sendable {
     let byteCount: Int64
     let created: Date?
     let cameraModel: String?
-    let modelKey: String?
-    let fromWhatsApp: Bool
+    let groupKey: String
+    let groupName: String
 }
 
-struct OwnCamera: Identifiable, Equatable, Sendable {
+struct PhoneGroup: Identifiable, Equatable, Sendable {
     let id: String
     let name: String
     let count: Int
-    let isOwn: Bool
-}
-
-struct DeviceTally: Equatable, Sendable {
-    let key: String
-    let name: String
-    let count: Int
+    let shown: Bool
 }
 
 struct AttachmentDeletion: Identifiable, Equatable {
@@ -32,21 +26,16 @@ struct AttachmentDeletion: Identifiable, Equatable {
     let deleted: Bool
 }
 
-struct AttachmentPass: Sendable {
-    var candidates: [AttachmentItem]
-    var tallies: [DeviceTally]
-}
-
-/// Photos saved from other people. iMessage keeps the sender's camera details and
-/// often saves them as Live Photos. PhotoKit does not record which app saved a photo.
-/// A model that accounts for at least 15 percent of camera photos, and the most
-/// common model, start as this person's own cameras. Nothing is downloaded.
+/// Photos grouped by the phone named in the original file. Nothing is downloaded.
 enum AttachmentScan {
     private static let convertedKey = "convertedLivePhotoIDs"
     private static let batchSize = 200
-    static let ownShare = 0.15
+    static let whatsAppGroup = "album:whatsapp"
+    static let noCameraGroup = "meta:none"
+    static let whatsAppName = "WhatsApp"
+    static let noCameraName = "No camera info"
 
-    nonisolated static func collect(onProgress: @escaping (_ checked: Int, _ total: Int) -> Void) -> AttachmentPass {
+    nonisolated static func collect(onProgress: @escaping (_ checked: Int, _ total: Int) -> Void) -> [AttachmentItem] {
         let converted = Set(UserDefaults.standard.stringArray(forKey: convertedKey) ?? [])
         let whatsApp = whatsAppImageIDs(excluding: converted)
         let options = PHFetchOptions()
@@ -54,8 +43,6 @@ enum AttachmentScan {
         let result = PHAsset.fetchAssets(with: .image, options: options)
         let total = result.count
         var candidates: [AttachmentItem] = []
-        var counts: [String: Int] = [:]
-        var names: [String: String] = [:]
         var index = 0
         while index < total {
             let end = min(index + batchSize, total)
@@ -67,22 +54,25 @@ enum AttachmentScan {
                         guard !converted.contains(asset.localIdentifier) else { return }
                         let fromWhatsApp = whatsApp.contains(asset.localIdentifier)
                         let facts = originalCamera(asset)
-                        if let facts, let key = facts.key, let name = facts.name, !fromWhatsApp {
-                            counts[key, default: 0] += 1
-                            if names[key] == nil {
-                                names[key] = name
-                            }
+                        let group: (key: String, name: String)?
+                        if fromWhatsApp {
+                            group = (whatsAppGroup, whatsAppName)
+                        } else if let facts, let key = facts.key, let name = facts.name {
+                            group = ("model:\(key)", name)
+                        } else if facts != nil {
+                            group = (noCameraGroup, noCameraName)
+                        } else {
+                            group = nil
                         }
-                        if fromWhatsApp || facts?.key != nil {
-                            candidates.append(AttachmentItem(
-                                id: asset.localIdentifier,
-                                byteCount: imageByteCount(asset),
-                                created: asset.creationDate,
-                                cameraModel: facts?.name ?? (fromWhatsApp ? "WhatsApp" : nil),
-                                modelKey: facts?.key,
-                                fromWhatsApp: fromWhatsApp
-                            ))
-                        }
+                        guard let group else { return }
+                        candidates.append(AttachmentItem(
+                            id: asset.localIdentifier,
+                            byteCount: imageByteCount(asset),
+                            created: asset.creationDate,
+                            cameraModel: facts?.name ?? group.name,
+                            groupKey: group.key,
+                            groupName: group.name
+                        ))
                     }
                 }
             }
@@ -92,28 +82,7 @@ enum AttachmentScan {
         if total == 0 {
             onProgress(0, 0)
         }
-        let tallies = counts.map { key, count in
-            DeviceTally(key: key, name: names[key] ?? key, count: count)
-        }.sorted { lhs, rhs in
-            if lhs.count != rhs.count { return lhs.count > rhs.count }
-            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
-        }
-        return AttachmentPass(candidates: candidates, tallies: tallies)
-    }
-
-    /// Own cameras are any model with at least 15 percent of camera photos, plus the most common model.
-    nonisolated static func heuristicOwnKeys(_ tallies: [DeviceTally]) -> Set<String> {
-        let total = tallies.reduce(0) { $0 + $1.count }
-        guard total > 0 else { return [] }
-        let top = tallies.map(\.count).max() ?? 0
-        var own = Set<String>()
-        for tally in tallies {
-            let share = Double(tally.count) / Double(total)
-            if share >= ownShare || tally.count == top {
-                own.insert(tally.key)
-            }
-        }
-        return own
+        return candidates
     }
 
     nonisolated private static func whatsAppImageIDs(excluding converted: Set<String>) -> Set<String> {
@@ -142,7 +111,7 @@ enum AttachmentScan {
 
     /// Camera identity from the original photo resource only. Nil means the metadata
     /// could not be read, so the photo is left out unless it is in a WhatsApp album.
-    /// A readable photo with no model is not a saved attachment.
+    /// A readable photo with no model is grouped as No camera info.
     nonisolated private static func originalCamera(_ asset: PHAsset) -> CameraFacts? {
         let resources = PHAssetResource.assetResources(for: asset)
         guard let resource = resources.first(where: { $0.type == .photo }) else { return nil }
@@ -327,20 +296,16 @@ final class AttachmentsModel: ObservableObject {
     @Published var found = 0
     @Published var deleting = false
     @Published var deletion: AttachmentDeletion?
-    @Published var devices: [OwnCamera] = []
+    @Published var devices: [PhoneGroup] = []
 
-    private static let overrideKey = "attachmentOwnDeviceOverrides"
+    private static let selectionKey = "photosByPhoneShown"
     private var didScan = false
     private var generation = 0
     private var candidates: [AttachmentItem] = []
-    private var tallies: [DeviceTally] = []
-    private var overrides: [String: Bool] = [:]
+    private var chosen: Set<String> = []
 
     init() {
-        if let data = UserDefaults.standard.data(forKey: Self.overrideKey),
-           let stored = try? JSONDecoder().decode([String: Bool].self, from: data) {
-            overrides = stored
-        }
+        chosen = Set(UserDefaults.standard.stringArray(forKey: Self.selectionKey) ?? [])
     }
 
     var allSelected: Bool {
@@ -365,7 +330,7 @@ final class AttachmentsModel: ObservableObject {
         items = []
         totalBytes = 0
         candidates = []
-        let collected: AttachmentPass = await withCheckedContinuation { continuation in
+        let collected: [AttachmentItem] = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 let batch = AttachmentScan.collect { checked, total in
                     DispatchQueue.main.async {
@@ -378,19 +343,20 @@ final class AttachmentsModel: ObservableObject {
             }
         }
         guard token == generation else { return }
-        candidates = collected.candidates
-        tallies = collected.tallies
+        candidates = collected
         applyFilter()
         scanning = false
         didScan = true
     }
 
-    func setOwn(_ key: String, own: Bool) {
+    func togglePhone(_ key: String) {
         guard !scanning, !deleting else { return }
-        overrides[key] = own
-        if let data = try? JSONEncoder().encode(overrides) {
-            UserDefaults.standard.set(data, forKey: Self.overrideKey)
+        if chosen.contains(key) {
+            chosen.remove(key)
+        } else {
+            chosen.insert(key)
         }
+        persistChosen()
         applyFilter()
     }
 
@@ -414,39 +380,49 @@ final class AttachmentsModel: ObservableObject {
     }
 
     func deleteSelected() async {
-        let chosen = items.filter { selected.contains($0.id) }
-        guard !chosen.isEmpty, !deleting else { return }
+        let photos = items.filter { selected.contains($0.id) }
+        guard !photos.isEmpty, !deleting else { return }
         deleting = true
         defer { deleting = false }
         do {
-            try await LibraryModel.delete(localIdentifiers: chosen.map(\.id))
+            try await LibraryModel.delete(localIdentifiers: photos.map(\.id))
         } catch {
             return
         }
-        let bytes = chosen.reduce(Int64(0)) { $0 + $1.byteCount }
-        let ids = Set(chosen.map(\.id))
+        let bytes = photos.reduce(Int64(0)) { $0 + $1.byteCount }
+        let ids = Set(photos.map(\.id))
         candidates.removeAll { ids.contains($0.id) }
         clearSelection()
         applyFilter()
-        deletion = AttachmentDeletion(freedBytes: bytes, count: chosen.count, deleted: true)
+        deletion = AttachmentDeletion(freedBytes: bytes, count: photos.count, deleted: true)
     }
 
     private func applyFilter() {
-        let heuristic = AttachmentScan.heuristicOwnKeys(tallies)
-        devices = tallies.map { tally in
-            OwnCamera(
-                id: tally.key,
-                name: tally.name,
-                count: tally.count,
-                isOwn: overrides[tally.key] ?? heuristic.contains(tally.key)
+        var counts: [String: Int] = [:]
+        var names: [String: String] = [:]
+        for item in candidates {
+            counts[item.groupKey, default: 0] += 1
+            if names[item.groupKey] == nil {
+                names[item.groupKey] = item.groupName
+            }
+        }
+        let available = Set(counts.keys)
+        if chosen.intersection(available) != chosen {
+            chosen = chosen.intersection(available)
+            persistChosen()
+        }
+        devices = counts.map { key, count in
+            PhoneGroup(
+                id: key,
+                name: names[key] ?? key,
+                count: count,
+                shown: chosen.contains(key)
             )
+        }.sorted { lhs, rhs in
+            if lhs.count != rhs.count { return lhs.count > rhs.count }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
         }
-        let own = Set(devices.filter(\.isOwn).map(\.id))
-        let visible = candidates.filter { item in
-            if item.fromWhatsApp { return true }
-            guard let key = item.modelKey else { return false }
-            return !own.contains(key)
-        }
+        let visible = candidates.filter { chosen.contains($0.groupKey) }
         let visibleIDs = Set(visible.map(\.id))
         selected = selected.intersection(visibleIDs)
         items = visible
@@ -460,6 +436,10 @@ final class AttachmentsModel: ObservableObject {
     private func clearSelection() {
         selected.removeAll()
         selectedBytes = 0
+    }
+
+    private func persistChosen() {
+        UserDefaults.standard.set(Array(chosen), forKey: Self.selectionKey)
     }
 }
 
@@ -477,7 +457,7 @@ struct AttachmentsScreen: View {
                 if !model.devices.isEmpty {
                     cameras
                 }
-                Text("Saved attachments are photos, including Live Photos, from a camera that is not yours. Your cameras start as any model in at least 15 percent of the camera photos here, plus the most common model. Switch one off if it is not yours, or on if it is. Screenshots, photos whose details could not be read, and photos this app has saved but not yet deleted are left out. Pictures in an album named WhatsApp are included. A sender with the same phone model cannot be told apart. Nothing is downloaded, and nothing leaves this iPhone.")
+                Text("Photos are grouped by the phone named in the original file, including this one. Tap one or more phones to see only those photos. Nothing is selected until you choose it, and the choice is remembered. WhatsApp is the album of that name. No camera info is a photo that could be read but names no phone. Screenshots and photos this app has saved but not yet deleted are left out. Nothing is downloaded, and nothing leaves this iPhone.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 if model.scanning && model.items.isEmpty {
@@ -487,8 +467,12 @@ struct AttachmentsScreen: View {
                             .foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                } else if !model.scanning && model.devices.isEmpty {
+                    Text("No photos to group in the photos you allowed.")
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 } else if !model.scanning && model.items.isEmpty {
-                    Text("No saved attachments in the photos you allowed.")
+                    Text("Nothing is selected. Tap one or more phones to see their photos.")
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
@@ -509,7 +493,7 @@ struct AttachmentsScreen: View {
             .padding(16)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .navigationTitle("Saved Attachments")
+        .navigationTitle("Photos by Phone")
         .navigationBarTitleDisplayMode(.large)
         .refreshable {
             if !model.deleting {
@@ -583,24 +567,34 @@ struct AttachmentsScreen: View {
 
     private var cameras: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Your cameras")
+            Text("Phones")
                 .font(.headline)
-            Text("On means this camera is yours, so its photos are left out.")
+            Text("Tap a phone to show its photos. Nothing is selected until you choose it.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             ForEach(model.devices) { device in
-                Toggle(isOn: Binding(
-                    get: { device.isOwn },
-                    set: { model.setOwn(device.id, own: $0) }
-                )) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(device.name)
-                        Text("\(device.count.formatted()) photos")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                Button {
+                    model.togglePhone(device.id)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: device.shown ? "checkmark.circle.fill" : "circle")
+                            .font(.title3)
+                            .foregroundStyle(device.shown ? pine : Color.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(device.name)
+                                .foregroundStyle(.primary)
+                            Text("\(device.count.formatted()) photos")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
                     }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .disabled(model.scanning || model.deleting)
+                .accessibilityLabel(device.shown ? "Hide \(device.name)" : "Show \(device.name)")
+                .accessibilityAddTraits(device.shown ? .isSelected : [])
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

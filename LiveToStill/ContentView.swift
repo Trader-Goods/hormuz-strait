@@ -201,7 +201,7 @@ private struct LibraryScreen: View {
             NavigationLink {
                 AttachmentsScreen()
             } label: {
-                Label("Saved Attachments", systemImage: "paperclip")
+                Label("Photos by Phone", systemImage: "iphone")
                     .font(.subheadline.weight(.semibold))
                     .frame(maxWidth: .infinity)
             }
