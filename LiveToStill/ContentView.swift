@@ -336,12 +336,12 @@ private struct CloudSpaceScreen: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 } else if model.cloudItems.isEmpty && model.cloudResult == nil {
-                    Text("No Live Photos are stored only in iCloud. iCloud Photos must be on for this to find them. Converting a Live Photo on this iPhone frees that space in iCloud too, after Recently Deleted is emptied.")
+                    Text("No Live Photos were found. This includes every photo that still has a paired video, with Live on or off, whether the files are on this iPhone, only in iCloud, or both. If iCloud Photos is off, pictures that exist only in iCloud are not in this library. If you already converted them, the video is gone and there is nothing left to free.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     EmptyRecentlyDeletedButton()
                 } else if !model.cloudItems.isEmpty {
-                    Text("These Live Photos are not stored on this iPhone. Each photo file is downloaded and saved unchanged, then the Live Photo is deleted. The paired video is never downloaded. Deleting the original syncs, so iCloud storage is freed after Recently Deleted is emptied. One photo is handled at a time so the download has room. Photos that cannot be downloaded stay in the library and can be tried again later.")
+                    Text("Every Live Photo is included, including ones already on this iPhone and ones with Live turned off. The photo file is saved unchanged. When it is not on this iPhone, only that photo is downloaded, never the paired video. Deleting the original syncs, so iCloud storage is freed after Recently Deleted is emptied. One photo is handled at a time so the download has room. Photos that cannot be read stay in the library and can be tried again later.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     Button("Free Up iCloud Space") {
@@ -405,9 +405,17 @@ private struct CloudSpaceScreen: View {
 
     private var summary: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("\((model.cloudScanning ? model.cloudFound : model.cloudItems.count).formatted()) in iCloud")
+            Text("\((model.cloudScanning ? model.cloudFound : model.cloudItems.count).formatted()) Live Photos")
                 .font(.title2)
                 .fontWeight(.semibold)
+            if model.cloudScanFinished && !model.cloudScanning {
+                Text("\(model.cloudOnDevice.formatted()) on this iPhone")
+                    .foregroundStyle(.secondary)
+                Text("\(model.cloudOnlyCount.formatted()) only in iCloud")
+                    .foregroundStyle(.secondary)
+                Text("\(model.cloudItems.count.formatted()) will be converted")
+                    .foregroundStyle(.secondary)
+            }
             Text(summaryLine)
                 .foregroundStyle(.secondary)
             if model.cloudScanning && model.cloudScanTotal > 0 {
@@ -431,6 +439,9 @@ private struct CloudSpaceScreen: View {
     private var summaryLine: String {
         if model.cloudScanning || !model.cloudScanFinished {
             return "Paired video size appears as the library is measured"
+        }
+        if model.cloudItems.isEmpty {
+            return "Nothing with a paired video is left to convert"
         }
         guard model.cloudTotalBytes > 0 else {
             return "Paired video size is unavailable"

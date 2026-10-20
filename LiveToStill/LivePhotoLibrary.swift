@@ -8,6 +8,8 @@ struct LiveItem: Identifiable, Equatable, Sendable {
     let id: String
     let videoByteCount: Int64
     var stillByteCount: Int64 = 0
+    /// The still conversion would copy is on this iPhone. Unknown counts as on device.
+    var storedOnDevice: Bool = true
 }
 
 struct WorkProgress: Equatable {
@@ -137,6 +139,8 @@ final class LibraryModel: ObservableObject {
     @Published var cloudChecked = 0
     @Published var cloudScanTotal = 0
     @Published var cloudFound = 0
+    @Published var cloudOnDevice = 0
+    @Published var cloudOnlyCount = 0
     @Published var cloudProgress: WorkProgress?
     @Published var cloudResult: ConversionResult?
     @Published var cloudStoragePause: StoragePause?
@@ -278,6 +282,8 @@ final class LibraryModel: ObservableObject {
         cloudChecked = 0
         cloudScanTotal = 0
         cloudFound = 0
+        cloudOnDevice = 0
+        cloudOnlyCount = 0
         cloudItems = []
         cloudTotalBytes = 0
         let found: [LiveItem] = await withCheckedContinuation { continuation in
@@ -295,8 +301,7 @@ final class LibraryModel: ObservableObject {
         }
         guard generation == cloudScanGeneration else { return }
         cloudItems = found
-        cloudFound = found.count
-        cloudTotalBytes = found.reduce(0) { $0 + $1.videoByteCount }
+        refreshCloudBreakdown()
         cloudScanning = false
         cloudScanFinished = true
     }
@@ -368,8 +373,8 @@ final class LibraryModel: ObservableObject {
             cloudActiveItemID = item.id
             let done = cloudSessionDeleted + cloudSessionSkipped
             cloudProgress = WorkProgress(
-                title: "Downloading the photo",
-                detail: "Downloading the photo file only. The paired video stays in iCloud and is not downloaded.",
+                title: "Saving the photo",
+                detail: "The photo file is copied unchanged. The paired video is not downloaded.",
                 completed: done,
                 total: max(cloudJobTotal, 1)
             )
@@ -458,9 +463,15 @@ final class LibraryModel: ObservableObject {
         persistSavedIDs()
         markRemoved([item])
         cloudItems.removeAll { $0.id == item.id }
-        cloudFound = cloudItems.count
-        cloudTotalBytes = cloudItems.reduce(0) { $0 + $1.videoByteCount }
+        refreshCloudBreakdown()
         return true
+    }
+
+    private func refreshCloudBreakdown() {
+        cloudFound = cloudItems.count
+        cloudOnDevice = cloudItems.filter(\.storedOnDevice).count
+        cloudOnlyCount = cloudFound - cloudOnDevice
+        cloudTotalBytes = cloudItems.reduce(0) { $0 + $1.videoByteCount }
     }
 
     private func pauseCloudForStorage() {
@@ -810,8 +821,12 @@ final class LibraryModel: ObservableObject {
         return all
     }
 
-    /// Live Photos whose still file is not on this iPhone. The paired-video check
-    /// matches the regular scan. Nothing is downloaded while scanning.
+    /// Every image that still has a paired video, including Live turned off.
+    /// Locality is only for the breakdown. A cloud-only filter returned nothing:
+    /// `locallyAvailable` is missing or stays true when the original is still on
+    /// the phone, which is the case for Download and Keep Originals and for
+    /// photos that are stored in both places. Deleting the Live Photo frees the
+    /// iCloud copy either way. Nothing is downloaded while scanning.
     nonisolated static func collectCloudOnly(onProgress: @escaping (_ checked: Int, _ found: Int, _ total: Int) -> Void) -> [LiveItem] {
         let options = PHFetchOptions()
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
@@ -829,14 +844,14 @@ final class LibraryModel: ObservableObject {
                         let resources = PHAssetResource.assetResources(for: asset)
                         let paired = resources.filter { isReclaimablePairedVideo($0.type) }
                         guard !paired.isEmpty else { return }
-                        guard stillIsCloudOnly(in: resources, adjusted: asset.hasAdjustments) else { return }
                         let videoBytes = paired.reduce(Int64(0)) { sum, resource in
                             sum + max(0, LiveResourceFileSize(resource))
                         }
                         all.append(LiveItem(
                             id: asset.localIdentifier,
                             videoByteCount: videoBytes,
-                            stillByteCount: displayedStillByteCount(in: resources, adjusted: asset.hasAdjustments)
+                            stillByteCount: displayedStillByteCount(in: resources, adjusted: asset.hasAdjustments),
+                            storedOnDevice: stillStoredOnDevice(in: resources, adjusted: asset.hasAdjustments)
                         ))
                     }
                 }
@@ -850,12 +865,12 @@ final class LibraryModel: ObservableObject {
         return all
     }
 
-    /// The still that conversion would copy is not stored on this device.
-    /// A missing still resource is not offered, because there is nothing to download.
-    nonisolated private static func stillIsCloudOnly(in resources: [PHAssetResource], adjusted: Bool) -> Bool {
-        let type: PHAssetResourceType = adjusted ? .fullSizePhoto : .photo
-        guard let resource = resources.first(where: { $0.type == type }) else { return false }
-        return !LiveResourceIsLocal(resource)
+    /// The still conversion copies. Unknown locality counts as on this iPhone.
+    nonisolated private static func stillStoredOnDevice(in resources: [PHAssetResource], adjusted: Bool) -> Bool {
+        let preferred: PHAssetResourceType = adjusted ? .fullSizePhoto : .photo
+        let resource = resources.first(where: { $0.type == preferred }) ?? resources.first(where: { $0.type == .photo })
+        guard let resource else { return true }
+        return LiveResourceIsLocal(resource)
     }
 
     nonisolated private static func displayedStillByteCount(in resources: [PHAssetResource], adjusted: Bool) -> Int64 {

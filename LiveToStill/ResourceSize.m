@@ -12,14 +12,24 @@ long long LiveResourceFileSize(PHAssetResource *resource) {
     return 0;
 }
 
-BOOL LiveResourceIsLocal(PHAssetResource *resource) {
+static int LiveResourceLocalityForKey(PHAssetResource *resource, NSString *key) {
     @try {
-        id value = [resource valueForKey:@"locallyAvailable"];
+        id value = [resource valueForKey:key];
         if ([value isKindOfClass:[NSNumber class]]) {
-            return [(NSNumber *)value boolValue];
+            return [(NSNumber *)value boolValue] ? 1 : 0;
         }
     } @catch (NSException *exception) {
-        return YES;
+        return -1;
     }
-    return YES;
+    return -1;
+}
+
+BOOL LiveResourceIsLocal(PHAssetResource *resource) {
+    int locality = LiveResourceLocalityForKey(resource, @"locallyAvailable");
+    if (locality < 0) {
+        locality = LiveResourceLocalityForKey(resource, @"isLocallyAvailable");
+    }
+    // Unknown is not evidence the file is only in iCloud. Download and Keep
+    // Originals, and a key that does not report eviction, both look local.
+    return locality != 0;
 }
