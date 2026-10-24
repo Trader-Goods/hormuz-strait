@@ -44,7 +44,7 @@ actor IMAPClient {
 
     func connect() async throws {
         let tls = NWProtocolTLS.Options()
-        sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, tls_protocol_version_TLSv12)
+        sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv12)
         let tcp = NWProtocolTCP.Options()
         tcp.connectionTimeout = 30
         let parameters = NWParameters(tls: tls, tcp: tcp)
