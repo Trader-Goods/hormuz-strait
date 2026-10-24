@@ -1,0 +1,268 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA1000000000000000000021 /* SpamSweepApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000011 /* SpamSweepApp.swift */; };
+		AA1000000000000000000022 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000012 /* ContentView.swift */; };
+		AA1000000000000000000023 /* SweepModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000013 /* SweepModel.swift */; };
+		AA1000000000000000000024 /* IMAPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000014 /* IMAPClient.swift */; };
+		AA1000000000000000000025 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000015 /* KeychainStore.swift */; };
+		AA1000000000000000000026 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000016 /* Assets.xcassets */; };
+		AA1000000000000000000028 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000018 /* PrivacyInfo.xcprivacy */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AA1000000000000000000011 /* SpamSweepApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpamSweepApp.swift; sourceTree = "<group>"; };
+		AA1000000000000000000012 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		AA1000000000000000000013 /* SweepModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SweepModel.swift; sourceTree = "<group>"; };
+		AA1000000000000000000014 /* IMAPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPClient.swift; sourceTree = "<group>"; };
+		AA1000000000000000000015 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		AA1000000000000000000016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AA1000000000000000000017 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA1000000000000000000018 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		AA1000000000000000000009 /* SpamSweep.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpamSweep.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AA1000000000000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AA1000000000000000000006 = {
+			isa = PBXGroup;
+			children = (
+				AA1000000000000000000007 /* SpamSweep */,
+				AA1000000000000000000008 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AA1000000000000000000007 /* SpamSweep */ = {
+			isa = PBXGroup;
+			children = (
+				AA1000000000000000000011 /* SpamSweepApp.swift */,
+				AA1000000000000000000012 /* ContentView.swift */,
+				AA1000000000000000000013 /* SweepModel.swift */,
+				AA1000000000000000000014 /* IMAPClient.swift */,
+				AA1000000000000000000015 /* KeychainStore.swift */,
+				AA1000000000000000000016 /* Assets.xcassets */,
+				AA1000000000000000000017 /* Info.plist */,
+				AA1000000000000000000018 /* PrivacyInfo.xcprivacy */,
+			);
+			path = SpamSweep;
+			sourceTree = "<group>";
+		};
+		AA1000000000000000000008 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AA1000000000000000000009 /* SpamSweep.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AA1000000000000000000001 /* SpamSweep */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA1000000000000000000036 /* Build configuration list for PBXNativeTarget "SpamSweep" */;
+			buildPhases = (
+				AA1000000000000000000003 /* Sources */,
+				AA1000000000000000000004 /* Frameworks */,
+				AA1000000000000000000005 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SpamSweep;
+			productName = SpamSweep;
+			productReference = AA1000000000000000000009 /* SpamSweep.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AA1000000000000000000002 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				ORGANIZATIONNAME = "Trader Goods";
+				TargetAttributes = {
+					AA1000000000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = AA1000000000000000000035 /* Build configuration list for PBXProject "SpamSweep" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AA1000000000000000000006;
+			productRefGroup = AA1000000000000000000008 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AA1000000000000000000001 /* SpamSweep */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AA1000000000000000000005 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA1000000000000000000026 /* Assets.xcassets in Resources */,
+				AA1000000000000000000028 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AA1000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA1000000000000000000021 /* SpamSweepApp.swift in Sources */,
+				AA1000000000000000000022 /* ContentView.swift in Sources */,
+				AA1000000000000000000023 /* SweepModel.swift in Sources */,
+				AA1000000000000000000024 /* IMAPClient.swift in Sources */,
+				AA1000000000000000000025 /* KeychainStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AA1000000000000000000031 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AA1000000000000000000032 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		AA1000000000000000000033 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 35734G7ZCQ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SpamSweep/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tradergoods.spamsweep;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		AA1000000000000000000034 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 35734G7ZCQ;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SpamSweep/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tradergoods.spamsweep;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Spam Sweep CI";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AA1000000000000000000035 /* Build configuration list for PBXProject "SpamSweep" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA1000000000000000000031 /* Debug */,
+				AA1000000000000000000032 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA1000000000000000000036 /* Build configuration list for PBXNativeTarget "SpamSweep" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA1000000000000000000033 /* Debug */,
+				AA1000000000000000000034 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = AA1000000000000000000002 /* Project object */;
+}
