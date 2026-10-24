@@ -79,6 +79,39 @@ def find_group(auth, app):
     return group
 
 
+def add_internal_testers(auth, app, group):
+    try:
+        users = api("GET", "/v1/users?limit=20", auth, quiet=True).get("data", [])
+    except SystemExit:
+        print("could not list App Store Connect users")
+        print("add yourself to internal group Me if the build does not appear")
+        return
+    added = 0
+    for user in users:
+        attributes = user.get("attributes") or {}
+        email = attributes.get("username") or ""
+        if "@" not in email:
+            continue
+        try:
+            api("POST", "/v1/betaTesters", auth, {
+                "data": {
+                    "type": "betaTesters",
+                    "attributes": {"email": email},
+                    "relationships": {
+                        "betaGroups": {"data": [{"type": "betaGroups", "id": group}]},
+                    },
+                }
+            }, quiet=True)
+            added += 1
+        except SystemExit as error:
+            if getattr(error, "code", None) not in (409, 422):
+                print("a tester could not be added")
+    if added:
+        print(f"added {added} internal testers")
+    else:
+        print("internal testers were already on the group or could not be added")
+
+
 def group_access(auth, group):
     attributes = api("GET", f"/v1/betaGroups/{group}", auth)["data"].get("attributes", {})
     access = attributes.get("hasAccessToAllBuilds")
@@ -187,6 +220,7 @@ def main():
     auth = token()
     app = app_id(auth, os.environ["BUNDLE_ID"])
     group = find_group(auth, app)
+    add_internal_testers(auth, app, group)
     deadline = time.time() + WAIT_SECONDS
     build_id = None
     while time.time() < deadline:

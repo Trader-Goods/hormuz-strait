@@ -107,15 +107,36 @@ actor IMAPClient {
         return found
     }
 
-    /// Moves messages. If UID MOVE is refused, copies them and then deletes the originals.
-    func uidMove(uids: [UInt64], to mailbox: String) async throws {
+    /// Header-only fetch. BODY.PEEK does not mark the message read, and the body is never requested.
+    func uidFetchHeaders(uids: [UInt64], fields: String) async throws -> [FetchedHeader] {
+        guard !uids.isEmpty else { return [] }
+        var found: [FetchedHeader] = []
+        var index = 0
+        while index < uids.count {
+            let end = min(index + 80, uids.count)
+            let slice = Array(uids[index..<end])
+            let result = try await command("UID FETCH \(uidSet(slice)) (\(fields))")
+            try requireOK(result)
+            for line in result.untagged {
+                if let header = HeaderFetch.parseLine(line) {
+                    found.append(header)
+                }
+            }
+            index = end
+        }
+        return found
+    }
+
+    /// Moves messages in chunks. If UID MOVE is refused, copies them and then deletes the originals.
+    func uidMove(uids: [UInt64], to mailbox: String, onProgress: ((Int, Int) -> Void)? = nil) async throws {
         guard !uids.isEmpty else { return }
         if selected.isEmpty { throw IMAPError.badResponse }
         var index = 0
         while index < uids.count {
-            let end = min(index + 100, uids.count)
-            try await moveBatch(Array(uids[index..<end]), to: mailbox)
+            let end = min(index + 500, uids.count)
+            try await moveChunk(Array(uids[index..<end]), to: mailbox)
             index = end
+            onProgress?(min(index, uids.count), uids.count)
         }
     }
 
@@ -125,6 +146,17 @@ actor IMAPClient {
         connection = nil
         selected = ""
         buffer.removeAll()
+    }
+
+    private func moveChunk(_ uids: [UInt64], to mailbox: String) async throws {
+        do {
+            try await moveBatch(uids, to: mailbox)
+        } catch {
+            guard uids.count > 100 else { throw error }
+            let mid = uids.count / 2
+            try await moveChunk(Array(uids[..<mid]), to: mailbox)
+            try await moveChunk(Array(uids[mid...]), to: mailbox)
+        }
     }
 
     private func moveBatch(_ uids: [UInt64], to mailbox: String) async throws {

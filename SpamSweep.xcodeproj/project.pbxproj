@@ -12,8 +12,14 @@
 		AA1000000000000000000023 /* SweepModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000013 /* SweepModel.swift */; };
 		AA1000000000000000000024 /* IMAPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000014 /* IMAPClient.swift */; };
 		AA1000000000000000000025 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000015 /* KeychainStore.swift */; };
+		AA1000000000000000000029 /* HeaderMail.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000019 /* HeaderMail.swift */; };
+		AA100000000000000000002A /* SpamScorer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000001A /* SpamScorer.swift */; };
+		AA100000000000000000002B /* ScanStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000001B /* ScanStore.swift */; };
+		AA100000000000000000002C /* ContactsReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000001C /* ContactsReader.swift */; };
+		AA100000000000000000002D /* ScanEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000001D /* ScanEngine.swift */; };
 		AA1000000000000000000026 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000016 /* Assets.xcassets */; };
 		AA1000000000000000000028 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000018 /* PrivacyInfo.xcprivacy */; };
+		BB2000000000000000000021 /* ScorerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2000000000000000000011 /* ScorerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +28,13 @@
 		AA1000000000000000000013 /* SweepModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SweepModel.swift; sourceTree = "<group>"; };
 		AA1000000000000000000014 /* IMAPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IMAPClient.swift; sourceTree = "<group>"; };
 		AA1000000000000000000015 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		AA1000000000000000000019 /* HeaderMail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeaderMail.swift; sourceTree = "<group>"; };
+		AA100000000000000000001A /* SpamScorer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpamScorer.swift; sourceTree = "<group>"; };
+		AA100000000000000000001B /* ScanStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanStore.swift; sourceTree = "<group>"; };
+		AA100000000000000000001C /* ContactsReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsReader.swift; sourceTree = "<group>"; };
+		AA100000000000000000001D /* ScanEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanEngine.swift; sourceTree = "<group>"; };
+		BB2000000000000000000011 /* ScorerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScorerTests.swift; sourceTree = "<group>"; };
+		BB2000000000000000000009 /* SpamSweepTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SpamSweepTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA1000000000000000000016 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AA1000000000000000000017 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AA1000000000000000000018 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -43,6 +56,7 @@
 			isa = PBXGroup;
 			children = (
 				AA1000000000000000000007 /* SpamSweep */,
+				BB2000000000000000000007 /* SpamSweepTests */,
 				AA1000000000000000000008 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -55,6 +69,11 @@
 				AA1000000000000000000013 /* SweepModel.swift */,
 				AA1000000000000000000014 /* IMAPClient.swift */,
 				AA1000000000000000000015 /* KeychainStore.swift */,
+				AA1000000000000000000019 /* HeaderMail.swift */,
+				AA100000000000000000001A /* SpamScorer.swift */,
+				AA100000000000000000001B /* ScanStore.swift */,
+				AA100000000000000000001C /* ContactsReader.swift */,
+				AA100000000000000000001D /* ScanEngine.swift */,
 				AA1000000000000000000016 /* Assets.xcassets */,
 				AA1000000000000000000017 /* Info.plist */,
 				AA1000000000000000000018 /* PrivacyInfo.xcprivacy */,
@@ -66,6 +85,7 @@
 			isa = PBXGroup;
 			children = (
 				AA1000000000000000000009 /* SpamSweep.app */,
+				BB2000000000000000000009 /* SpamSweepTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -120,6 +140,7 @@
 			projectRoot = "";
 			targets = (
 				AA1000000000000000000001 /* SpamSweep */,
+				BB2000000000000000000001 /* SpamSweepTests */,
 			);
 		};
 /* End PBXProject section */
@@ -146,6 +167,11 @@
 				AA1000000000000000000023 /* SweepModel.swift in Sources */,
 				AA1000000000000000000024 /* IMAPClient.swift in Sources */,
 				AA1000000000000000000025 /* KeychainStore.swift in Sources */,
+				AA1000000000000000000029 /* HeaderMail.swift in Sources */,
+				AA100000000000000000002A /* SpamScorer.swift in Sources */,
+				AA100000000000000000002B /* ScanStore.swift in Sources */,
+				AA100000000000000000002C /* ContactsReader.swift in Sources */,
+				AA100000000000000000002D /* ScanEngine.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -208,6 +234,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.tradergoods.spamsweep;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				ENABLE_TESTABILITY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = minimal;
 				SWIFT_VERSION = 5.0;
@@ -234,6 +261,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.tradergoods.spamsweep;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "Spam Sweep CI";
+				ENABLE_TESTABILITY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_STRICT_CONCURRENCY = minimal;
 				SWIFT_VERSION = 5.0;
@@ -258,6 +286,131 @@
 			buildConfigurations = (
 				AA1000000000000000000033 /* Debug */,
 				AA1000000000000000000034 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin PBXContainerItemProxy section */
+		BB200000000000000000000A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA1000000000000000000002 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA1000000000000000000001;
+			remoteInfo = SpamSweep;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		BB200000000000000000000B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA1000000000000000000001 /* SpamSweep */;
+			targetProxy = BB200000000000000000000A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXGroup section */
+		BB2000000000000000000007 /* SpamSweepTests */ = {
+			isa = PBXGroup;
+			children = (
+				BB2000000000000000000011 /* ScorerTests.swift */,
+			);
+			path = SpamSweepTests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		BB2000000000000000000001 /* SpamSweepTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB2000000000000000000036 /* Build configuration list for PBXNativeTarget "SpamSweepTests" */;
+			buildPhases = (
+				BB2000000000000000000003 /* Sources */,
+				BB2000000000000000000004 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BB200000000000000000000B /* PBXTargetDependency */,
+			);
+			name = SpamSweepTests;
+			productName = SpamSweepTests;
+			productReference = BB2000000000000000000009 /* SpamSweepTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXSourcesBuildPhase section */
+		BB2000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB2000000000000000000021 /* ScorerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		BB2000000000000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		BB2000000000000000000033 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 35734G7ZCQ;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tradergoods.spamsweep.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SpamSweep.app/SpamSweep";
+			};
+			name = Debug;
+		};
+		BB2000000000000000000034 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 35734G7ZCQ;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tradergoods.spamsweep.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SpamSweep.app/SpamSweep";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		BB2000000000000000000036 /* Build configuration list for PBXNativeTarget "SpamSweepTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB2000000000000000000033 /* Debug */,
+				BB2000000000000000000034 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

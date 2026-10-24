@@ -70,7 +70,7 @@ def token():
     return f"{header}.{payload}.{b64url(ecdsa_der_to_raw(der))}"
 
 
-def api(method, path, auth, body=None):
+def api(method, path, auth, body=None, quiet=False):
     data = None if body is None else json.dumps(body).encode()
     request = urllib.request.Request(
         API + path,
@@ -89,8 +89,9 @@ def api(method, path, auth, body=None):
             payload = json.loads(raw)
         except json.JSONDecodeError:
             payload = {}
-        for item in payload.get("errors", []):
-            print(item.get("status"), item.get("code"), item.get("title"), item.get("detail"))
+        if not quiet:
+            for item in payload.get("errors", []):
+                print(item.get("status"), item.get("code"), item.get("title"), item.get("detail"))
         failure = SystemExit(1)
         failure.code = error.code
         raise failure
