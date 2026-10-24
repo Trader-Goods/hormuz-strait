@@ -376,3 +376,37 @@ final class SignInTests: XCTestCase {
         )
     }
 }
+
+final class MoveTests: XCTestCase {
+    func testUIDRangesMatchTheCompactForm() {
+        var uids = Array(UInt64(101)...UInt64(250))
+        uids.append(300)
+        uids.append(contentsOf: UInt64(412)...UInt64(900))
+        XCTAssertEqual(UIDSet.encode(uids), "101:250,300,412:900")
+    }
+
+    func testChunksKeepAboutFifteenHundredAndRespectTheLineLimit() {
+        let consecutive = Array(UInt64(1)...UInt64(3000))
+        let wide = UIDSet.chunks(consecutive, targetCount: 1500, maxCharacters: 6000)
+        XCTAssertEqual(wide.map(\.count), [1500, 1500])
+        XCTAssertEqual(UIDSet.encode(wide[0]), "1:1500")
+
+        let sparse = (0..<400).map { UInt64($0 * 10 + 3) }
+        let limited = UIDSet.chunks(sparse, targetCount: 2000, maxCharacters: 80)
+        XCTAssertGreaterThan(limited.count, 1)
+        for chunk in limited where chunk.count > 1 {
+            XCTAssertLessThanOrEqual(UIDSet.encode(chunk).count, 80)
+        }
+    }
+
+    func testSenderLabelNamesTheBatch() {
+        let owners: [UInt64: String] = [1: "a@spam.test", 2: "a@spam.test", 3: "b@spam.test"]
+        XCTAssertEqual(UIDSet.senderLabel([1, 2], owners: owners), "a@spam.test")
+        XCTAssertEqual(UIDSet.senderLabel([1, 2, 3], owners: owners), "a@spam.test and 1 more")
+    }
+
+    func testMoveEstimateAppearsAfterTheFirstBatch() {
+        XCTAssertEqual(MoveETA.text(sessionMoved: 0, total: 1000, moved: 0, elapsed: 0), "Estimating time left")
+        XCTAssertEqual(MoveETA.text(sessionMoved: 100, total: 1000, moved: 100, elapsed: 10), "about 2 min left")
+    }
+}

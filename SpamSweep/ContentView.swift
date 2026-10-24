@@ -8,19 +8,100 @@ struct ContentView: View {
     @ObservedObject var model: SweepModel
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if model.signedIn {
-                    InboxScreen(model: model)
-                } else {
-                    SignInScreen(model: model)
+        ZStack {
+            NavigationStack {
+                Group {
+                    if model.signedIn {
+                        InboxScreen(model: model)
+                    } else {
+                        SignInScreen(model: model)
+                    }
                 }
+                .navigationTitle("Spam Sweep")
+                .navigationBarTitleDisplayMode(.large)
             }
-            .navigationTitle("Spam Sweep")
-            .navigationBarTitleDisplayMode(.large)
+            if model.moveVisible {
+                MoveProgressScreen(model: model)
+            }
         }
         .onChange(of: model.scanning) { _, _ in model.syncIdleTimer() }
         .onChange(of: model.keepAwake) { _, _ in model.syncIdleTimer() }
+        .onChange(of: model.moving) { _, _ in model.syncIdleTimer() }
+    }
+}
+
+private struct MoveProgressScreen: View {
+    @ObservedObject var model: SweepModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Spacer(minLength: 0)
+            Text(title)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(ink)
+            ProgressView(value: fraction)
+                .tint(amber)
+            if finished {
+                Text("Moved \(model.moveDone.formatted()) emails.")
+                    .font(.title3.weight(.semibold))
+            } else {
+                Text("Moved \(model.moveDone.formatted()) of \(model.moveTotal.formatted()) emails")
+                Text("\(model.moveRemaining.formatted()) to go")
+                    .foregroundStyle(.secondary)
+            }
+            if !model.moveSender.isEmpty {
+                Text(model.moveSender)
+                    .font(.subheadline)
+                    .lineLimit(3)
+            }
+            if model.moving, !model.moveETA.isEmpty {
+                Text(model.moveETA)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Text("Keep Spam Sweep open until this finishes. The screen stays on. If you leave, the move stops after the current batch and you can continue later.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            if let error = model.errorMessage {
+                ErrorNote(message: error, detail: model.errorDetail)
+            }
+            if model.moving {
+                Button("Cancel") { model.cancelMove() }
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
+            } else if model.moveRemaining > 0 {
+                Button("Continue") { Task { await model.continueMove() } }
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity)
+                Button("Cancel") { model.abandonMove() }
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
+            } else {
+                Button("Done") { model.dismissMove() }
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(Color(uiColor: .systemBackground))
+    }
+
+    private var finished: Bool {
+        !model.moving && model.moveRemaining == 0
+    }
+
+    private var title: String {
+        if model.moving { return "Moving mail" }
+        if model.moveRemaining > 0 { return "Move paused" }
+        if model.moveTotal == 0 { return "Nothing to move" }
+        return "Move finished"
+    }
+
+    private var fraction: Double {
+        guard model.moveTotal > 0 else { return model.moving ? 0 : 1 }
+        return min(1, Double(model.moveDone) / Double(model.moveTotal))
     }
 }
 
@@ -237,6 +318,21 @@ private struct InboxScreen: View {
             Text(model.email).font(.subheadline).foregroundStyle(.secondary)
             Text("\(model.sweptTotal.formatted()) cleaned")
                 .font(.title2.weight(.semibold))
+            if let pending = model.pendingMoveOffer {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(pending.remainingCount > 0
+                        ? "A move was interrupted. \(pending.remainingCount.formatted()) emails are still left."
+                        : "A move was interrupted before the messages were found.")
+                    Text("Moved \(pending.moved.formatted()) of \(pending.total.formatted()) emails.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Button("Continue") { Task { await model.continueMove() } }
+                        .buttonStyle(.borderedProminent)
+                    Button("Cancel") { model.abandonMove() }
+                        .buttonStyle(.bordered)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
             Text(summaryLine).foregroundStyle(.secondary)
             Button {
                 Task { await model.sweepNow() }

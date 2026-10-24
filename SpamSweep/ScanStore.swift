@@ -16,6 +16,24 @@ struct FolderCursor: Codable, Equatable {
     var done = false
 }
 
+struct PendingMove: Codable, Equatable {
+    var junk: Bool
+    var destination: String
+    var moved: Int
+    var total: Int
+    var remaining: [String: [UInt64]]
+    var searchAddresses: [String] = []
+    var searchDomains: [String] = []
+
+    var remainingCount: Int {
+        remaining.values.reduce(0) { $0 + $1.count }
+    }
+
+    var hasWork: Bool {
+        remainingCount > 0 || !searchAddresses.isEmpty || !searchDomains.isEmpty
+    }
+}
+
 enum ScanStore {
     struct Snapshot: Codable, Equatable {
         var accountEmail = ""
@@ -33,6 +51,8 @@ enum ScanStore {
         var sentAddresses: [String] = []
         var sentDomains: [String] = []
         var sentWarning = ""
+        var inboxUIDs: [String: [UInt64]] = [:]
+        var pendingMove: PendingMove?
     }
 
     private static let lock = NSLock()
@@ -43,6 +63,9 @@ enum ScanStore {
         guard let url = fileURL(), let data = try? Data(contentsOf: url) else { return Snapshot() }
         if let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) {
             return snapshot
+        }
+        if let loose = try? JSONDecoder().decode(LooseSnapshot.self, from: data) {
+            return loose.make()
         }
         guard let legacy = try? JSONDecoder().decode(LegacySnapshot.self, from: data) else { return Snapshot() }
         var snapshot = Snapshot()
@@ -61,6 +84,49 @@ enum ScanStore {
     private struct LegacySnapshot: Codable {
         var sweptTotal: Int?
         var blocks: [BlockEntry]?
+    }
+
+    /// Older saves omit inbox ids and the pending move. Missing keys must not wipe the scan.
+    private struct LooseSnapshot: Decodable {
+        var accountEmail: String?
+        var sweptTotal: Int?
+        var blocks: [BlockEntry]?
+        var whitelist: [BlockEntry]?
+        var keepAwake: Bool?
+        var includeBulk: Bool?
+        var includeOther: Bool?
+        var useContacts: Bool?
+        var folders: [String: FolderCursor]?
+        var processed: Int?
+        var scanComplete: Bool?
+        var senders: [SenderAggregate]?
+        var sentAddresses: [String]?
+        var sentDomains: [String]?
+        var sentWarning: String?
+        var inboxUIDs: [String: [UInt64]]?
+        var pendingMove: PendingMove?
+
+        func make() -> Snapshot {
+            var snapshot = Snapshot()
+            snapshot.accountEmail = accountEmail ?? ""
+            snapshot.sweptTotal = sweptTotal ?? 0
+            snapshot.blocks = blocks ?? []
+            snapshot.whitelist = whitelist ?? []
+            snapshot.keepAwake = keepAwake ?? true
+            snapshot.includeBulk = includeBulk ?? true
+            snapshot.includeOther = includeOther ?? false
+            snapshot.useContacts = useContacts ?? false
+            snapshot.folders = folders ?? [:]
+            snapshot.processed = processed ?? 0
+            snapshot.scanComplete = scanComplete ?? false
+            snapshot.senders = senders ?? []
+            snapshot.sentAddresses = sentAddresses ?? []
+            snapshot.sentDomains = sentDomains ?? []
+            snapshot.sentWarning = sentWarning ?? ""
+            snapshot.inboxUIDs = inboxUIDs ?? [:]
+            snapshot.pendingMove = pendingMove
+            return snapshot
+        }
     }
 
     private static func fileURL() -> URL? {

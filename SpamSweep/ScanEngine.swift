@@ -25,6 +25,17 @@ struct ScanTick {
     var snapshot: ScanStore.Snapshot
 }
 
+struct MoveTick {
+    var moved: Int
+    var total: Int
+    var sender: String
+    var eta: String
+    var destination: String
+    var junk: Bool
+    var replacement: [String: [UInt64]]?
+    var removed: [String: [UInt64]]
+}
+
 enum SweepEngine {
     static func describe(_ error: Error) -> String {
         switch error {
@@ -111,6 +122,7 @@ enum SweepEngine {
                     snapshot.scanComplete = false
                     snapshot.processed = 0
                     snapshot.sentWarning = ""
+                    snapshot.inboxUIDs = [:]
                 }
                 let started = Date()
                 var done = 0
@@ -123,6 +135,7 @@ enum SweepEngine {
                 }
                 done += sentCount
                 let targets = MailboxPlan.targets(boxes, includeBulk: snapshot.includeBulk, includeOther: snapshot.includeOther)
+                let inboxName = targets.first?.name ?? "INBOX"
                 var plans: [(ScanFolder, [UInt64])] = []
                 var total = sentCount
                 for target in targets {
@@ -157,9 +170,14 @@ enum SweepEngine {
                         let end = min(index + 80, todo.count)
                         let slice = Array(todo[index..<end])
                         let fetched = try await client.uidFetchHeaders(uids: slice, fields: MailFields.inbox)
+                        let recordsInbox = !target.countsAsJunk && target.name.caseInsensitiveCompare(inboxName) == .orderedSame
                         for item in fetched {
                             guard let header = MailHeader.parse(text: item.text, uid: item.uid, size: item.size, inBulk: target.countsAsJunk) else { continue }
                             SenderStats.fold(header, into: &map)
+                            if recordsInbox {
+                                let address = header.fromAddress.lowercased()
+                                snapshot.inboxUIDs[address, default: []].append(header.uid)
+                            }
                         }
                         var cursor = snapshot.folders[target.name] ?? FolderCursor()
                         cursor.lastUID = max(cursor.lastUID, slice.max() ?? cursor.lastUID)
@@ -189,6 +207,117 @@ enum SweepEngine {
                 throw error
             }
         }
+    }
+
+    /// One batched inbox move. Known ids are not searched again. Missing senders are searched once, then every id is moved together.
+    static func moveInbox(
+        groups: [String: [UInt64]],
+        searchAddresses: [String],
+        searchDomains: [String],
+        protect: Set<String>,
+        junk: Bool,
+        destinationName: String?,
+        alreadyMoved: Int,
+        stop: StopFlag,
+        onTick: (MoveTick) async -> Void
+    ) async throws {
+        guard let saved = KeychainStore.load() else {
+            throw IMAPError.loginFailed("Saved sign-in is missing. Connect again.")
+        }
+        try await exclusive {
+            let client = IMAPClient()
+            do {
+                try await client.login(email: saved.email, password: saved.appPassword)
+                let boxes = try await client.listMailboxes()
+                let destination = try resolveDestination(boxes, junk: junk, preferred: destinationName)
+                try await client.select("INBOX")
+                var owners: [UInt64: String] = [:]
+                var ordered: [UInt64] = []
+                func add(_ uid: UInt64, sender: String) {
+                    if owners[uid] != nil { return }
+                    owners[uid] = sender
+                    ordered.append(uid)
+                }
+                for (sender, uids) in groups {
+                    for uid in uids {
+                        add(uid, sender: sender)
+                    }
+                }
+                if !stop.isStopped && !searchAddresses.isEmpty {
+                    let found = try await client.uidSearchSenders(searchAddresses)
+                    let label = searchAddresses.count == 1 ? searchAddresses[0] : "Selected senders"
+                    for uid in found {
+                        add(uid, sender: label)
+                    }
+                }
+                if !stop.isStopped && !searchDomains.isEmpty {
+                    for domain in searchDomains where !stop.isStopped {
+                        let found = try await client.uidSearch(from: "@\(domain)")
+                        let kept = try await dropping(found, protect: protect, client: client)
+                        for uid in kept {
+                            add(uid, sender: "@\(domain)")
+                        }
+                    }
+                }
+                var prepared: [String: [UInt64]] = [:]
+                for uid in ordered {
+                    let sender = owners[uid] ?? "Unknown sender"
+                    prepared[sender, default: []].append(uid)
+                }
+                let total = alreadyMoved + ordered.count
+                await onTick(MoveTick(
+                    moved: alreadyMoved,
+                    total: total,
+                    sender: ordered.isEmpty ? "Nothing to move" : "Starting the move",
+                    eta: MoveETA.text(sessionMoved: 0, total: total, moved: alreadyMoved, elapsed: 0),
+                    destination: destination,
+                    junk: junk,
+                    replacement: prepared,
+                    removed: [:]
+                ))
+                let pieces = UIDSet.chunks(ordered)
+                let started = Date()
+                var moved = alreadyMoved
+                var session = 0
+                for piece in pieces {
+                    if stop.isStopped || Task.isCancelled { break }
+                    try await client.moveMessages(piece, to: destination)
+                    session += piece.count
+                    moved += piece.count
+                    var removed: [String: [UInt64]] = [:]
+                    for uid in piece {
+                        let sender = owners[uid] ?? "Unknown sender"
+                        removed[sender, default: []].append(uid)
+                    }
+                    await onTick(MoveTick(
+                        moved: moved,
+                        total: total,
+                        sender: UIDSet.senderLabel(piece, owners: owners),
+                        eta: MoveETA.text(sessionMoved: session, total: total, moved: moved, elapsed: Date().timeIntervalSince(started)),
+                        destination: destination,
+                        junk: junk,
+                        replacement: nil,
+                        removed: removed
+                    ))
+                }
+                await client.logout()
+            } catch {
+                await client.logout()
+                throw error
+            }
+        }
+    }
+
+    private static func resolveDestination(_ boxes: [IMAPMailbox], junk: Bool, preferred: String?) throws -> String {
+        if let preferred, boxes.contains(where: { $0.name == preferred }) {
+            return preferred
+        }
+        if junk {
+            guard let name = MailboxPlan.junkName(boxes) else { throw IMAPError.missingFolder("Junk") }
+            return name
+        }
+        guard let name = MailboxPlan.trashName(boxes) else { throw IMAPError.missingFolder("Trash") }
+        return name
     }
 
     static func move(

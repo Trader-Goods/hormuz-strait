@@ -32,11 +32,18 @@ final class SweepModel: ObservableObject {
     @Published var confirmingBlock = false
     @Published var confirmingNotSpam = false
     @Published var confirmingRestart = false
+    @Published var moving = false
+    @Published var moveVisible = false
+    @Published var moveDone = 0
+    @Published var moveTotal = 0
+    @Published var moveSender = ""
+    @Published var moveETA = ""
     private var snapshot = ScanStore.Snapshot()
     private var contactEmails = Set<String>()
     private var heldOff = Set<String>()
     private var pinnedOn = Set<String>()
     private var stopFlag: StopFlag?
+    private var moveStop: StopFlag?
     private var didOpenSweep = false
 
     var hasProgress: Bool {
@@ -106,8 +113,18 @@ final class SweepModel: ObservableObject {
         }
     }
 
+    var moveRemaining: Int {
+        max(0, moveTotal - moveDone)
+    }
+
+    var pendingMoveOffer: PendingMove? {
+        guard !moveVisible, let pending = snapshot.pendingMove, pending.hasWork else { return nil }
+        return pending
+    }
+
     func signOut() {
         stopFlag?.stop()
+        moveStop?.stop()
         KeychainStore.clear()
         signedIn = false
         email = ""
@@ -118,6 +135,8 @@ final class SweepModel: ObservableObject {
         status = ""
         clearError()
         scanning = false
+        moving = false
+        moveVisible = false
         syncIdleTimer()
     }
 
@@ -297,8 +316,7 @@ final class SweepModel: ObservableObject {
 
     func blockSelected(junk: Bool) async {
         let plan = blockPlan()
-        let needles = plan.addresses + plan.domains.map { "@\($0)" }
-        guard !needles.isEmpty else { return }
+        guard !plan.addresses.isEmpty || !plan.domains.isEmpty else { return }
         var entries = snapshot.blocks
         for address in plan.addresses {
             let entry = BlockEntry(kind: .address, value: address)
@@ -310,28 +328,69 @@ final class SweepModel: ObservableObject {
         }
         let protected = protectedAddresses(except: Set(plan.addresses))
         snapshot.blocks = entries
-        ScanStore.save(snapshot)
         blocks = entries
-        working = true
-        clearError()
-        status = junk ? "Moving mail to Junk…" : "Moving mail to Trash…"
-        defer { working = false }
-        do {
-            let moved = try await SweepEngine.move(needles: needles, junk: junk, protect: protected) { [weak self] finished, expected in
-                Task { @MainActor in
-                    self?.status = "Moving \(finished.formatted()) of \(expected.formatted())"
-                }
-            }
-            snapshot.sweptTotal += moved
-            ScanStore.save(snapshot)
-            sweptTotal = snapshot.sweptTotal
-            selected.removeAll()
-            selectedDomains.removeAll()
-            status = "Cleaned \(moved.formatted()) messages."
-        } catch {
-            status = ""
-            report(error)
-        }
+        let job = moveJob(plan: plan, protect: protected)
+        let total = job.groups.values.reduce(0) { $0 + $1.count }
+        snapshot.pendingMove = PendingMove(
+            junk: junk,
+            destination: "",
+            moved: 0,
+            total: total,
+            remaining: job.groups,
+            searchAddresses: job.missingAddresses,
+            searchDomains: job.missingDomains
+        )
+        ScanStore.save(snapshot)
+        selected.removeAll()
+        selectedDomains.removeAll()
+        await runMove(
+            groups: job.groups,
+            searchAddresses: job.missingAddresses,
+            searchDomains: job.missingDomains,
+            protect: protected,
+            junk: junk,
+            destinationName: nil,
+            alreadyMoved: 0
+        )
+    }
+
+    func continueMove() async {
+        guard let pending = snapshot.pendingMove, pending.hasWork else { return }
+        await runMove(
+            groups: pending.remaining,
+            searchAddresses: pending.searchAddresses,
+            searchDomains: pending.searchDomains,
+            protect: [],
+            junk: pending.junk,
+            destinationName: pending.destination.isEmpty ? nil : pending.destination,
+            alreadyMoved: pending.moved
+        )
+    }
+
+    func cancelMove() {
+        moveStop?.stop()
+        moveSender = "Stopping after this batch…"
+    }
+
+    func abandonMove() {
+        moveStop?.stop()
+        snapshot.pendingMove = nil
+        ScanStore.save(snapshot)
+        moving = false
+        moveVisible = false
+        moveSender = ""
+        moveETA = ""
+        syncIdleTimer()
+        rescore(preselect: false)
+    }
+
+    func dismissMove() {
+        moveVisible = false
+        moveSender = ""
+        moveETA = ""
+        moving = false
+        syncIdleTimer()
+        rescore(preselect: false)
     }
 
     func markNotSpam() {
@@ -376,7 +435,169 @@ final class SweepModel: ObservableObject {
     }
 
     func syncIdleTimer() {
-        UIApplication.shared.isIdleTimerDisabled = keepAwake && scanning
+        UIApplication.shared.isIdleTimerDisabled = moving || (keepAwake && scanning)
+    }
+
+    private func runMove(
+        groups: [String: [UInt64]],
+        searchAddresses: [String],
+        searchDomains: [String],
+        protect: Set<String>,
+        junk: Bool,
+        destinationName: String?,
+        alreadyMoved: Int
+    ) async {
+        let flag = StopFlag()
+        moveStop = flag
+        moving = true
+        moveVisible = true
+        moveDone = alreadyMoved
+        moveTotal = alreadyMoved + groups.values.reduce(0) { $0 + $1.count }
+        moveSender = "Connecting to Yahoo…"
+        moveETA = "Estimating time left"
+        clearError()
+        status = junk ? "Moving mail to Junk…" : "Moving mail to Trash…"
+        syncIdleTimer()
+        defer {
+            moving = false
+            moveStop = nil
+            syncIdleTimer()
+            if snapshot.pendingMove == nil {
+                moveSender = ""
+                moveETA = ""
+            }
+            rescore(preselect: false)
+        }
+        do {
+            try await SweepEngine.moveInbox(
+                groups: groups,
+                searchAddresses: searchAddresses,
+                searchDomains: searchDomains,
+                protect: protect,
+                junk: junk,
+                destinationName: destinationName,
+                alreadyMoved: alreadyMoved,
+                stop: flag
+            ) { tick in
+                await MainActor.run {
+                    self.applyMove(tick)
+                }
+            }
+            if flag.isStopped, let pending = snapshot.pendingMove, pending.remainingCount > 0 {
+                moveSender = "Move paused"
+                status = "Moved \(moveDone.formatted()) of \(moveTotal.formatted()) emails."
+            } else if moveTotal == 0 {
+                moveSender = "No matching inbox mail to move."
+                status = moveSender
+            } else {
+                status = "Moved \(moveDone.formatted()) emails."
+            }
+        } catch {
+            status = ""
+            report(error)
+            if snapshot.pendingMove != nil {
+                moveSender = "Move paused"
+            }
+        }
+    }
+
+    private func applyMove(_ tick: MoveTick) {
+        var pending = snapshot.pendingMove ?? PendingMove(
+            junk: tick.junk,
+            destination: tick.destination,
+            moved: tick.moved,
+            total: tick.total,
+            remaining: [:]
+        )
+        pending.junk = tick.junk
+        if !tick.destination.isEmpty {
+            pending.destination = tick.destination
+        }
+        if let replacement = tick.replacement {
+            pending.remaining = replacement
+            pending.total = tick.total
+            pending.moved = tick.moved
+            pending.searchAddresses = []
+            pending.searchDomains = []
+        }
+        if !tick.removed.isEmpty {
+            var drop = Set<UInt64>()
+            for uids in tick.removed.values {
+                drop.formUnion(uids)
+            }
+            var next: [String: [UInt64]] = [:]
+            for (sender, uids) in pending.remaining {
+                let kept = uids.filter { !drop.contains($0) }
+                if !kept.isEmpty { next[sender] = kept }
+            }
+            pending.remaining = next
+            pending.moved = tick.moved
+            pending.total = tick.total
+            snapshot.sweptTotal += drop.count
+            for sender in Array(snapshot.inboxUIDs.keys) {
+                guard var stored = snapshot.inboxUIDs[sender] else { continue }
+                let before = stored.count
+                stored.removeAll { drop.contains($0) }
+                let removed = before - stored.count
+                if stored.isEmpty {
+                    snapshot.inboxUIDs.removeValue(forKey: sender)
+                } else {
+                    snapshot.inboxUIDs[sender] = stored
+                }
+                if removed > 0, let index = snapshot.senders.firstIndex(where: { $0.address == sender }) {
+                    snapshot.senders[index].count = max(0, snapshot.senders[index].count - removed)
+                }
+            }
+            snapshot.senders.removeAll { $0.count == 0 && (snapshot.inboxUIDs[$0.address] ?? []).isEmpty }
+        }
+        if pending.remaining.isEmpty {
+            snapshot.pendingMove = nil
+        } else {
+            snapshot.pendingMove = pending
+        }
+        ScanStore.save(snapshot)
+        sweptTotal = snapshot.sweptTotal
+        moveDone = pending.moved
+        moveTotal = max(pending.total, pending.moved)
+        moveSender = tick.sender
+        moveETA = tick.eta
+    }
+
+    private func moveJob(
+        plan: (addresses: [String], domains: [String]),
+        protect: Set<String>
+    ) -> (groups: [String: [UInt64]], missingAddresses: [String], missingDomains: [String]) {
+        let domainSet = Set(plan.domains)
+        var chosen = Set(selected.map { $0.lowercased() })
+        for sender in snapshot.senders where domainSet.contains(sender.domain) && !protect.contains(sender.address) {
+            chosen.insert(sender.address.lowercased())
+        }
+        chosen.subtract(protect)
+        var counts: [String: Int] = [:]
+        for sender in snapshot.senders {
+            counts[sender.address.lowercased()] = sender.count
+        }
+        var groups: [String: [UInt64]] = [:]
+        var missingAddresses: [String] = []
+        for address in chosen {
+            let uids = Array(Set(snapshot.inboxUIDs[address] ?? []))
+            if !uids.isEmpty {
+                groups[address] = uids
+            } else if (counts[address] ?? 0) > 0 && !domainSet.contains(MailAddress.domain(of: address)) {
+                missingAddresses.append(address)
+            }
+        }
+        var missingDomains: [String] = []
+        for domain in plan.domains {
+            let covered = snapshot.senders.filter { $0.domain == domain && chosen.contains($0.address.lowercased()) }
+            let ready = snapshot.scanComplete && covered.allSatisfy { sender in
+                sender.count == 0 || !(snapshot.inboxUIDs[sender.address] ?? []).isEmpty
+            }
+            if !ready {
+                missingDomains.append(domain)
+            }
+        }
+        return (groups, missingAddresses, missingDomains)
     }
 
     private func report(_ error: Error) {

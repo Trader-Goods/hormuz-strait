@@ -114,6 +114,85 @@ struct FetchedMail {
     var recipients: [String]
 }
 
+enum UIDSet {
+    /// `101:250,300,412:900` rather than one number per message.
+    static func encode(_ uids: [UInt64]) -> String {
+        let sorted = Array(Set(uids)).sorted()
+        var parts: [String] = []
+        var rangeStart: UInt64 = 0
+        var rangeEnd: UInt64 = 0
+        var open = false
+        for uid in sorted {
+            if !open {
+                rangeStart = uid
+                rangeEnd = uid
+                open = true
+            } else if uid == rangeEnd + 1 {
+                rangeEnd = uid
+            } else {
+                parts.append(rangeStart == rangeEnd ? "\(rangeStart)" : "\(rangeStart):\(rangeEnd)")
+                rangeStart = uid
+                rangeEnd = uid
+            }
+        }
+        if open {
+            parts.append(rangeStart == rangeEnd ? "\(rangeStart)" : "\(rangeStart):\(rangeEnd)")
+        }
+        return parts.joined(separator: ",")
+    }
+
+    /// Prefer 1000–2000 messages per command. Sparse ids stay short enough for one IMAP line.
+    static func chunks(_ uids: [UInt64], targetCount: Int = 1500, maxCharacters: Int = 6000) -> [[UInt64]] {
+        let sorted = Array(Set(uids)).sorted()
+        var chunks: [[UInt64]] = []
+        var current: [UInt64] = []
+        for uid in sorted {
+            current.append(uid)
+            let tooLong = current.count > 1 && encode(current).count > maxCharacters
+            if tooLong {
+                let overflow = current.removeLast()
+                chunks.append(current)
+                current = [overflow]
+            } else if current.count >= targetCount {
+                chunks.append(current)
+                current = []
+            }
+        }
+        if !current.isEmpty {
+            chunks.append(current)
+        }
+        return chunks
+    }
+
+    static func senderLabel(_ uids: [UInt64], owners: [UInt64: String]) -> String {
+        var counts: [String: Int] = [:]
+        for uid in uids {
+            let name = owners[uid] ?? "Unknown sender"
+            counts[name, default: 0] += 1
+        }
+        let ranked = counts.sorted { left, right in
+            if left.value == right.value { return left.key < right.key }
+            return left.value > right.value
+        }
+        guard let first = ranked.first else { return "Mail" }
+        if ranked.count == 1 { return first.key }
+        return "\(first.key) and \(ranked.count - 1) more"
+    }
+}
+
+enum MoveETA {
+    static func text(sessionMoved: Int, total: Int, moved: Int, elapsed: TimeInterval) -> String {
+        guard sessionMoved > 0, total > moved, elapsed > 0.2 else {
+            return total > moved ? "Estimating time left" : ""
+        }
+        let remain = elapsed / Double(sessionMoved) * Double(total - moved)
+        if remain < 45 { return "under a minute left" }
+        let minutes = Int((remain / 60).rounded())
+        if minutes <= 90 { return "about \(minutes) min left" }
+        return String(format: "about %.1f hours left", remain / 3600)
+    }
+}
+
 enum IMAPValue {
     case atom(String)
     case string(String)
@@ -211,6 +290,23 @@ actor IMAPClient {
         return searchUIDs(result.untagged)
     }
 
+    /// One OR query per batch, instead of a round trip for every sender.
+    func uidSearchSenders(_ addresses: [String]) async throws -> [UInt64] {
+        let unique = Array(Set(addresses.map { $0.lowercased() }.filter { !$0.isEmpty }))
+        guard !unique.isEmpty else { return [] }
+        var found = Set<UInt64>()
+        var index = 0
+        while index < unique.count {
+            let end = min(index + 40, unique.count)
+            let slice = Array(unique[index..<end])
+            let result = try await command("UID SEARCH \(fromTree(slice))")
+            try requireOK(result)
+            found.formUnion(searchUIDs(result.untagged))
+            index = end
+        }
+        return Array(found)
+    }
+
     func uidFetch(uids: [UInt64], headers: Bool) async throws -> [FetchedMail] {
         guard !uids.isEmpty else { return [] }
         var found: [FetchedMail] = []
@@ -253,13 +349,20 @@ actor IMAPClient {
     func uidMove(uids: [UInt64], to mailbox: String, onProgress: ((Int, Int) -> Void)? = nil) async throws {
         guard !uids.isEmpty else { return }
         if selected.isEmpty { throw IMAPError.badResponse }
-        var index = 0
-        while index < uids.count {
-            let end = min(index + 500, uids.count)
-            try await moveChunk(Array(uids[index..<end]), to: mailbox)
-            index = end
-            onProgress?(min(index, uids.count), uids.count)
+        let pieces = UIDSet.chunks(uids)
+        var done = 0
+        let total = pieces.reduce(0) { $0 + $1.count }
+        for piece in pieces {
+            try await moveChunk(piece, to: mailbox)
+            done += piece.count
+            onProgress?(done, total)
         }
+    }
+
+    func moveMessages(_ uids: [UInt64], to mailbox: String) async throws {
+        guard !uids.isEmpty else { return }
+        if selected.isEmpty { throw IMAPError.badResponse }
+        try await moveChunk(uids, to: mailbox)
     }
 
     func logout() async {
@@ -594,28 +697,16 @@ actor IMAPClient {
     }
 
     private func uidSet(_ uids: [UInt64]) -> String {
-        let sorted = uids.sorted()
-        var parts: [String] = []
-        var rangeStart: UInt64 = 0
-        var rangeEnd: UInt64 = 0
-        var open = false
-        for uid in sorted {
-            if !open {
-                rangeStart = uid
-                rangeEnd = uid
-                open = true
-            } else if uid == rangeEnd + 1 {
-                rangeEnd = uid
-            } else {
-                parts.append(rangeStart == rangeEnd ? "\(rangeStart)" : "\(rangeStart):\(rangeEnd)")
-                rangeStart = uid
-                rangeEnd = uid
-            }
+        UIDSet.encode(uids)
+    }
+
+    private func fromTree(_ addresses: [String]) -> String {
+        let keys = addresses.map { "FROM \(quote($0))" }
+        guard var text = keys.first else { return "ALL" }
+        for key in keys.dropFirst() {
+            text = "OR \(text) \(key)"
         }
-        if open {
-            parts.append(rangeStart == rangeEnd ? "\(rangeStart)" : "\(rangeStart):\(rangeEnd)")
-        }
-        return parts.joined(separator: ",")
+        return text
     }
 
     private func searchUIDs(_ lines: [Data]) -> [UInt64] {
