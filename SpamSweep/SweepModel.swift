@@ -25,6 +25,7 @@ final class SweepModel: ObservableObject {
     @Published var eta = ""
     @Published var status = ""
     @Published var errorMessage: String?
+    @Published var errorDetail: String?
     @Published var sentWarning = ""
     @Published var scanComplete = false
     @Published var pendingSafe: String?
@@ -73,14 +74,15 @@ final class SweepModel: ObservableObject {
     }
 
     func signIn(email rawEmail: String, password rawPassword: String) async {
-        let email = rawEmail.trimmingCharacters(in: .whitespacesAndNewlines)
-        let password = rawPassword.replacingOccurrences(of: " ", with: "")
-        guard email.contains("@"), email.contains("."), password.count >= 4 else {
+        let email = YahooAccount.normalizeEmail(rawEmail)
+        let password = YahooAccount.normalizePassword(rawPassword)
+        guard email.contains("@"), email.contains("."), !password.isEmpty else {
             errorMessage = "Enter the Yahoo email address and the app password."
+            errorDetail = nil
             return
         }
         working = true
-        errorMessage = nil
+        clearError()
         status = "Signing in to Yahoo…"
         defer {
             working = false
@@ -100,7 +102,7 @@ final class SweepModel: ObservableObject {
             applySnapshot(stored, preselect: true)
             await sweepOnOpen()
         } catch {
-            errorMessage = SweepEngine.describe(error)
+            report(error)
         }
     }
 
@@ -114,7 +116,7 @@ final class SweepModel: ObservableObject {
         selected.removeAll()
         selectedDomains.removeAll()
         status = ""
-        errorMessage = nil
+        clearError()
         scanning = false
         syncIdleTimer()
     }
@@ -148,9 +150,10 @@ final class SweepModel: ObservableObject {
             if !ContactsReader.isAuthorized && contactEmails.isEmpty {
                 useContacts = false
                 errorMessage = "Contacts access is off, so people you know were not protected."
+                errorDetail = nil
             } else {
                 useContacts = true
-                errorMessage = nil
+                clearError()
             }
         } else {
             useContacts = false
@@ -172,7 +175,7 @@ final class SweepModel: ObservableObject {
             rollups = []
         }
         scanning = true
-        errorMessage = nil
+        clearError()
         status = "Reading mail you've sent…"
         phase = status
         done = 0
@@ -199,7 +202,7 @@ final class SweepModel: ObservableObject {
         } catch {
             applySnapshot(ScanStore.load(), preselect: true)
             status = ""
-            errorMessage = SweepEngine.describe(error)
+            report(error)
         }
     }
 
@@ -224,7 +227,7 @@ final class SweepModel: ObservableObject {
             return
         }
         sweeping = true
-        errorMessage = nil
+        clearError()
         status = "Moving blocked mail to Junk…"
         defer { sweeping = false }
         do {
@@ -234,7 +237,7 @@ final class SweepModel: ObservableObject {
             status = moved == 0 ? "No new blocked mail." : "Moved \(moved.formatted()) messages to Junk."
         } catch {
             status = ""
-            errorMessage = SweepEngine.describe(error)
+            report(error)
         }
     }
 
@@ -310,7 +313,7 @@ final class SweepModel: ObservableObject {
         ScanStore.save(snapshot)
         blocks = entries
         working = true
-        errorMessage = nil
+        clearError()
         status = junk ? "Moving mail to Junk…" : "Moving mail to Trash…"
         defer { working = false }
         do {
@@ -327,7 +330,7 @@ final class SweepModel: ObservableObject {
             status = "Cleaned \(moved.formatted()) messages."
         } catch {
             status = ""
-            errorMessage = SweepEngine.describe(error)
+            report(error)
         }
     }
 
@@ -374,6 +377,16 @@ final class SweepModel: ObservableObject {
 
     func syncIdleTimer() {
         UIApplication.shared.isIdleTimerDisabled = keepAwake && scanning
+    }
+
+    private func report(_ error: Error) {
+        errorMessage = SweepEngine.describe(error)
+        errorDetail = SweepEngine.details(error)
+    }
+
+    private func clearError() {
+        errorMessage = nil
+        errorDetail = nil
     }
 
     private func apply(_ tick: ScanTick) {

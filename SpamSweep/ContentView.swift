@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private let yahooSecurity = URL(string: "https://login.yahoo.com/account/security")!
 private let yahooBlocked = URL(string: "https://mail.yahoo.com/d/settings/filters")!
@@ -27,6 +28,7 @@ private struct SignInScreen: View {
     @ObservedObject var model: SweepModel
     @State private var email = ""
     @State private var password = ""
+    @State private var revealPassword = false
 
     var body: some View {
         ScrollView {
@@ -40,11 +42,34 @@ private struct SignInScreen: View {
                     .autocorrectionDisabled()
                     .padding(12)
                     .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                SecureField("Yahoo app password", text: $password)
-                    .textContentType(.password)
-                    .padding(12)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                Text("In Yahoo, open Account Security, then Generate app password. Use that password here, not your normal Yahoo password.")
+                HStack(spacing: 8) {
+                    if revealPassword {
+                        TextField("Yahoo app password", text: $password)
+                            .keyboardType(.asciiCapable)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    } else {
+                        SecureField("Yahoo app password", text: $password)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                    Button {
+                        revealPassword.toggle()
+                    } label: {
+                        Image(systemName: revealPassword ? "eye.slash" : "eye")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(revealPassword ? "Hide password" : "Show password")
+                }
+                .padding(12)
+                .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                if let hint = YahooAccount.passwordHint(for: password) {
+                    Text(hint)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Text("In Yahoo, open Account Security, then Generate app password. Use that password here, not your normal Yahoo password. Spaces and dashes are removed.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Link(destination: yahooSecurity) {
@@ -69,13 +94,36 @@ private struct SignInScreen: View {
                     }
                 }
                 if let error = model.errorMessage {
-                    Text(error).foregroundStyle(.red)
+                    ErrorNote(message: error, detail: model.errorDetail)
                 }
                 PrivacyNote()
             }
             .padding(20)
         }
         .background(Color(uiColor: .systemGroupedBackground))
+    }
+}
+
+private struct ErrorNote: View {
+    var message: String
+    var detail: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(message)
+                .foregroundStyle(.red)
+                .textSelection(.enabled)
+            if let detail, !detail.isEmpty {
+                Button("Copy details") {
+                    if message.contains(detail) {
+                        UIPasteboard.general.string = message
+                    } else {
+                        UIPasteboard.general.string = "\(message)\n\(detail)"
+                    }
+                }
+                .font(.footnote)
+            }
+        }
     }
 }
 
@@ -96,7 +144,7 @@ private struct InboxScreen: View {
                     Text(model.sentWarning).font(.footnote).foregroundStyle(.secondary)
                 }
                 if let error = model.errorMessage {
-                    Text(error).foregroundStyle(.red)
+                    ErrorNote(message: error, detail: model.errorDetail)
                 } else if !model.status.isEmpty {
                     Text(model.status).foregroundStyle(.secondary)
                 }

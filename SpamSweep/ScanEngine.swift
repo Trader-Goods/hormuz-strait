@@ -28,10 +28,20 @@ struct ScanTick {
 enum SweepEngine {
     static func describe(_ error: Error) -> String {
         switch error {
-        case IMAPError.loginFailed:
-            return "Yahoo refused the sign-in. Use your Yahoo email and an app password from Account Security, not your normal Yahoo password."
+        case IMAPError.loginFailed(let detail):
+            if detail.hasPrefix("Saved sign-in") { return detail }
+            return joined(
+                "Yahoo refused the sign-in. Use your Yahoo email and an app password from Account Security, not your normal Yahoo password.",
+                detail
+            )
+        case IMAPError.connectionFailed(let detail):
+            return joined("Could not connect to Yahoo. The connection or TLS handshake failed.", detail)
+        case IMAPError.disconnected:
+            return "Could not connect to Yahoo. The connection closed before a reply."
+        case IMAPError.unavailable(let detail):
+            return joined("Yahoo is busy or temporarily unavailable. Spam Sweep already retried.", detail)
         case IMAPError.invalidPassword:
-            return "The app password cannot contain a line break."
+            return "Enter the Yahoo app password. It cannot contain a line break."
         case IMAPError.keychain:
             return "The password could not be saved in the iPhone Keychain."
         case IMAPError.missingFolder(let name):
@@ -39,17 +49,36 @@ enum SweepEngine {
         case IMAPError.busy:
             return "Spam Sweep is already talking to Yahoo."
         case IMAPError.refused(let line):
-            return "Yahoo replied: \(line)"
+            return joined("Yahoo replied:", line)
         default:
             return "Could not reach Yahoo Mail."
         }
+    }
+
+    static func details(_ error: Error) -> String? {
+        switch error {
+        case IMAPError.loginFailed(let detail),
+             IMAPError.connectionFailed(let detail),
+             IMAPError.unavailable(let detail),
+             IMAPError.refused(let detail):
+            return detail.isEmpty ? nil : detail
+        case IMAPError.disconnected:
+            return "The connection closed before Yahoo replied."
+        default:
+            return nil
+        }
+    }
+
+    private static func joined(_ summary: String, _ detail: String) -> String {
+        let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return summary }
+        return "\(summary)\n\(trimmed)"
     }
 
     static func verify(email: String, password: String) async throws {
         try await exclusive {
             let client = IMAPClient()
             do {
-                try await client.connect()
                 try await client.login(email: email, password: password)
                 await client.logout()
             } catch {
@@ -65,11 +94,12 @@ enum SweepEngine {
         stop: StopFlag,
         onTick: @escaping (ScanTick) -> Void
     ) async throws -> ScanStore.Snapshot {
-        guard let saved = KeychainStore.load() else { throw IMAPError.loginFailed }
+        guard let saved = KeychainStore.load() else {
+            throw IMAPError.loginFailed("Saved sign-in is missing. Connect again.")
+        }
         return try await exclusive {
             let client = IMAPClient()
             do {
-                try await client.connect()
                 try await client.login(email: saved.email, password: saved.appPassword)
                 let boxes = try await client.listMailboxes()
                 var snapshot = start
@@ -169,11 +199,12 @@ enum SweepEngine {
     ) async throws -> Int {
         let unique = Array(Set(needles.map { $0.lowercased() }.filter { !$0.isEmpty }))
         guard !unique.isEmpty else { return 0 }
-        guard let saved = KeychainStore.load() else { throw IMAPError.loginFailed }
+        guard let saved = KeychainStore.load() else {
+            throw IMAPError.loginFailed("Saved sign-in is missing. Connect again.")
+        }
         return try await exclusive {
             let client = IMAPClient()
             do {
-                try await client.connect()
                 try await client.login(email: saved.email, password: saved.appPassword)
                 let boxes = try await client.listMailboxes()
                 let destination = junk

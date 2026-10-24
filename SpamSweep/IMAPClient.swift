@@ -4,13 +4,100 @@ import Security
 
 enum IMAPError: Error {
     case disconnected
-    case loginFailed
+    case connectionFailed(String)
+    case loginFailed(String)
+    case unavailable(String)
     case refused(String)
     case badResponse
     case missingFolder(String)
     case keychain
     case invalidPassword
     case busy
+}
+
+enum YahooAccount {
+    static func normalizeEmail(_ raw: String) -> String {
+        var email = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !email.isEmpty && !email.contains("@") {
+            email += "@yahoo.com"
+        }
+        return email
+    }
+
+    private static let dashes: Set<Unicode.Scalar> = ["-", "–", "—", "−"]
+
+    static func normalizePassword(_ raw: String) -> String {
+        let stripped = raw.unicodeScalars.filter { scalar in
+            if CharacterSet.whitespacesAndNewlines.contains(scalar) { return false }
+            return !dashes.contains(scalar)
+        }
+        var built = ""
+        built.unicodeScalars.append(contentsOf: stripped)
+        return built.lowercased()
+    }
+
+    /// Yahoo app passwords are 16 lowercase letters. Empty input stays quiet so the field can start blank.
+    static func passwordHint(for raw: String) -> String? {
+        if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return nil }
+        let password = normalizePassword(raw)
+        let letters = password.allSatisfy { $0.isASCII && $0.isLetter }
+        if password.count == 16 && letters { return nil }
+        if !letters {
+            return "Yahoo app passwords are 16 letters. After removing spaces and dashes, this one has \(password.count) characters and is not only letters."
+        }
+        return "Yahoo app passwords are 16 letters. After removing spaces and dashes, this one has \(password.count)."
+    }
+}
+
+enum IMAPText {
+    static func plainToken(email: String, password: String) -> String {
+        var raw = Data([0])
+        raw.append(contentsOf: email.utf8)
+        raw.append(0)
+        raw.append(contentsOf: password.utf8)
+        return raw.base64EncodedString()
+    }
+
+    static func isUnavailable(_ text: String) -> Bool {
+        text.range(of: "[UNAVAILABLE]", options: .caseInsensitive) != nil
+    }
+
+    static func redact(_ text: String, password: String, token: String) -> String {
+        var cleaned = text.replacingOccurrences(of: "\u{0}", with: "")
+        if password.count >= 8 {
+            cleaned = cleaned.replacingOccurrences(of: password, with: "[password]", options: .caseInsensitive)
+        }
+        if token.count >= 8 {
+            cleaned = cleaned.replacingOccurrences(of: token, with: "[sasl]")
+        }
+        return clip(cleaned)
+    }
+
+    static func clip(_ text: String, limit: Int = 300) -> String {
+        let flat = text.replacingOccurrences(of: "\r", with: " ").replacingOccurrences(of: "\n", with: " ")
+        if flat.count <= limit { return flat }
+        return String(flat.prefix(limit))
+    }
+
+    static func transcript(_ lines: [String]) -> String {
+        var seen = Set<String>()
+        let unique = lines.filter { seen.insert($0).inserted }
+        let text = unique.joined(separator: "\n")
+        if text.count <= 900 { return text }
+        return String(text.suffix(900))
+    }
+
+    static func capabilityTokens(in lines: [Data]) -> Set<String> {
+        var tokens = Set<String>()
+        for line in lines {
+            let upper = String(decoding: line, as: UTF8.self).uppercased()
+            guard let range = upper.range(of: "CAPABILITY") else { continue }
+            for token in upper[range.upperBound...].split(whereSeparator: { $0 == " " || $0 == "[" || $0 == "]" }) {
+                if !token.isEmpty { tokens.insert(String(token)) }
+            }
+        }
+        return tokens
+    }
 }
 
 struct IMAPMailbox {
@@ -41,28 +128,63 @@ actor IMAPClient {
     private var buffer = Data()
     private var tagNumber = 0
     private var selected = ""
+    private var greetingLine = ""
 
     func connect() async throws {
-        let tls = NWProtocolTLS.Options()
-        sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv12)
-        let tcp = NWProtocolTCP.Options()
-        tcp.connectionTimeout = 30
-        let parameters = NWParameters(tls: tls, tcp: tcp)
-        guard let nwPort = NWEndpoint.Port(rawValue: port) else { throw IMAPError.disconnected }
-        let connection = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: parameters)
-        self.connection = connection
-        try await waitUntilReady(connection)
-        let greeting = try await readLogicalLine()
-        let text = String(decoding: greeting, as: UTF8.self).uppercased()
-        if text.contains("BYE") || !text.contains("OK") {
-            throw IMAPError.disconnected
+        connection?.cancel()
+        connection = nil
+        buffer.removeAll()
+        selected = ""
+        greetingLine = ""
+        do {
+            let tls = NWProtocolTLS.Options()
+            sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv12)
+            let tcp = NWProtocolTCP.Options()
+            tcp.connectionTimeout = 30
+            let parameters = NWParameters(tls: tls, tcp: tcp)
+            guard let nwPort = NWEndpoint.Port(rawValue: port) else {
+                throw IMAPError.connectionFailed("Could not open port 993.")
+            }
+            let connection = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: parameters)
+            self.connection = connection
+            try await waitUntilReady(connection)
+            let greeting = try await readLogicalLine()
+            let raw = String(decoding: greeting, as: UTF8.self)
+            greetingLine = raw
+            let upper = raw.uppercased()
+            if IMAPText.isUnavailable(raw) {
+                throw IMAPError.unavailable(IMAPText.clip(raw))
+            }
+            if upper.contains("BYE") || !upper.contains("OK") {
+                throw IMAPError.connectionFailed(IMAPText.clip(raw))
+            }
+        } catch let error as IMAPError {
+            throw error
+        } catch {
+            throw IMAPError.connectionFailed(IMAPText.clip(error.localizedDescription))
         }
     }
 
-    func login(email: String, password: String) async throws {
+    /// CAPABILITY, then ID, then LOGIN. A NO with AUTH=PLAIN falls back to AUTHENTICATE PLAIN. [UNAVAILABLE] is retried by the caller.
+    func login(email rawEmail: String, password rawPassword: String) async throws {
+        let email = YahooAccount.normalizeEmail(rawEmail)
+        let password = YahooAccount.normalizePassword(rawPassword)
+        guard !password.isEmpty else { throw IMAPError.invalidPassword }
         guard !password.contains("\r"), !password.contains("\n") else { throw IMAPError.invalidPassword }
-        let result = try await command("LOGIN \(quote(email)) \(quote(password))")
-        if !result.ok { throw IMAPError.loginFailed }
+        var lastUnavailable = ""
+        for attempt in 1...4 {
+            do {
+                try await signInOnce(email: email, password: password)
+                return
+            } catch let error as IMAPError {
+                guard case .unavailable(let detail) = error else { throw error }
+                lastUnavailable = detail
+                if attempt == 4 { break }
+                let seconds = UInt64(1 << (attempt - 1))
+                try await Task.sleep(nanoseconds: seconds * 1_000_000_000)
+            }
+        }
+        throw IMAPError.unavailable(lastUnavailable)
     }
 
     func listMailboxes() async throws -> [IMAPMailbox] {
@@ -148,6 +270,124 @@ actor IMAPClient {
         buffer.removeAll()
     }
 
+    private func signInOnce(email: String, password: String) async throws {
+        let token = IMAPText.plainToken(email: email, password: password)
+        try await connect()
+        var caps = try await requestCapabilities()
+        caps.formUnion(IMAPText.capabilityTokens(in: [Data(greetingLine.utf8)]))
+        var notes = ["CAPABILITY: \(caps.sorted().joined(separator: " "))"]
+        let idLine = try await sendClientID()
+        notes.append("ID: \(IMAPText.redact(idLine, password: password, token: token))")
+
+        let loginResult = try await command("LOGIN \(quote(email)) \(quote(password))")
+        if loginResult.ok { return }
+        let loginLine = IMAPText.redact(loginResult.tagLine, password: password, token: token)
+        notes.append("LOGIN: \(loginLine)")
+        if IMAPText.isUnavailable(loginResult.tagLine) {
+            throw IMAPError.unavailable(IMAPText.transcript(notes))
+        }
+        guard caps.contains("AUTH=PLAIN") else {
+            throw IMAPError.loginFailed(IMAPText.transcript(notes))
+        }
+        do {
+            try await finishPlain(
+                email: email,
+                password: password,
+                token: token,
+                saslIR: caps.contains("SASL-IR"),
+                notes: &notes
+            )
+        } catch let error as IMAPError {
+            guard case .connectionFailed(let detail) = error else { throw error }
+            notes.append("Connection closed after LOGIN: \(IMAPText.redact(detail, password: password, token: token))")
+            do {
+                try await connect()
+                let retryCaps = try await requestCapabilities()
+                _ = try await sendClientID()
+                try await finishPlain(
+                    email: email,
+                    password: password,
+                    token: token,
+                    saslIR: retryCaps.contains("SASL-IR"),
+                    notes: &notes
+                )
+            } catch let retry as IMAPError {
+                switch retry {
+                case .loginFailed, .unavailable:
+                    throw retry
+                case .connectionFailed(let again):
+                    notes.append(IMAPText.redact(again, password: password, token: token))
+                    throw IMAPError.connectionFailed(IMAPText.transcript(notes))
+                default:
+                    throw retry
+                }
+            }
+        }
+    }
+
+    private func finishPlain(
+        email: String,
+        password: String,
+        token: String,
+        saslIR: Bool,
+        notes: inout [String]
+    ) async throws {
+        let plain = try await authenticatePlain(email: email, password: password, saslIR: saslIR)
+        if plain.ok { return }
+        let plainLine = IMAPText.redact(plain.tagLine, password: password, token: token)
+        notes.append("AUTHENTICATE PLAIN: \(plainLine)")
+        if IMAPText.isUnavailable(plain.tagLine) {
+            throw IMAPError.unavailable(IMAPText.transcript(notes))
+        }
+        throw IMAPError.loginFailed(IMAPText.transcript(notes))
+    }
+
+    private func requestCapabilities() async throws -> Set<String> {
+        let result = try await command("CAPABILITY")
+        var tokens = IMAPText.capabilityTokens(in: result.untagged)
+        tokens.formUnion(IMAPText.capabilityTokens(in: [Data(result.tagLine.utf8)]))
+        return tokens
+    }
+
+    private func sendClientID() async throws -> String {
+        let result = try await command("ID (\"name\" \"SpamSweep\" \"version\" \"1.0\")")
+        return result.tagLine
+    }
+
+    /// SASL-IR sends the initial response on the command line. Otherwise the server sends `+` first.
+    private func authenticatePlain(email: String, password: String, saslIR: Bool) async throws -> CommandResult {
+        let token = IMAPText.plainToken(email: email, password: password)
+        tagNumber += 1
+        let tag = String(format: "A%03d", tagNumber)
+        if saslIR {
+            try await sendLine("\(tag) AUTHENTICATE PLAIN \(token)")
+        } else {
+            try await sendLine("\(tag) AUTHENTICATE PLAIN")
+        }
+        var untagged: [Data] = []
+        var sent = saslIR
+        while true {
+            let line = try await readLogicalLine()
+            let text = String(decoding: line, as: UTF8.self)
+            if text.hasPrefix("+") {
+                if !sent {
+                    try await sendLine(token)
+                    sent = true
+                } else {
+                    try await sendLine("")
+                }
+                continue
+            }
+            if text.uppercased().hasPrefix("* BYE"), IMAPText.isUnavailable(text) {
+                throw IMAPError.unavailable(IMAPText.clip(text))
+            }
+            if isTagged(line, tag: tag) {
+                return CommandResult(tagLine: text, untagged: untagged)
+            }
+            untagged.append(line)
+        }
+    }
+
     private func moveChunk(_ uids: [UInt64], to mailbox: String) async throws {
         do {
             try await moveBatch(uids, to: mailbox)
@@ -183,18 +423,30 @@ actor IMAPClient {
         }
     }
 
-    private func command(_ text: String) async throws -> CommandResult {
+    private func command(_ body: String) async throws -> CommandResult {
         tagNumber += 1
         let tag = String(format: "A%03d", tagNumber)
-        try await send(Data("\(tag) \(text)\r\n".utf8))
+        try await sendLine("\(tag) \(body)")
         var untagged: [Data] = []
         while true {
             let line = try await readLogicalLine()
-            if line.starts(with: Data(tag.utf8)) {
-                return CommandResult(tagLine: String(decoding: line, as: UTF8.self), untagged: untagged)
+            let text = String(decoding: line, as: UTF8.self)
+            if text.uppercased().hasPrefix("* BYE"), IMAPText.isUnavailable(text) {
+                throw IMAPError.unavailable(IMAPText.clip(text))
+            }
+            if isTagged(line, tag: tag) {
+                return CommandResult(tagLine: text, untagged: untagged)
             }
             untagged.append(line)
         }
+    }
+
+    private func isTagged(_ line: Data, tag: String) -> Bool {
+        line.starts(with: Data("\(tag) ".utf8))
+    }
+
+    private func sendLine(_ text: String) async throws {
+        try await send(Data("\(text)\r\n".utf8))
     }
 
     private func requireOK(_ result: CommandResult) throws {
@@ -233,38 +485,51 @@ actor IMAPClient {
     }
 
     private func send(_ data: Data) async throws {
-        guard let connection else { throw IMAPError.disconnected }
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            connection.send(content: data, completion: .contentProcessed { error in
-                if let error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
-                }
-            })
+        guard let connection else { throw IMAPError.connectionFailed("Yahoo closed the connection.") }
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                connection.send(content: data, completion: .contentProcessed { error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
+                })
+            }
+        } catch let error as IMAPError {
+            throw error
+        } catch {
+            throw IMAPError.connectionFailed(IMAPText.clip(error.localizedDescription))
         }
     }
 
     private func fill() async throws {
-        guard let connection else { throw IMAPError.disconnected }
-        let chunk: Data? = try await withCheckedThrowingContinuation { continuation in
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { data, _, isComplete, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
+        guard let connection else { throw IMAPError.connectionFailed("Yahoo closed the connection.") }
+        let chunk: Data?
+        do {
+            chunk = try await withCheckedThrowingContinuation { continuation in
+                connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { data, _, isComplete, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                        return
+                    }
+                    if let data, !data.isEmpty {
+                        continuation.resume(returning: data)
+                        return
+                    }
+                    if isComplete {
+                        continuation.resume(returning: nil)
+                        return
+                    }
+                    continuation.resume(returning: Data())
                 }
-                if let data, !data.isEmpty {
-                    continuation.resume(returning: data)
-                    return
-                }
-                if isComplete {
-                    continuation.resume(returning: nil)
-                    return
-                }
-                continuation.resume(returning: Data())
             }
+        } catch let error as IMAPError {
+            throw error
+        } catch {
+            throw IMAPError.connectionFailed(IMAPText.clip(error.localizedDescription))
         }
-        guard let chunk else { throw IMAPError.disconnected }
+        guard let chunk else { throw IMAPError.connectionFailed("Yahoo closed the connection.") }
         if !chunk.isEmpty {
             buffer.append(chunk)
         }

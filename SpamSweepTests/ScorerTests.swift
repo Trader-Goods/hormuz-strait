@@ -316,3 +316,63 @@ final class ScorerTests: XCTestCase {
         SpamScorer.score(only(header), context: context)
     }
 }
+
+final class SignInTests: XCTestCase {
+    func testNormalizeEmailAndPassword() {
+        XCTAssertEqual(YahooAccount.normalizeEmail("  Me@Yahoo.COM "), "me@yahoo.com")
+        XCTAssertEqual(YahooAccount.normalizeEmail("Pat"), "pat@yahoo.com")
+        XCTAssertEqual(
+            YahooAccount.normalizePassword(" ABCD-EFGH—IJKL MNOP "),
+            "abcdefghijklmnop"
+        )
+        XCTAssertNil(YahooAccount.passwordHint(for: ""))
+        XCTAssertNil(YahooAccount.passwordHint(for: "abcd efgh ijkl mnop"))
+        XCTAssertNotNil(YahooAccount.passwordHint(for: "abcd"))
+        XCTAssertNotNil(YahooAccount.passwordHint(for: "abcdefghijklmno1"))
+    }
+
+    func testPlainTokenAndRedactionOmitThePassword() {
+        let token = IMAPText.plainToken(email: "user", password: "pass")
+        XCTAssertEqual(token, "AHVzZXIAcGFzcw==")
+        let secret = "abcdefghijklmnop"
+        let sasl = IMAPText.plainToken(email: "a@yahoo.com", password: secret)
+        let line = "A003 NO [AUTHENTICATIONFAILED] \(secret) \(sasl)"
+        let redacted = IMAPText.redact(line, password: secret, token: sasl)
+        XCTAssertFalse(redacted.contains(secret))
+        XCTAssertFalse(redacted.contains(sasl))
+        XCTAssertTrue(redacted.contains("[AUTHENTICATIONFAILED]"))
+        XCTAssertTrue(redacted.contains("[password]"))
+    }
+
+    func testCapabilityKeepsPlainAndIgnoresOAuthForAvailability() {
+        let tokens = IMAPText.capabilityTokens(in: [
+            Data("* CAPABILITY IMAP4rev1 SASL-IR AUTH=PLAIN AUTH=XOAUTH2 AUTH=OAUTHBEARER ID".utf8)
+        ])
+        XCTAssertTrue(tokens.contains("AUTH=PLAIN"))
+        XCTAssertTrue(tokens.contains("SASL-IR"))
+        XCTAssertTrue(tokens.contains("AUTH=XOAUTH2"))
+        XCTAssertFalse(IMAPText.isUnavailable("A001 NO [AUTHENTICATIONFAILED] Invalid credentials"))
+        XCTAssertTrue(IMAPText.isUnavailable("A004 NO [UNAVAILABLE] Server busy"))
+    }
+
+    func testErrorTextDistinguishesConnectionAuthAndBusy() {
+        let password = "abcdefghijklmnop"
+        let auth = SweepEngine.describe(IMAPError.loginFailed("LOGIN: A003 NO [AUTHENTICATIONFAILED] Invalid credentials"))
+        XCTAssertTrue(auth.contains("NO [AUTHENTICATIONFAILED]"))
+        XCTAssertTrue(auth.contains("refused the sign-in"))
+        XCTAssertFalse(auth.contains(password))
+
+        let busy = SweepEngine.describe(IMAPError.unavailable("A001 NO [UNAVAILABLE] Server busy"))
+        XCTAssertTrue(busy.contains("[UNAVAILABLE]"))
+        XCTAssertFalse(busy.contains("refused the sign-in"))
+
+        let offline = SweepEngine.describe(IMAPError.connectionFailed("The operation timed out"))
+        XCTAssertTrue(offline.contains("TLS"))
+        XCTAssertTrue(offline.contains("timed out"))
+        XCTAssertFalse(offline.contains("refused the sign-in"))
+        XCTAssertEqual(
+            SweepEngine.details(IMAPError.loginFailed("LOGIN: A003 NO [AUTHENTICATIONFAILED] Invalid credentials")),
+            "LOGIN: A003 NO [AUTHENTICATIONFAILED] Invalid credentials"
+        )
+    }
+}
