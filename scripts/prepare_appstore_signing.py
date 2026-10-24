@@ -140,15 +140,6 @@ def export_p12(key_path, pem_path, p12_path, password, legacy):
     quiet(cmd, env)
 
 
-def certificate_label(item):
-    attributes = item.get("attributes", {})
-    return " ".join(
-        part
-        for part in (attributes.get("certificateType"), attributes.get("name"), attributes.get("displayName"), attributes.get("expirationDate"))
-        if part
-    )
-
-
 def list_distribution_certificates(auth):
     found = []
     for kind in ("IOS_DISTRIBUTION", "DISTRIBUTION"):
@@ -157,23 +148,50 @@ def list_distribution_certificates(auth):
     return found
 
 
+def app_store_profiles(auth):
+    query = urllib.parse.urlencode({"filter[profileType]": "IOS_APP_STORE", "limit": 200})
+    return api("GET", "/v1/profiles?" + query, auth).get("data", [])
+
+
+def profile_certificate_ids(auth, profile_id):
+    payload = api("GET", "/v1/profiles/" + profile_id + "/relationships/certificates", auth)
+    return [item["id"] for item in payload.get("data", []) if item.get("id")]
+
+
 def revoke_one_distribution_certificate(auth):
-    candidates = list_distribution_certificates(auth)
-    for item in candidates:
-        print("existing distribution certificate", certificate_label(item))
-    if not candidates:
-        raise SystemExit("no distribution certificate available to replace")
-    own = [
-        item for item in candidates
-        if "Spam Sweep" in certificate_label(item)
-    ]
-    if not own:
+    """Replace only the certificate on the Spam Sweep CI profile.
+
+    Distribution certificates are named for the account, not the app, so a name
+    match cannot tell Spam Sweep apart from Live to Still. A certificate that is
+    also attached to another App Store profile is left alone.
+    """
+    profiles = app_store_profiles(auth)
+    own_ids = set()
+    other_ids = set()
+    for item in profiles:
+        name = item.get("attributes", {}).get("name") or ""
+        ids = profile_certificate_ids(auth, item["id"])
+        if name == PROFILE_NAME:
+            own_ids.update(ids)
+        else:
+            other_ids.update(ids)
+    safe = [cert_id for cert_id in own_ids if cert_id not in other_ids]
+    if not safe:
         raise SystemExit("certificate limit reached; other apps' certificates were left in place")
-    own.sort(key=lambda item: item.get("attributes", {}).get("expirationDate") or "")
-    chosen = own[0]
-    print("revoking distribution certificate", certificate_label(chosen))
-    api("DELETE", "/v1/certificates/" + chosen["id"], auth)
-    print("revoked distribution certificate")
+    known = {item["id"] for item in list_distribution_certificates(auth)}
+    revoked = False
+    for cert_id in safe:
+        if cert_id not in known:
+            continue
+        try:
+            api("DELETE", "/v1/certificates/" + cert_id, auth)
+        except SystemExit as error:
+            if getattr(error, "code", None) != 404:
+                raise
+        print("revoked certificate attached to Spam Sweep CI")
+        revoked = True
+    if not revoked:
+        raise SystemExit("certificate limit reached; other apps' certificates were left in place")
 
 
 def distribution_certificate(auth, work, replaced=False):
