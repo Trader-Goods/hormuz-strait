@@ -14,6 +14,31 @@ struct BlockEntry: Codable, Identifiable, Equatable, Hashable {
 struct FolderCursor: Codable, Equatable {
     var lastUID: UInt64 = 0
     var done = false
+    var uidValidity: UInt64 = 0
+
+    private enum CodingKeys: String, CodingKey {
+        case lastUID, done, uidValidity
+    }
+
+    init(lastUID: UInt64 = 0, done: Bool = false, uidValidity: UInt64 = 0) {
+        self.lastUID = lastUID
+        self.done = done
+        self.uidValidity = uidValidity
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        lastUID = try container.decodeIfPresent(UInt64.self, forKey: .lastUID) ?? 0
+        done = try container.decodeIfPresent(Bool.self, forKey: .done) ?? false
+        uidValidity = try container.decodeIfPresent(UInt64.self, forKey: .uidValidity) ?? 0
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(lastUID, forKey: .lastUID)
+        try container.encode(done, forKey: .done)
+        try container.encode(uidValidity, forKey: .uidValidity)
+    }
 }
 
 struct PendingMove: Codable, Equatable {
@@ -53,6 +78,9 @@ enum ScanStore {
         var sentWarning = ""
         var inboxUIDs: [String: [UInt64]] = [:]
         var pendingMove: PendingMove?
+        var pendingSweep: PendingMove?
+        var autoSweep = true
+        var lastSweepAt: TimeInterval = 0
     }
 
     private static let lock = NSLock()
@@ -105,6 +133,9 @@ enum ScanStore {
         var sentWarning: String?
         var inboxUIDs: [String: [UInt64]]?
         var pendingMove: PendingMove?
+        var pendingSweep: PendingMove?
+        var autoSweep: Bool?
+        var lastSweepAt: TimeInterval?
 
         func make() -> Snapshot {
             var snapshot = Snapshot()
@@ -125,6 +156,9 @@ enum ScanStore {
             snapshot.sentWarning = sentWarning ?? ""
             snapshot.inboxUIDs = inboxUIDs ?? [:]
             snapshot.pendingMove = pendingMove
+            snapshot.pendingSweep = pendingSweep
+            snapshot.autoSweep = autoSweep ?? true
+            snapshot.lastSweepAt = lastSweepAt ?? 0
             return snapshot
         }
     }

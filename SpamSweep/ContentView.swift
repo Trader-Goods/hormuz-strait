@@ -42,7 +42,7 @@ private struct MoveProgressScreen: View {
             ProgressView(value: fraction)
                 .tint(amber)
             if finished {
-                Text("Moved \(model.moveDone.formatted()) emails.")
+                Text(model.moveTotal == 0 && !model.moveNote.isEmpty ? model.moveNote : "Moved \(model.moveDone.formatted()) emails.")
                     .font(.title3.weight(.semibold))
             } else {
                 Text("Moved \(model.moveDone.formatted()) of \(model.moveTotal.formatted()) emails")
@@ -95,7 +95,9 @@ private struct MoveProgressScreen: View {
     private var title: String {
         if model.moving { return "Moving mail" }
         if model.moveRemaining > 0 { return "Move paused" }
-        if model.moveTotal == 0 { return "Nothing to move" }
+        if model.moveTotal == 0 {
+            return model.moveNote.hasPrefix("Already moved") ? "Already moved" : "Nothing to move"
+        }
         return "Move finished"
     }
 
@@ -260,6 +262,9 @@ private struct InboxScreen: View {
             .padding(16)
         }
         .background(Color(uiColor: .systemGroupedBackground))
+        .refreshable {
+            await model.rescan()
+        }
         .navigationDestination(item: $detailAddress) { address in
             SenderDetail(address: address, model: model)
         }
@@ -318,6 +323,9 @@ private struct InboxScreen: View {
             Text(model.email).font(.subheadline).foregroundStyle(.secondary)
             Text("\(model.sweptTotal.formatted()) cleaned")
                 .font(.title2.weight(.semibold))
+            if model.sweepBanner {
+                sweepBanner
+            }
             if let pending = model.pendingMoveOffer {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(pending.remainingCount > 0
@@ -341,7 +349,7 @@ private struct InboxScreen: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
-            .disabled(model.sweeping || model.scanning || model.working || model.blocks.isEmpty)
+            .disabled(model.scanning || model.working || model.moving || model.blocks.isEmpty || model.sweepBanner)
             Button {
                 Task { await primaryScan() }
             } label: {
@@ -349,7 +357,7 @@ private struct InboxScreen: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
-            .disabled(model.scanning || model.working || model.sweeping)
+            .disabled(model.scanning || model.working || model.moving)
             if model.scanning {
                 Button("Stop") { model.stopScan() }
                     .buttonStyle(.bordered)
@@ -379,7 +387,7 @@ private struct InboxScreen: View {
         if model.scanning { return "Scanning…" }
         if !model.scanComplete && model.hasProgress { return "Continue scan" }
         if model.rows.isEmpty { return "Scan inbox" }
-        return "Scan again"
+        return "Rescan"
     }
 
     private func primaryScan() async {
@@ -392,6 +400,7 @@ private struct InboxScreen: View {
 
     private var options: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Toggle("Auto-move blocked mail when app opens", isOn: autoSweep)
             Toggle("Keep the screen awake while scanning", isOn: keepAwake)
             Toggle("Include Junk for better detection", isOn: includeBulk)
             Toggle("Also scan other folders", isOn: includeOther)
@@ -399,6 +408,54 @@ private struct InboxScreen: View {
         }
         .padding(16)
         .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var sweepBanner: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Moving blocked mail to Junk")
+                .font(.subheadline.weight(.semibold))
+            ProgressView(value: sweepFraction)
+                .tint(amber)
+            Text(sweepLine)
+            if !model.sweepETA.isEmpty {
+                Text(model.sweepETA)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            if !model.sweepSender.isEmpty {
+                Text(model.sweepSender)
+                    .font(.footnote)
+                    .lineLimit(2)
+                    .foregroundStyle(.secondary)
+            }
+            Text("You can keep using Spam Sweep. Skip stops after the current batch.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Button("Skip") { model.skipSweep() }
+                .buttonStyle(.bordered)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var sweepFraction: Double {
+        guard model.sweepTotal > 0 else { return 0 }
+        return min(1, Double(model.sweepDone) / Double(model.sweepTotal))
+    }
+
+    private var sweepLine: String {
+        if model.sweepPhase == "moving" {
+            return "Moved \(model.sweepDone.formatted()) of \(model.sweepTotal.formatted()), \(model.sweepRemaining.formatted()) left"
+        }
+        if model.sweepTotal > 0 {
+            return "Checking \(model.sweepDone.formatted()) of \(model.sweepTotal.formatted()) senders, \(model.sweepRemaining.formatted()) left"
+        }
+        return "Finding blocked mail"
+    }
+
+    private var autoSweep: Binding<Bool> {
+        Binding(get: { model.autoSweep }, set: { model.setAutoSweep($0) })
     }
 
     private var keepAwake: Binding<Bool> {

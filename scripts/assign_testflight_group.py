@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from prepare_appstore_signing import api, token
 
 GROUP_NAME = "Me"
+GROUP_ID = "0dad8ebc-e360-40e4-a9e4-daa071ee3c8b"
 WAIT_SECONDS = 20 * 60
 API_HOST = "https://api.appstoreconnect.apple.com"
 
@@ -40,6 +41,14 @@ def app_id(auth, bundle):
 
 
 def find_group(auth, app):
+    try:
+        item = api("GET", f"/v1/betaGroups/{GROUP_ID}", auth).get("data", {})
+        attributes = item.get("attributes") or {}
+        if item.get("id") == GROUP_ID and attributes.get("name") == GROUP_NAME and attributes.get("isInternalGroup") is True:
+            print("internal group found")
+            return GROUP_ID
+    except SystemExit:
+        print("known group id was not readable, searching by name")
     query = urllib.parse.urlencode({"filter[app]": app, "limit": 50})
     found = api("GET", "/v1/betaGroups?" + query, auth).get("data", [])
     names = []

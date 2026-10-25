@@ -16,6 +16,7 @@ final class SweepModel: ObservableObject {
     @Published var includeBulk = true
     @Published var includeOther = false
     @Published var useContacts = false
+    @Published var autoSweep = true
     @Published var scanning = false
     @Published var sweeping = false
     @Published var working = false
@@ -38,13 +39,21 @@ final class SweepModel: ObservableObject {
     @Published var moveTotal = 0
     @Published var moveSender = ""
     @Published var moveETA = ""
+    @Published var moveNote = ""
+    @Published var sweepBanner = false
+    @Published var sweepPhase = ""
+    @Published var sweepDone = 0
+    @Published var sweepTotal = 0
+    @Published var sweepETA = ""
+    @Published var sweepSender = ""
     private var snapshot = ScanStore.Snapshot()
     private var contactEmails = Set<String>()
     private var heldOff = Set<String>()
     private var pinnedOn = Set<String>()
     private var stopFlag: StopFlag?
     private var moveStop: StopFlag?
-    private var didOpenSweep = false
+    private var sweepStop: StopFlag?
+    private var sweepTask: Task<Void, Never>?
 
     var hasProgress: Bool {
         !snapshot.senders.isEmpty || snapshot.folders.values.contains { $0.lastUID > 0 }
@@ -77,7 +86,26 @@ final class SweepModel: ObservableObject {
         if stored.useContacts {
             contactEmails = ContactsReader.loadIfAllowed()
         }
-        applySnapshot(stored, preselect: true)
+        var changed = false
+        if let pending = stored.pendingMove, !pending.hasWork {
+            stored.pendingMove = nil
+            changed = true
+        }
+        if let pending = stored.pendingSweep, !pending.hasWork {
+            stored.pendingSweep = nil
+            changed = true
+        }
+        if changed { ScanStore.save(stored) }
+        applySnapshot(stored, preselect: !scanning && !moving && !sweepBanner)
+    }
+
+    func activate() async {
+        if !scanning && !moving && sweepTask == nil {
+            refreshAccount()
+        } else if !signedIn {
+            refreshAccount()
+        }
+        await sweepOnOpen()
     }
 
     func signIn(email rawEmail: String, password rawPassword: String) async {
@@ -125,6 +153,8 @@ final class SweepModel: ObservableObject {
     func signOut() {
         stopFlag?.stop()
         moveStop?.stop()
+        sweepStop?.stop()
+        sweepTask?.cancel()
         KeychainStore.clear()
         signedIn = false
         email = ""
@@ -137,7 +167,18 @@ final class SweepModel: ObservableObject {
         scanning = false
         moving = false
         moveVisible = false
+        sweepBanner = false
+        sweeping = false
         syncIdleTimer()
+    }
+
+    func setAutoSweep(_ value: Bool) {
+        autoSweep = value
+        snapshot.autoSweep = value
+        ScanStore.save(snapshot)
+        if value {
+            Task { await sweepOnOpen() }
+        }
     }
 
     func setKeepAwake(_ value: Bool) {
@@ -184,7 +225,8 @@ final class SweepModel: ObservableObject {
     }
 
     func startScan(restart: Bool) async {
-        guard signedIn, !scanning, !working, !sweeping else { return }
+        await stopSweepForUserAction()
+        guard signedIn, !scanning, !working, !moving else { return }
         if restart {
             heldOff.removeAll()
             pinnedOn.removeAll()
@@ -232,32 +274,121 @@ final class SweepModel: ObservableObject {
     }
 
     func sweepOnOpen() async {
-        guard signedIn, !blocks.isEmpty else { return }
-        if didOpenSweep { return }
-        didOpenSweep = true
-        await sweepNow()
-        didOpenSweep = false
+        guard signedIn, snapshot.autoSweep, !blocks.isEmpty else { return }
+        guard snapshot.pendingMove?.hasWork != true else { return }
+        guard !moving, !scanning, sweepTask == nil else { return }
+        if snapshot.pendingSweep?.hasWork == true {
+            await runSweep()
+            return
+        }
+        guard SweepSchedule.due(last: snapshot.lastSweepAt, now: Date()) else { return }
+        await runSweep()
+    }
+
+    func rescan() async {
+        guard signedIn, !moving else { return }
+        await startScan(restart: true)
     }
 
     func sweepNow() async {
-        guard signedIn, !scanning, !working, !sweeping else { return }
+        guard signedIn, !scanning, !moving, sweepTask == nil else { return }
         guard !blocks.isEmpty else {
             status = "Nothing is blocked yet."
             return
         }
+        await runSweep()
+    }
+
+    func skipSweep() {
+        sweepStop?.stop()
+        snapshot.pendingSweep = nil
+        snapshot.lastSweepAt = Date().timeIntervalSince1970
+        ScanStore.save(snapshot)
+        sweepBanner = false
+        sweeping = false
+        sweepPhase = ""
+        sweepETA = ""
+        sweepSender = ""
+    }
+
+    var sweepRemaining: Int {
+        max(0, sweepTotal - sweepDone)
+    }
+
+    private func runSweep() async {
+        guard sweepTask == nil else { return }
+        let flag = StopFlag()
+        sweepStop = flag
         sweeping = true
+        sweepBanner = true
+        sweepPhase = "finding"
+        sweepDone = 0
+        sweepTotal = 0
+        sweepETA = "Estimating time left"
+        sweepSender = "Finding blocked mail"
         clearError()
-        status = "Moving blocked mail to Junk…"
-        defer { sweeping = false }
+        let task = Task { @MainActor in
+            await self.performSweep(flag)
+        }
+        sweepTask = task
+        await task.value
+    }
+
+    private func performSweep(_ flag: StopFlag) async {
+        defer {
+            sweeping = false
+            sweepStop = nil
+            sweepTask = nil
+            if sweepPhase != "failed" {
+                sweepBanner = false
+                sweepETA = ""
+                sweepSender = ""
+                sweepPhase = ""
+            }
+            if !moving && !scanning {
+                rescore(preselect: false)
+            }
+        }
         do {
-            let moved = try await SweepEngine.sweepBlocked()
-            sweptTotal = ScanStore.load().sweptTotal
-            snapshot.sweptTotal = sweptTotal
-            status = moved == 0 ? "No new blocked mail." : "Moved \(moved.formatted()) messages to Junk."
+            _ = try await SweepEngine.sweepBlocked(stop: flag) { tick in
+                await MainActor.run {
+                    self.applySweep(tick)
+                }
+            }
+            if flag.isStopped {
+                status = "Sweep skipped."
+            } else if sweepPhase == "moving" {
+                status = sweepDone == 0 ? "No new blocked mail." : "Moved \(sweepDone.formatted()) blocked messages to Junk."
+            } else {
+                status = "No new blocked mail."
+            }
         } catch {
-            status = ""
+            sweepPhase = "failed"
+            sweepBanner = true
+            sweepSender = "Sweep paused"
             report(error)
         }
+    }
+
+    private func applySweep(_ tick: SweepTick) {
+        guard sweeping else { return }
+        snapshot = tick.snapshot
+        sweptTotal = tick.snapshot.sweptTotal
+        blocks = tick.snapshot.blocks
+        sweepPhase = tick.phase
+        sweepDone = tick.done
+        sweepTotal = tick.total
+        sweepETA = tick.eta
+        sweepSender = tick.sender
+        sweepBanner = true
+    }
+
+    private func stopSweepForUserAction() async {
+        guard sweepTask != nil else { return }
+        sweepStop?.stop()
+        snapshot.pendingSweep = nil
+        ScanStore.save(snapshot)
+        await sweepTask?.value
     }
 
     func toggle(_ row: ScoredSender) {
@@ -315,6 +446,7 @@ final class SweepModel: ObservableObject {
     }
 
     func blockSelected(junk: Bool) async {
+        await stopSweepForUserAction()
         let plan = blockPlan()
         guard !plan.addresses.isEmpty || !plan.domains.isEmpty else { return }
         var entries = snapshot.blocks
@@ -355,6 +487,7 @@ final class SweepModel: ObservableObject {
     }
 
     func continueMove() async {
+        await stopSweepForUserAction()
         guard let pending = snapshot.pendingMove, pending.hasWork else { return }
         await runMove(
             groups: pending.remaining,
@@ -455,6 +588,7 @@ final class SweepModel: ObservableObject {
         moveTotal = alreadyMoved + groups.values.reduce(0) { $0 + $1.count }
         moveSender = "Connecting to Yahoo…"
         moveETA = "Estimating time left"
+        moveNote = ""
         clearError()
         status = junk ? "Moving mail to Junk…" : "Moving mail to Trash…"
         syncIdleTimer()
@@ -477,7 +611,8 @@ final class SweepModel: ObservableObject {
                 junk: junk,
                 destinationName: destinationName,
                 alreadyMoved: alreadyMoved,
-                stop: flag
+                stop: flag,
+                confirmSearch: true
             ) { tick in
                 await MainActor.run {
                     self.applyMove(tick)
@@ -536,19 +671,31 @@ final class SweepModel: ObservableObject {
             snapshot.sweptTotal += drop.count
             for sender in Array(snapshot.inboxUIDs.keys) {
                 guard var stored = snapshot.inboxUIDs[sender] else { continue }
-                let before = stored.count
                 stored.removeAll { drop.contains($0) }
-                let removed = before - stored.count
                 if stored.isEmpty {
                     snapshot.inboxUIDs.removeValue(forKey: sender)
                 } else {
                     snapshot.inboxUIDs[sender] = stored
                 }
-                if removed > 0, let index = snapshot.senders.firstIndex(where: { $0.address == sender }) {
-                    snapshot.senders[index].count = max(0, snapshot.senders[index].count - removed)
+            }
+            for (sender, uids) in tick.removed where sender.contains("@") {
+                if let index = snapshot.senders.firstIndex(where: { $0.address == sender }) {
+                    snapshot.senders[index].count = max(0, snapshot.senders[index].count - uids.count)
                 }
             }
             snapshot.senders.removeAll { $0.count == 0 && (snapshot.inboxUIDs[$0.address] ?? []).isEmpty }
+        }
+        if !tick.cleared.isEmpty {
+            for address in tick.cleared {
+                snapshot.inboxUIDs.removeValue(forKey: address)
+                if let index = snapshot.senders.firstIndex(where: { $0.address == address }) {
+                    snapshot.senders[index].count = 0
+                }
+            }
+            snapshot.senders.removeAll { $0.count == 0 && (snapshot.inboxUIDs[$0.address] ?? []).isEmpty }
+        }
+        if !tick.note.isEmpty {
+            moveNote = tick.note
         }
         if pending.remaining.isEmpty {
             snapshot.pendingMove = nil
@@ -573,31 +720,16 @@ final class SweepModel: ObservableObject {
             chosen.insert(sender.address.lowercased())
         }
         chosen.subtract(protect)
-        var counts: [String: Int] = [:]
-        for sender in snapshot.senders {
-            counts[sender.address.lowercased()] = sender.count
-        }
         var groups: [String: [UInt64]] = [:]
         var missingAddresses: [String] = []
         for address in chosen {
             let uids = Array(Set(snapshot.inboxUIDs[address] ?? []))
             if !uids.isEmpty {
                 groups[address] = uids
-            } else if (counts[address] ?? 0) > 0 && !domainSet.contains(MailAddress.domain(of: address)) {
-                missingAddresses.append(address)
             }
+            missingAddresses.append(address)
         }
-        var missingDomains: [String] = []
-        for domain in plan.domains {
-            let covered = snapshot.senders.filter { $0.domain == domain && chosen.contains($0.address.lowercased()) }
-            let ready = snapshot.scanComplete && covered.allSatisfy { sender in
-                sender.count == 0 || !(snapshot.inboxUIDs[sender.address] ?? []).isEmpty
-            }
-            if !ready {
-                missingDomains.append(domain)
-            }
-        }
-        return (groups, missingAddresses, missingDomains)
+        return (groups, missingAddresses, plan.domains)
     }
 
     private func report(_ error: Error) {
@@ -627,6 +759,7 @@ final class SweepModel: ObservableObject {
         whitelist = stored.whitelist
         sweptTotal = stored.sweptTotal
         keepAwake = stored.keepAwake
+        autoSweep = stored.autoSweep
         includeBulk = stored.includeBulk
         includeOther = stored.includeOther
         useContacts = stored.useContacts

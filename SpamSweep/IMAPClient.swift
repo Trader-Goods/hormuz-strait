@@ -13,6 +13,7 @@ enum IMAPError: Error {
     case keychain
     case invalidPassword
     case busy
+    case timedOut
 }
 
 enum YahooAccount {
@@ -180,6 +181,78 @@ enum UIDSet {
     }
 }
 
+enum SenderSearch {
+    /// One IMAP SEARCH for about 20 senders, using OR'd FROM terms.
+    static func batches(_ addresses: [String], size: Int = 20) -> [[String]] {
+        let unique = Array(Set(addresses.map { $0.lowercased() }.filter { !$0.isEmpty })).sorted()
+        guard !unique.isEmpty else { return [] }
+        let chunk = max(1, size)
+        var batches: [[String]] = []
+        var index = 0
+        while index < unique.count {
+            let end = min(index + chunk, unique.count)
+            batches.append(Array(unique[index..<end]))
+            index = end
+        }
+        return batches
+    }
+}
+
+enum SweepSchedule {
+    static let minimumInterval: TimeInterval = 120
+
+    static func due(last: TimeInterval, now: Date, interval: TimeInterval = minimumInterval) -> Bool {
+        if last <= 0 { return true }
+        return now.timeIntervalSince1970 - last >= interval
+    }
+}
+
+enum UIDValidity {
+    static func parse(_ text: String) -> UInt64? {
+        let upper = text.uppercased()
+        guard let range = upper.range(of: "[UIDVALIDITY ") else { return nil }
+        let digits = upper[range.upperBound...].prefix { $0.isNumber }
+        guard !digits.isEmpty else { return nil }
+        return UInt64(digits)
+    }
+}
+
+enum MoveReport {
+    static func alreadyMoved(_ places: [(name: String, count: Int)]) -> String {
+        let parts = places.filter { $0.count > 0 }.map { "\($0.count.formatted()) in \($0.name)" }
+        guard let first = parts.first else { return "No matching mail is still in the inbox." }
+        if parts.count == 1 { return "Already moved: \(first)" }
+        let rest = parts.dropFirst().joined(separator: " and ")
+        return "Already moved: \(first) and \(rest)"
+    }
+}
+
+enum MoveFolders {
+    static func sources(folderNames: [String], destination: String, movingToJunk: Bool) -> [String] {
+        var names: [String] = []
+        func add(_ name: String) {
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            guard trimmed.caseInsensitiveCompare(destination) != .orderedSame else { return }
+            guard !names.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
+            names.append(trimmed)
+        }
+        add("INBOX")
+        let skip: Set<String> = [
+            "sent", "sent items", "sent messages", "drafts", "draft",
+            "trash", "deleted", "deleted items", "deleted messages",
+        ]
+        let junkNames: Set<String> = ["junk", "junk mail", "bulk"]
+        for name in folderNames.sorted() {
+            let lower = name.lowercased()
+            if skip.contains(lower) { continue }
+            if movingToJunk && junkNames.contains(lower) { continue }
+            add(name)
+        }
+        return names
+    }
+}
+
 enum MoveETA {
     static func text(sessionMoved: Int, total: Int, moved: Int, elapsed: TimeInterval) -> String {
         guard sessionMoved > 0, total > moved, elapsed > 0.2 else {
@@ -207,7 +280,13 @@ actor IMAPClient {
     private var buffer = Data()
     private var tagNumber = 0
     private var selected = ""
+    private var lastMailbox = ""
+    private var mailboxValidity: UInt64 = 0
     private var greetingLine = ""
+    private var savedEmail = ""
+    private var savedPassword = ""
+    private var retryEnabled = true
+    private var timedOut = false
 
     func connect() async throws {
         connection?.cancel()
@@ -226,8 +305,10 @@ actor IMAPClient {
             }
             let connection = NWConnection(host: NWEndpoint.Host(host), port: nwPort, using: parameters)
             self.connection = connection
-            try await waitUntilReady(connection)
-            let greeting = try await readLogicalLine()
+            let greeting = try await withTimeout(30) {
+                try await self.waitUntilReady(connection)
+                return try await self.readLogicalLine()
+            }
             let raw = String(decoding: greeting, as: UTF8.self)
             greetingLine = raw
             let upper = raw.uppercased()
@@ -250,6 +331,8 @@ actor IMAPClient {
         let password = YahooAccount.normalizePassword(rawPassword)
         guard !password.isEmpty else { throw IMAPError.invalidPassword }
         guard !password.contains("\r"), !password.contains("\n") else { throw IMAPError.invalidPassword }
+        savedEmail = email
+        savedPassword = password
         var lastUnavailable = ""
         for attempt in 1...4 {
             do {
@@ -276,6 +359,14 @@ actor IMAPClient {
         let result = try await command("SELECT \(quote(mailbox))")
         try requireOK(result)
         selected = mailbox
+        lastMailbox = mailbox
+        mailboxValidity = UIDValidity.parse(result.tagLine) ?? result.untagged.compactMap { line in
+            UIDValidity.parse(String(decoding: line, as: UTF8.self))
+        }.first ?? 0
+    }
+
+    func currentValidity() -> UInt64 {
+        mailboxValidity
     }
 
     func uidSearchAll() async throws -> [UInt64] {
@@ -290,19 +381,50 @@ actor IMAPClient {
         return searchUIDs(result.untagged)
     }
 
-    /// One OR query per batch, instead of a round trip for every sender.
-    func uidSearchSenders(_ addresses: [String]) async throws -> [UInt64] {
-        let unique = Array(Set(addresses.map { $0.lowercased() }.filter { !$0.isEmpty }))
-        guard !unique.isEmpty else { return [] }
+    func uidSearch(since uid: UInt64) async throws -> [UInt64] {
+        let result = try await command("UID SEARCH UID \(uid):*")
+        try requireOK(result)
+        return searchUIDs(result.untagged)
+    }
+
+    /// UIDs from an older scan are ignored when the mailbox no longer contains them.
+    func uidExisting(_ uids: [UInt64]) async throws -> [UInt64] {
+        guard !uids.isEmpty else { return [] }
+        var found: [UInt64] = []
+        for piece in UIDSet.chunks(uids, targetCount: 400, maxCharacters: 3500) {
+            let result = try await command("UID SEARCH UID \(UIDSet.encode(piece))")
+            try requireOK(result)
+            found.append(contentsOf: searchUIDs(result.untagged))
+        }
+        return found
+    }
+
+    /// Exact address, then HEADER FROM, and a per-address retry when a combined OR search comes back empty.
+    func findMessages(addresses: [String], domains: [String]) async throws -> [UInt64] {
         var found = Set<UInt64>()
-        var index = 0
-        while index < unique.count {
-            let end = min(index + 40, unique.count)
-            let slice = Array(unique[index..<end])
+        for batch in SenderSearch.batches(addresses, size: 20) {
+            found.formUnion(try await searchAddressBatch(batch))
+        }
+        for domain in domains {
+            let bare = domain.hasPrefix("@") ? String(domain.dropFirst()) : domain
+            guard !bare.isEmpty else { continue }
+            found.formUnion(try await searchDomain(bare))
+        }
+        return Array(found)
+    }
+
+    /// One OR query per batch of about 20 senders, instead of a round trip for every sender.
+    func uidSearchSenders(_ addresses: [String], onBatch: ((Int, Int) async -> Void)? = nil) async throws -> [UInt64] {
+        let batches = SenderSearch.batches(addresses, size: 20)
+        guard !batches.isEmpty else { return [] }
+        var found = Set<UInt64>()
+        for (index, slice) in batches.enumerated() {
             let result = try await command("UID SEARCH \(fromTree(slice))")
             try requireOK(result)
             found.formUnion(searchUIDs(result.untagged))
-            index = end
+            if let onBatch {
+                await onBatch(index + 1, batches.count)
+            }
         }
         return Array(found)
     }
@@ -366,7 +488,10 @@ actor IMAPClient {
     }
 
     func logout() async {
-        _ = try? await command("LOGOUT")
+        savedEmail = ""
+        savedPassword = ""
+        lastMailbox = ""
+        _ = try? await commandOnce("LOGOUT", timeout: 10)
         connection?.cancel()
         connection = nil
         selected = ""
@@ -527,6 +652,25 @@ actor IMAPClient {
     }
 
     private func command(_ body: String) async throws -> CommandResult {
+        let limit = commandTimeout(body)
+        do {
+            return try await commandOnce(body, timeout: limit)
+        } catch {
+            guard retryEnabled, !savedEmail.isEmpty, shouldRetry(error) else { throw error }
+            retryEnabled = false
+            defer { retryEnabled = true }
+            try await reopen()
+            return try await commandOnce(body, timeout: limit)
+        }
+    }
+
+    private func commandOnce(_ body: String, timeout: TimeInterval) async throws -> CommandResult {
+        try await withTimeout(timeout) {
+            try await self.execute(body)
+        }
+    }
+
+    private func execute(_ body: String) async throws -> CommandResult {
         tagNumber += 1
         let tag = String(format: "A%03d", tagNumber)
         try await sendLine("\(tag) \(body)")
@@ -542,6 +686,67 @@ actor IMAPClient {
             }
             untagged.append(line)
         }
+    }
+
+    private func commandTimeout(_ body: String) -> TimeInterval {
+        let upper = body.uppercased()
+        if upper.hasPrefix("UID MOVE") || upper.hasPrefix("UID COPY") || upper.hasPrefix("UID STORE") || upper.hasPrefix("UID EXPUNGE") || upper == "EXPUNGE" {
+            return 120
+        }
+        if upper.hasPrefix("UID SEARCH") || upper.hasPrefix("UID FETCH") {
+            return 90
+        }
+        return 45
+    }
+
+    private func shouldRetry(_ error: Error) -> Bool {
+        switch error as? IMAPError {
+        case .timedOut, .disconnected, .connectionFailed:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func reopen() async throws {
+        let email = savedEmail
+        let password = savedPassword
+        let mailbox = lastMailbox
+        connection?.cancel()
+        connection = nil
+        buffer.removeAll()
+        selected = ""
+        try await connect()
+        try await signInOnce(email: email, password: password)
+        if !mailbox.isEmpty {
+            try await select(mailbox)
+        }
+    }
+
+    private func withTimeout<T>(_ seconds: TimeInterval, _ body: () async throws -> T) async throws -> T {
+        timedOut = false
+        let timer = Task {
+            try await Task.sleep(nanoseconds: UInt64(max(1, seconds) * 1_000_000_000))
+            await self.expireConnection()
+        }
+        defer { timer.cancel() }
+        do {
+            let value = try await body()
+            if timedOut { throw IMAPError.timedOut }
+            return value
+        } catch {
+            if timedOut { throw IMAPError.timedOut }
+            throw error
+        }
+    }
+
+    private func expireConnection() {
+        timedOut = true
+        let current = connection
+        connection = nil
+        selected = ""
+        buffer.removeAll()
+        current?.cancel()
     }
 
     private func isTagged(_ line: Data, tag: String) -> Bool {
@@ -707,6 +912,43 @@ actor IMAPClient {
             text = "OR \(text) \(key)"
         }
         return text
+    }
+
+    private func searchAddressBatch(_ batch: [String]) async throws -> Set<UInt64> {
+        if batch.count > 1 {
+            let combined = try await command("UID SEARCH \(fromTree(batch))")
+            if combined.ok {
+                let uids = Set(searchUIDs(combined.untagged))
+                if !uids.isEmpty { return uids }
+            }
+        }
+        var found = Set<UInt64>()
+        for address in batch {
+            found.formUnion(try await searchExact(address))
+        }
+        return found
+    }
+
+    private func searchExact(_ address: String) async throws -> Set<UInt64> {
+        var found = Set<UInt64>()
+        let from = try await command("UID SEARCH FROM \(quote(address))")
+        if from.ok { found.formUnion(searchUIDs(from.untagged)) }
+        if !found.isEmpty { return found }
+        let header = try await command("UID SEARCH HEADER FROM \(quote(address))")
+        if header.ok { found.formUnion(searchUIDs(header.untagged)) }
+        return found
+    }
+
+    private func searchDomain(_ domain: String) async throws -> Set<UInt64> {
+        var found = Set<UInt64>()
+        for needle in [domain, "@\(domain)"] {
+            let from = try await command("UID SEARCH FROM \(quote(needle))")
+            if from.ok { found.formUnion(searchUIDs(from.untagged)) }
+            if !found.isEmpty { continue }
+            let header = try await command("UID SEARCH HEADER FROM \(quote(needle))")
+            if header.ok { found.formUnion(searchUIDs(header.untagged)) }
+        }
+        return found
     }
 
     private func searchUIDs(_ lines: [Data]) -> [UInt64] {

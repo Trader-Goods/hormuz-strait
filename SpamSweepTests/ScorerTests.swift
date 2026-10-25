@@ -409,4 +409,51 @@ final class MoveTests: XCTestCase {
         XCTAssertEqual(MoveETA.text(sessionMoved: 0, total: 1000, moved: 0, elapsed: 0), "Estimating time left")
         XCTAssertEqual(MoveETA.text(sessionMoved: 100, total: 1000, moved: 100, elapsed: 10), "about 2 min left")
     }
+
+    func testSenderSearchUsesBatchesOfTwenty() {
+        let addresses = (1...45).map { "sender\($0)@bad.test" }
+        let batches = SenderSearch.batches(addresses, size: 20)
+        XCTAssertEqual(batches.count, 3)
+        XCTAssertEqual(batches.map(\.count), [20, 20, 5])
+    }
+
+    func testAutoSweepWaitsTwoMinutes() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        XCTAssertTrue(SweepSchedule.due(last: 0, now: now))
+        XCTAssertFalse(SweepSchedule.due(last: now.timeIntervalSince1970 - 60, now: now))
+        XCTAssertTrue(SweepSchedule.due(last: now.timeIntervalSince1970 - 120, now: now))
+    }
+
+    func testUIDValidityParsesTheSelectReply() {
+        XCTAssertEqual(UIDValidity.parse("* OK [UIDVALIDITY 3857529045] UIDs valid"), 3_857_529_045)
+        XCTAssertNil(UIDValidity.parse("* 12 EXISTS"))
+    }
+
+    func testAlreadyMovedMessageNamesTheFolder() {
+        XCTAssertEqual(
+            MoveReport.alreadyMoved([("Junk", 1240), ("Trash", 0)]),
+            "Already moved: \(1240.formatted()) in Junk"
+        )
+        XCTAssertEqual(
+            MoveReport.alreadyMoved([("Junk", 12), ("Trash", 3)]),
+            "Already moved: 12 in Junk and 3 in Trash"
+        )
+        XCTAssertEqual(MoveReport.alreadyMoved([]), "No matching mail is still in the inbox.")
+    }
+
+    func testMoveSourcesSkipJunkWhenThatIsTheDestination() {
+        let sources = MoveFolders.sources(
+            folderNames: ["INBOX", "Bulk", "Trash", "Newsletters"],
+            destination: "Bulk",
+            movingToJunk: true
+        )
+        XCTAssertEqual(sources, ["INBOX", "Newsletters"])
+    }
+
+    func testTimedOutErrorIsDistinctFromAuthFailure() {
+        let message = SweepEngine.describe(IMAPError.timedOut)
+        XCTAssertTrue(message.contains("stopped answering"))
+        XCTAssertFalse(message.contains("refused the sign-in"))
+        XCTAssertEqual(SweepEngine.details(IMAPError.timedOut), "The mail server did not answer before the time limit.")
+    }
 }

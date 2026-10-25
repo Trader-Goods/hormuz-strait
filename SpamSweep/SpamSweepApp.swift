@@ -17,8 +17,7 @@ struct SpamSweepApp: App {
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
-                model.refreshAccount()
-                Task { await model.sweepOnOpen() }
+                Task { await model.activate() }
             } else if phase == .background {
                 BackgroundSweep.schedule()
             }
@@ -44,10 +43,17 @@ enum BackgroundSweep {
 
     private static func handle(_ task: BGAppRefreshTask) {
         schedule()
+        let stop = StopFlag()
         let work = Task {
-            try? await SweepEngine.sweepBlocked()
+            let snapshot = ScanStore.load()
+            guard snapshot.autoSweep else { return }
+            guard snapshot.pendingMove?.hasWork != true else { return }
+            let resume = snapshot.pendingSweep?.hasWork == true
+            guard resume || SweepSchedule.due(last: snapshot.lastSweepAt, now: Date()) else { return }
+            try? await SweepEngine.sweepBlocked(stop: stop)
         }
         task.expirationHandler = {
+            stop.stop()
             work.cancel()
         }
         Task {
