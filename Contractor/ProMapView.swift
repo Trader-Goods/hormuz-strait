@@ -229,6 +229,9 @@ private struct JobPinCard: View {
                 Label(job.category.title, systemImage: job.category.symbol)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(job.category == .lawn ? pine : clay)
+                if SampleJobs.contains(job.id) {
+                    Text("Sample — not a real customer").font(.caption.weight(.semibold)).foregroundStyle(clay)
+                }
                 Text(job.place(exact: model.showsExactAddress(job)))
                     .font(.headline)
                     .foregroundStyle(ink)
@@ -241,7 +244,7 @@ private struct JobPinCard: View {
                 if let estimate = job.estimate {
                     Text(estimate.explanation).font(.footnote)
                 }
-                if model.session?.canTakeJobs == true && job.status.isListed {
+                if model.session?.canTakeJobs == true && job.status.isListed && !SampleJobs.contains(job.id) {
                     Button("Accept \(Money.compact(cents: job.offeredPriceCents))") {
                         Task { _ = await model.acceptListing(jobID: job.id) }
                     }

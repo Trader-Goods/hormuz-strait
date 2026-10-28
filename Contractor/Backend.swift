@@ -49,6 +49,7 @@ protocol ContractorAPI: AnyObject {
     func review(jobID: UUID, rating: Int, body: String) async throws -> ReviewRecord
     func user(id: UUID) async throws -> UserRecord?
     func job(id: UUID) async throws -> JobRecord?
+    func cachePhotos(_ names: [String]) async
 }
 
 enum PhotoStore {
@@ -72,9 +73,22 @@ enum PhotoStore {
     }
 
     static func image(_ name: String) -> UIImage? {
-        let url = folder.appendingPathComponent(name)
+        let url = folder.appendingPathComponent(safe(name))
         guard let data = try? Data(contentsOf: url) else { return nil }
         return UIImage(data: data)
+    }
+
+    static func write(_ name: String, data: Data) {
+        guard let image = UIImage(data: data), let jpeg = image.jpegData(compressionQuality: 0.7) else { return }
+        try? jpeg.write(to: folder.appendingPathComponent(safe(name)), options: .atomic)
+    }
+
+    static func has(_ name: String) -> Bool {
+        FileManager.default.fileExists(atPath: folder.appendingPathComponent(safe(name)).path)
+    }
+
+    private static func safe(_ name: String) -> String {
+        name.replacingOccurrences(of: "/", with: "_")
     }
 }
 
@@ -273,61 +287,70 @@ final class MockBackend: ContractorAPI {
         return book.canSeeExactAddress(job, viewer: viewer) ? job : job.listingCopy()
     }
 
+    func cachePhotos(_ names: [String]) async {}
+
     private func persist() {
         guard let data = try? JSONEncoder().encode(book) else { return }
         try? data.write(to: fileURL, options: .atomic)
     }
 }
 
-/// Live Supabase client. Used only when SUPABASE_URL and SUPABASE_ANON_KEY are set.
-/// Email confirmation must be off, or sign-up will not return a session.
+/// Live Supabase client. Used when SUPABASE_URL and SUPABASE_ANON_KEY are set.
+/// Sign-up works with email confirmation on or off. No session means the person must confirm first.
 @MainActor
 final class SupabaseBackend: ContractorAPI {
     private let base: URL
     private let key: String
     private var accessToken: String?
+    private var refreshToken: String?
     private var userID: UUID?
 
     init() {
         base = BackendConfig.supabaseURL!
         key = BackendConfig.anonKey
+        accessToken = UserDefaults.standard.string(forKey: "contractor.access")
+        refreshToken = UserDefaults.standard.string(forKey: "contractor.refresh")
+        if let raw = UserDefaults.standard.string(forKey: "contractor.user") {
+            userID = UUID(uuidString: raw)
+        }
     }
 
-    func restore() async throws -> UserRecord? { nil }
+    func restore() async throws -> UserRecord? {
+        guard accessToken != nil, userID != nil else { return nil }
+        if let record = try? await currentUser() { return record }
+        guard await refreshed() else {
+            clearSession()
+            return nil
+        }
+        return try? await currentUser()
+    }
 
     func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int, serviceTypes: [String]) async throws -> UserRecord {
         guard acceptedTerms else { throw MarketplaceError.termsRequired }
         guard USAddress.isValidZip(zip) else { throw MarketplaceError.invalid }
-        let payload: [String: Any] = [
-            "email": email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-            "password": password,
-        ]
-        let response = try await send(path: "/auth/v1/signup", method: "POST", body: payload, auth: false)
-        try storeSession(response)
-        guard let userID else { throw MarketplaceError.invalid }
-        let profile: [String: Any] = [
-            "id": userID.uuidString,
+        let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let metadata: [String: Any] = [
             "role": role.rawValue,
-            "email": email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
             "display_name": name,
             "zip": USAddress.normalizeZip(zip),
-            "phone_verified": false,
+            "business_name": business,
+            "categories": categories.map(\.rawValue),
+            "service_zips": serviceZips.isEmpty ? [USAddress.normalizeZip(zip)] : serviceZips,
+            "radius_miles": radiusMiles,
+            "service_types": serviceTypes,
         ]
-        _ = try await send(path: "/rest/v1/profiles", method: "POST", body: profile, auth: true)
-        if role == .pro {
-            let pro: [String: Any] = [
-                "id": userID.uuidString,
-                "business_name": business,
-                "categories": categories.map(\.rawValue),
-                "service_zips": serviceZips.isEmpty ? [USAddress.normalizeZip(zip)] : serviceZips,
-                "radius_miles": radiusMiles,
-                "service_types": serviceTypes,
-                "identity_verified": false,
-                "payouts_ready": false,
-                "stripe_account_id": "",
-            ]
-            _ = try await send(path: "/rest/v1/pro_profiles", method: "POST", body: pro, auth: true)
+        let payload: [String: Any] = [
+            "email": cleanEmail,
+            "password": password,
+            "data": metadata,
+        ]
+        let response = try await send(path: "/auth/v1/signup", method: "POST", body: payload, auth: false)
+        do {
+            try storeSession(response)
+        } catch MarketplaceError.confirmEmail {
+            throw MarketplaceError.confirmEmail
         }
+        try await ensureProfile(metadata: metadata, email: cleanEmail)
         return try await currentUser()
     }
 
@@ -338,6 +361,9 @@ final class SupabaseBackend: ContractorAPI {
         ]
         let response = try await send(path: "/auth/v1/token?grant_type=password", method: "POST", body: payload, auth: false)
         try storeSession(response)
+        let user = (response["user"] as? [String: Any]) ?? [:]
+        let metadata = (user["user_metadata"] as? [String: Any]) ?? [:]
+        try await ensureProfile(metadata: metadata, email: payload["email"] ?? "")
         return try await currentUser()
     }
 
@@ -371,8 +397,7 @@ final class SupabaseBackend: ContractorAPI {
     }
 
     func signOut() async {
-        accessToken = nil
-        userID = nil
+        clearSession()
     }
 
     func refresh(_ user: UserRecord) async throws -> UserRecord {
@@ -623,6 +648,12 @@ final class SupabaseBackend: ContractorAPI {
         init?(intValue: Int) { return nil }
     }
 
+    private static func strings(_ value: Any?) -> [String] {
+        if let list = value as? [String] { return list }
+        if let list = value as? [Any] { return list.compactMap { $0 as? String } }
+        return []
+    }
+
     private static func camel(_ snake: String) -> String {
         guard snake.contains("_") else { return snake }
         let parts = snake.split(separator: "_")
@@ -641,20 +672,99 @@ final class SupabaseBackend: ContractorAPI {
         return record
     }
 
+    func cachePhotos(_ names: [String]) async {
+        for name in names where !name.isEmpty && !PhotoStore.has(name) {
+            guard let url = URL(string: "storage/v1/object/authenticated/job-photos/\(name)", relativeTo: base)?.absoluteURL else { continue }
+            var request = URLRequest(url: url)
+            request.setValue(key, forHTTPHeaderField: "apikey")
+            request.setValue("Bearer \(accessToken ?? key)", forHTTPHeaderField: "Authorization")
+            guard let (data, response) = try? await URLSession.shared.data(for: request),
+                  let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { continue }
+            PhotoStore.write(name, data: data)
+        }
+    }
+
     private func storeSession(_ json: [String: Any]) throws {
-        if let token = json["access_token"] as? String {
-            accessToken = token
+        let token = json["access_token"] as? String
+        let user = json["user"] as? [String: Any]
+        let idString = (user?["id"] as? String) ?? (json["id"] as? String)
+        guard let token, !token.isEmpty, let idString, let uuid = UUID(uuidString: idString) else {
+            let pendingEmail = (user?["email"] as? String) ?? (json["email"] as? String)
+            let pendingID = (user?["id"] as? String) ?? (json["id"] as? String)
+            if pendingID != nil || pendingEmail != nil || json["confirmation_sent_at"] != nil || user?["confirmation_sent_at"] != nil {
+                throw MarketplaceError.confirmEmail
+            }
+            throw MarketplaceError.invalid
         }
-        if let user = json["user"] as? [String: Any], let id = user["id"] as? String, let uuid = UUID(uuidString: id) {
-            userID = uuid
+        accessToken = token
+        refreshToken = json["refresh_token"] as? String
+        userID = uuid
+        UserDefaults.standard.set(token, forKey: "contractor.access")
+        UserDefaults.standard.set(refreshToken, forKey: "contractor.refresh")
+        UserDefaults.standard.set(uuid.uuidString, forKey: "contractor.user")
+    }
+
+    private func clearSession() {
+        accessToken = nil
+        refreshToken = nil
+        userID = nil
+        UserDefaults.standard.removeObject(forKey: "contractor.access")
+        UserDefaults.standard.removeObject(forKey: "contractor.refresh")
+        UserDefaults.standard.removeObject(forKey: "contractor.user")
+    }
+
+    private func refreshed() async -> Bool {
+        guard let refreshToken, !refreshToken.isEmpty else { return false }
+        guard let json = try? await send(path: "/auth/v1/token?grant_type=refresh_token", method: "POST", body: ["refresh_token": refreshToken], auth: false) else {
+            return false
         }
-        guard accessToken != nil, userID != nil else { throw MarketplaceError.invalid }
+        return (try? storeSession(json)) != nil
+    }
+
+    private func ensureProfile(metadata: [String: Any], email: String) async throws {
+        guard let userID else { return }
+        if try await user(id: userID) != nil { return }
+        let role = UserRole(rawValue: metadata["role"] as? String ?? "") ?? .customer
+        let name = (metadata["display_name"] as? String) ?? "New member"
+        let zip = USAddress.normalizeZip(metadata["zip"] as? String ?? "")
+        guard USAddress.isValidZip(zip) else { return }
+        let profile: [String: Any] = [
+            "id": userID.uuidString,
+            "role": role.rawValue,
+            "email": email,
+            "display_name": name,
+            "zip": zip,
+            "phone_verified": false,
+        ]
+        _ = try? await send(path: "/rest/v1/profiles", method: "POST", body: profile, auth: true)
+        if role == .pro {
+            let categories = Self.strings(metadata["categories"])
+            let zips = Self.strings(metadata["service_zips"])
+            let types = Self.strings(metadata["service_types"])
+            let radius = metadata["radius_miles"] as? Int ?? 25
+            let pro: [String: Any] = [
+                "id": userID.uuidString,
+                "business_name": metadata["business_name"] as? String ?? "",
+                "categories": categories,
+                "service_zips": zips.isEmpty ? [zip] : zips,
+                "radius_miles": radius,
+                "service_types": types,
+                "identity_verified": false,
+                "payouts_ready": false,
+                "stripe_account_id": "",
+            ]
+            _ = try? await send(path: "/rest/v1/pro_profiles", method: "POST", body: pro, auth: true)
+        }
     }
 
     private func upload(_ data: Data) async throws -> String? {
+        guard let userID else { throw MarketplaceError.wrongAccount }
         guard let image = UIImage(data: data), let jpeg = image.jpegData(compressionQuality: 0.7) else { return nil }
-        let name = UUID().uuidString + ".jpg"
-        var request = URLRequest(url: base.appendingPathComponent("storage/v1/object/job-photos/\(name)"))
+        let name = "\(userID.uuidString)/\(UUID().uuidString).jpg"
+        guard let uploadURL = URL(string: "storage/v1/object/job-photos/\(name)", relativeTo: base)?.absoluteURL else {
+            throw MarketplaceError.invalid
+        }
+        var request = URLRequest(url: uploadURL)
         request.httpMethod = "POST"
         request.setValue(key, forHTTPHeaderField: "apikey")
         request.setValue("Bearer \(accessToken ?? key)", forHTTPHeaderField: "Authorization")

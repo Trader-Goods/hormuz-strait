@@ -86,6 +86,8 @@ enum MarketplaceError: Error, Equatable {
     case chatLocked
     case notPaid
     case termsRequired
+    case confirmEmail
+    case sampleJob
 }
 
 struct StoredUser: Codable, Equatable {
@@ -607,5 +609,36 @@ struct MarketplaceBook: Codable, Equatable {
             }
         }
         return book
+    }
+}
+
+enum SampleJobs {
+    static let ids: Set<UUID> = [
+        UUID(uuidString: "30000000-0000-0000-0000-000000000001")!,
+        UUID(uuidString: "30000000-0000-0000-0000-000000000002")!,
+        UUID(uuidString: "30000000-0000-0000-0000-000000000003")!,
+    ]
+
+    static func contains(_ id: UUID) -> Bool { ids.contains(id) }
+
+    /// Local examples for an empty live map. They are not written to Supabase.
+    static func near(_ pro: UserRecord) -> [JobRecord] {
+        let listed = MarketplaceBook.demo().jobs.filter { $0.status.isListed && ids.contains($0.id) && pro.offers($0) }
+        return listed.enumerated().map { index, job in
+            var copy = job.listingCopy()
+            copy.street = ""
+            copy.zip = pro.zip
+            copy.city = "Sample area"
+            copy.state = "US"
+            copy.details.notes = "SAMPLE — not a real customer. " + job.details.notes
+            if let origin = pro.coordinate {
+                copy.latitude = origin.latitude + 0.01 + Double(index) * 0.012
+                copy.longitude = origin.longitude + 0.008 + Double(index) * 0.01
+            } else {
+                copy.latitude = nil
+                copy.longitude = nil
+            }
+            return copy
+        }
     }
 }

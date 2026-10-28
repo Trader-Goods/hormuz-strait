@@ -19,32 +19,39 @@ struct WelcomeView: View {
                     if let error = model.errorMessage {
                         Text(error).foregroundStyle(.red)
                     }
-                    Card {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Try the demo").font(.headline)
-                            Text("Password for both is demo1234.")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                            Button("Open as Maya, a customer") {
-                                Task { await model.signIn(email: "maya@contractor.demo", password: "demo1234") }
+                    if !model.live {
+                        Card {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Try the demo").font(.headline)
+                                Text("Password for both is demo1234.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                Button("Open as Maya, a customer") {
+                                    Task { await model.signIn(email: "maya@contractor.demo", password: "demo1234") }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                Button("Open as Greenline Lawn, a pro") {
+                                    Task { await model.signIn(email: "greenline@contractor.demo", password: "demo1234") }
+                                }
+                                .buttonStyle(.bordered)
                             }
-                            .buttonStyle(.borderedProminent)
-                            Button("Open as Greenline Lawn, a pro") {
-                                Task { await model.signIn(email: "greenline@contractor.demo", password: "demo1234") }
-                            }
-                            .buttonStyle(.bordered)
                         }
                     }
                     Card {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Create an account").font(.headline)
+                            Text(model.live ? "Sign in or create an account" : "Create an account").font(.headline)
                             TextField("Email", text: $email)
                                 .textInputAutocapitalization(.never)
                                 .keyboardType(.emailAddress)
                                 .autocorrectionDisabled()
                             SecureField("Password", text: $password)
+                            Button(model.busy ? "Signing in…" : "Sign in") {
+                                Task { await model.signIn(email: email, password: password) }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.busy || email.isEmpty || password.isEmpty)
                             Button("I'm a customer") { role = .customer }
-                                .buttonStyle(.borderedProminent)
+                                .buttonStyle(.bordered)
                             Button("I'm a pro") { role = .pro }
                                 .buttonStyle(.bordered)
                         }

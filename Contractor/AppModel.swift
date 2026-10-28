@@ -10,17 +10,28 @@ final class AppModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var busy = false
     @Published var notices: [NoticeRecord] = []
+    @Published var showSampleJobs: Bool
+
+    var showsSampleJobs: Bool { live && showSampleJobs }
 
     let live = BackendConfig.isLive
     private let api: any ContractorAPI
 
     init() {
+        let stored = UserDefaults.standard.object(forKey: "contractor.showSampleJobs") as? Bool
+        showSampleJobs = stored ?? true
         if BackendConfig.isLive {
             api = SupabaseBackend()
         } else {
             api = MockBackend()
         }
         Task { await restore() }
+    }
+
+    func setShowSampleJobs(_ on: Bool) async {
+        showSampleJobs = on
+        UserDefaults.standard.set(on, forKey: "contractor.showSampleJobs")
+        await reload()
     }
 
     private func restore() async {
@@ -118,7 +129,14 @@ final class AppModel: ObservableObject {
                     }
                 }
             }
+            if self.showSampleJobs, let me = self.session, me.role == .pro, self.live {
+                for sample in SampleJobs.near(me) where !self.jobs.contains(where: { $0.id == sample.id }) {
+                    self.jobs.append(sample)
+                }
+            }
             self.notices = try await self.api.notices()
+            let names = self.jobs.flatMap(\.photoNames)
+            await self.api.cachePhotos(names)
             if let session = self.session {
                 self.session = try await self.api.refresh(session)
             }
@@ -139,6 +157,10 @@ final class AppModel: ObservableObject {
     }
 
     func acceptListing(jobID: UUID) async -> Bool {
+        if SampleJobs.contains(jobID) {
+            errorMessage = Self.describe(MarketplaceError.sampleJob)
+            return false
+        }
         var ok = false
         await run {
             _ = try await self.api.acceptListing(jobID: jobID)
@@ -149,6 +171,10 @@ final class AppModel: ObservableObject {
     }
 
     func sendQuote(jobID: UUID, price: String, message: String) async -> Bool {
+        if SampleJobs.contains(jobID) {
+            errorMessage = Self.describe(MarketplaceError.sampleJob)
+            return false
+        }
         let digits = price.filter { $0.isNumber || $0 == "." }
         let dollars = Decimal(string: digits) ?? 0
         let cents = NSDecimalNumber(decimal: dollars * 100).intValue
@@ -292,6 +318,10 @@ final class AppModel: ObservableObject {
             return "Reviews are only for jobs booked in the app."
         case .termsRequired:
             return "Accept the Terms to create an account."
+        case .confirmEmail:
+            return "Check your email"
+        case .sampleJob:
+            return "Sample jobs are examples on this phone. They are not real customers."
         case .wrongAccount, .missing, .none:
             return "That could not be saved."
         }

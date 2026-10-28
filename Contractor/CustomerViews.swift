@@ -69,6 +69,9 @@ struct JobCard: View {
                         .padding(.vertical, 4)
                         .background(paper, in: Capsule())
                 }
+                if SampleJobs.contains(job.id) {
+                    Text("Sample").font(.caption.weight(.semibold)).foregroundStyle(clay)
+                }
                 Text(job.place(exact: exact)).font(.headline).foregroundStyle(ink)
                 Text("\(DayStamp.display(job.scheduledOn)) · \(job.details.summary(for: job.category))")
                     .font(.subheadline)

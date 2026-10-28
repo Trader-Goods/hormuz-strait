@@ -56,7 +56,11 @@ struct DemoBanner: View {
     @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        if !model.live {
+        if model.showsSampleJobs {
+            Text("Live account. Sample jobs on a contractor map are examples on this phone, not real customers.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        } else if !model.live {
             Text("Demo data on this iPhone. The 5% fee is calculated and the card is authorized, not charged.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)

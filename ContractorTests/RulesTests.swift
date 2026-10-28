@@ -204,6 +204,24 @@ final class RulesTests: XCTestCase {
         XCTAssertFalse(book.openJobs(for: greenline).contains { $0.id == original.id })
     }
 
+    func testSampleJobsStayOnThePhoneAndHideTheStreet() {
+        let pro = UserRecord(
+            id: UUID(), role: .pro, email: "pro@example.com", displayName: "Pat", zip: "94110",
+            phoneVerified: true, businessName: "Pat Yard", categories: [.lawn, .moving], serviceZips: ["94110"],
+            radiusMiles: 25, latitude: 37.76, longitude: -122.42, rating: 0, reviewCount: 0,
+            serviceTypes: ServiceCatalog.ids(matching: [.lawn, .moving]), identityVerified: true, payoutsReady: true
+        )
+        let samples = SampleJobs.near(pro)
+        XCTAssertEqual(samples.count, 3)
+        for sample in samples {
+            XCTAssertTrue(SampleJobs.contains(sample.id))
+            XCTAssertEqual(sample.street, "")
+            XCTAssertTrue(sample.details.notes.hasPrefix("SAMPLE — not a real customer."))
+            XCTAssertTrue(pro.reaches(sample))
+        }
+        XCTAssertEqual(AppModel.describe(MarketplaceError.confirmEmail), "Check your email")
+    }
+
     private func readyPro(_ book: inout MarketplaceBook, email: String, categories: [ServiceCategory]) throws -> UserRecord {
         let user = try book.signUp(
             role: .pro, name: "Pat", email: email, password: "secret1", zip: "44903",

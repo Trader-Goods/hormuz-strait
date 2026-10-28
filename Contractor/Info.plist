@@ -13,9 +13,9 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Contractor uses photos you choose so pros can see the lawn or the move.</string>
 	<key>SUPABASE_URL</key>
-	<string></string>
+	<string>https://oqqrybckmunxyjyiabim.supabase.co</string>
 	<key>SUPABASE_ANON_KEY</key>
-	<string></string>
+	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9xcXJ5YmNrbXVueHlqeWlhYmltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxOTUwNzcsImV4cCI6MjEwODc3MTA3N30.l9IpX-A2gS5jhQB6q7U5Kqy_nV0Wr5ptyuZJDYbX0WM</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiresFullScreen</key>

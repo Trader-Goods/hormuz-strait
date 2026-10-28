@@ -58,6 +58,12 @@ struct ProHome: View {
                     }
                     .pickerStyle(.segmented)
                     if section == 0 {
+                        if model.live {
+                            Toggle("Show sample jobs", isOn: Binding(
+                                get: { model.showSampleJobs },
+                                set: { on in Task { await model.setShowSampleJobs(on) } }
+                            ))
+                        }
                         ProSetupCard()
                         Menu(typeFilter == "All" ? "All services" : (ServiceCatalog.find(typeFilter)?.title ?? "Service")) {
                             Button("All services") { typeFilter = "All" }
@@ -171,6 +177,11 @@ struct ProJobView: View {
             VStack(alignment: .leading, spacing: 14) {
                 if let job {
                     Text(job.serviceTitle).foregroundStyle(job.category == .moving ? clay : pine).font(.subheadline.weight(.semibold))
+                    if SampleJobs.contains(job.id) {
+                        Text("Sample — not a real customer. You cannot accept this job.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                     Text(job.place(exact: model.showsExactAddress(job))).font(.title2.weight(.semibold))
                     if job.offeredPriceCents > 0 {
                         Text("Offered \(Money.string(cents: job.offeredPriceCents))").font(.title3.weight(.semibold))
@@ -208,7 +219,7 @@ struct ProJobView: View {
                                 .buttonStyle(.bordered)
                             }
                         }
-                    } else if job.status.isListed {
+                    } else if job.status.isListed && !SampleJobs.contains(job.id) {
                         if model.session?.canTakeJobs == true {
                             Button("Accept \(Money.string(cents: job.offeredPriceCents))") {
                                 Task { _ = await model.acceptListing(jobID: job.id) }
