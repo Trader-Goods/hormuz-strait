@@ -22,7 +22,7 @@ enum BackendConfig {
 @MainActor
 protocol ContractorAPI: AnyObject {
     func restore() async throws -> UserRecord?
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool) async throws -> UserRecord
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int) async throws -> UserRecord
     func signIn(email: String, password: String) async throws -> UserRecord
     func verifyPhone() async throws -> UserRecord
     func signOut() async
@@ -32,7 +32,9 @@ protocol ContractorAPI: AnyObject {
     func quotes(for jobID: UUID) async throws -> [QuoteRecord]
     func myQuotes() async throws -> [QuoteRecord]
     func bookings() async throws -> [BookingRecord]
-    func postJob(category: ServiceCategory, street: String, zip: String, scheduledOn: String, details: JobDetails, photos: [Data]) async throws -> JobRecord
+    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data]) async throws -> JobRecord
+    func rememberJobLocation(id: UUID, latitude: Double, longitude: Double) async
+    func rememberProLocation(latitude: Double, longitude: Double) async
     func sendQuote(jobID: UUID, priceCents: Int, message: String) async throws -> QuoteRecord
     func book(quoteID: UUID) async throws -> BookingRecord
     func bookAgain(bookingID: UUID, scheduledOn: String, recurrence: String) async throws -> BookingRecord
@@ -98,8 +100,8 @@ final class MockBackend: ContractorAPI {
         return book.user(sessionID)
     }
 
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool) async throws -> UserRecord {
-        let user = try book.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms)
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int) async throws -> UserRecord {
+        let user = try book.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms, radiusMiles: radiusMiles)
         sessionID = user.id
         UserDefaults.standard.set(user.id.uuidString, forKey: "contractor.session")
         persist()
@@ -156,12 +158,26 @@ final class MockBackend: ContractorAPI {
         return book.bookings.filter { $0.proID == sessionID || $0.customerID == sessionID }
     }
 
-    func postJob(category: ServiceCategory, street: String, zip: String, scheduledOn: String, details: JobDetails, photos: [Data]) async throws -> JobRecord {
+    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data]) async throws -> JobRecord {
         guard let sessionID else { throw MarketplaceError.wrongAccount }
         let names = photos.compactMap { PhotoStore.save($0) }
-        let job = try book.postJob(customerID: sessionID, category: category, street: street, zip: zip, scheduledOn: scheduledOn, details: details, photoNames: names)
+        let job = try book.postJob(customerID: sessionID, category: category, street: street, city: city, state: state, zip: zip, latitude: latitude, longitude: longitude, scheduledOn: scheduledOn, details: details, photoNames: names)
         persist()
         return job
+    }
+
+    func rememberJobLocation(id: UUID, latitude: Double, longitude: Double) async {
+        guard let index = book.jobs.firstIndex(where: { $0.id == id }) else { return }
+        book.jobs[index].latitude = latitude
+        book.jobs[index].longitude = longitude
+        persist()
+    }
+
+    func rememberProLocation(latitude: Double, longitude: Double) async {
+        guard let sessionID, let index = book.users.firstIndex(where: { $0.user.id == sessionID }) else { return }
+        book.users[index].user.latitude = latitude
+        book.users[index].user.longitude = longitude
+        persist()
     }
 
     func sendQuote(jobID: UUID, priceCents: Int, message: String) async throws -> QuoteRecord {
@@ -239,9 +255,9 @@ final class SupabaseBackend: ContractorAPI {
 
     func restore() async throws -> UserRecord? { nil }
 
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool) async throws -> UserRecord {
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int) async throws -> UserRecord {
         guard acceptedTerms else { throw MarketplaceError.termsRequired }
-        guard RichlandCounty.contains(zip) else { throw MarketplaceError.outsideArea }
+        guard USAddress.isValidZip(zip) else { throw MarketplaceError.invalid }
         let payload: [String: Any] = [
             "email": email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
             "password": password,
@@ -254,7 +270,7 @@ final class SupabaseBackend: ContractorAPI {
             "role": role.rawValue,
             "email": email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
             "display_name": name,
-            "zip": RichlandCounty.normalize(zip),
+            "zip": USAddress.normalizeZip(zip),
             "phone_verified": false,
         ]
         _ = try await send(path: "/rest/v1/profiles", method: "POST", body: profile, auth: true)
@@ -263,7 +279,8 @@ final class SupabaseBackend: ContractorAPI {
                 "id": userID.uuidString,
                 "business_name": business,
                 "categories": categories.map(\.rawValue),
-                "service_zips": serviceZips.isEmpty ? [RichlandCounty.normalize(zip)] : serviceZips,
+                "service_zips": serviceZips.isEmpty ? [USAddress.normalizeZip(zip)] : serviceZips,
+                "radius_miles": radiusMiles,
             ]
             _ = try await send(path: "/rest/v1/pro_profiles", method: "POST", body: pro, auth: true)
         }
@@ -304,7 +321,7 @@ final class SupabaseBackend: ContractorAPI {
         let me = try await currentUser()
         let jobs: [JobRecord] = try await get("/rest/v1/jobs?status=eq.open&select=*")
         return jobs.filter { job in
-            me.categories.contains(job.category) && me.serviceZips.contains(job.zip)
+            me.reaches(job)
         }
     }
 
@@ -322,7 +339,26 @@ final class SupabaseBackend: ContractorAPI {
         return try await get("/rest/v1/bookings?or=(pro_id.eq.\(userID.uuidString),customer_id.eq.\(userID.uuidString))&select=*")
     }
 
-    func postJob(category: ServiceCategory, street: String, zip: String, scheduledOn: String, details: JobDetails, photos: [Data]) async throws -> JobRecord {
+    func rememberJobLocation(id: UUID, latitude: Double, longitude: Double) async {
+        _ = try? await send(
+            path: "/rest/v1/jobs?id=eq.\(id.uuidString)",
+            method: "PATCH",
+            body: ["latitude": latitude, "longitude": longitude],
+            auth: true
+        )
+    }
+
+    func rememberProLocation(latitude: Double, longitude: Double) async {
+        guard let userID else { return }
+        _ = try? await send(
+            path: "/rest/v1/pro_profiles?id=eq.\(userID.uuidString)",
+            method: "PATCH",
+            body: ["latitude": latitude, "longitude": longitude],
+            auth: true
+        )
+    }
+
+    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data]) async throws -> JobRecord {
         guard let userID else { throw MarketplaceError.wrongAccount }
         var names: [String] = []
         for photo in photos {
@@ -332,7 +368,11 @@ final class SupabaseBackend: ContractorAPI {
             "customer_id": userID.uuidString,
             "category": category.rawValue,
             "street": street,
-            "zip": RichlandCounty.normalize(zip),
+            "city": city,
+            "state": state,
+            "zip": USAddress.normalizeZip(zip),
+            "latitude": latitude as Any,
+            "longitude": longitude as Any,
             "scheduled_on": scheduledOn,
             "details": [
                 "lawnSize": details.lawnSize,
@@ -456,6 +496,9 @@ final class SupabaseBackend: ContractorAPI {
             businessName: pro?.businessName ?? "",
             categories: pro?.categories ?? [],
             serviceZips: pro?.serviceZips ?? [],
+            radiusMiles: pro?.radiusMiles ?? 25,
+            latitude: pro?.latitude,
+            longitude: pro?.longitude,
             rating: pro?.rating ?? 0,
             reviewCount: pro?.reviewCount ?? 0
         )
@@ -479,6 +522,9 @@ final class SupabaseBackend: ContractorAPI {
         var businessName: String?
         var categories: [ServiceCategory]?
         var serviceZips: [String]?
+        var radiusMiles: Int?
+        var latitude: Double?
+        var longitude: Double?
         var rating: Double?
         var reviewCount: Int?
     }

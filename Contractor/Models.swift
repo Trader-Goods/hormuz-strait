@@ -58,11 +58,29 @@ struct UserRecord: Codable, Equatable, Identifiable {
     var businessName: String
     var categories: [ServiceCategory]
     var serviceZips: [String]
+    var radiusMiles: Int = 25
+    var latitude: Double?
+    var longitude: Double?
     var rating: Double
     var reviewCount: Int
 
+    func reaches(_ job: JobRecord) -> Bool {
+        guard categories.contains(job.category) else { return false }
+        if let latitude, let longitude, let jobLatitude = job.latitude, let jobLongitude = job.longitude {
+            let miles = GeoPoint(latitude: latitude, longitude: longitude)
+                .miles(to: GeoPoint(latitude: jobLatitude, longitude: jobLongitude))
+            return miles <= Double(max(radiusMiles, 1))
+        }
+        return zip == job.zip || serviceZips.contains(job.zip)
+    }
+
     var publicName: String {
         role == .pro && !businessName.isEmpty ? businessName : displayName
+    }
+
+    var coordinate: GeoPoint? {
+        guard let latitude, let longitude else { return nil }
+        return GeoPoint(latitude: latitude, longitude: longitude)
     }
 }
 
@@ -89,14 +107,32 @@ struct JobRecord: Codable, Equatable, Identifiable {
     var customerID: UUID
     var category: ServiceCategory
     var street: String
+    var city: String
+    var state: String
     var zip: String
+    var latitude: Double?
+    var longitude: Double?
     var scheduledOn: String
     var details: JobDetails
     var status: JobStatus
     var photoNames: [String]
     var createdAt: Date
 
-    var place: String { "\(street), \(zip)" }
+    var fullAddress: String { "\(street), \(city), \(state) \(zip)" }
+
+    func place(exact: Bool) -> String {
+        exact ? fullAddress : "Near \(city), \(state) \(zip)"
+    }
+
+    var coordinate: GeoPoint? {
+        guard let latitude, let longitude else { return nil }
+        return GeoPoint(latitude: latitude, longitude: longitude)
+    }
+
+    func mapCoordinate(exact: Bool) -> GeoPoint? {
+        guard let coordinate else { return nil }
+        return exact ? coordinate : coordinate.approximate(seed: id)
+    }
 }
 
 struct QuoteRecord: Codable, Equatable, Identifiable {

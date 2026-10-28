@@ -49,6 +49,7 @@ struct CustomerHome: View {
 struct JobCard: View {
     var job: JobRecord
     var quoteCount: Int
+    var exact = true
 
     var body: some View {
         Card {
@@ -64,7 +65,7 @@ struct JobCard: View {
                         .padding(.vertical, 4)
                         .background(paper, in: Capsule())
                 }
-                Text(job.place).font(.headline).foregroundStyle(ink)
+                Text(job.place(exact: exact)).font(.headline).foregroundStyle(ink)
                 Text("\(DayStamp.display(job.scheduledOn)) · \(job.details.summary(for: job.category))")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -81,7 +82,9 @@ struct PostJobView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var category = ServiceCategory.lawn
     @State private var street = ""
-    @State private var zip = "44903"
+    @State private var city = ""
+    @State private var state = ""
+    @State private var zip = ""
     @State private var date = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
     @State private var lawnSize = "Medium"
     @State private var rooms = 2
@@ -100,10 +103,14 @@ struct PostJobView: View {
                 }
                 .pickerStyle(.segmented)
                 TextField("Street address", text: $street)
+                TextField("City", text: $city)
+                TextField("State", text: $state)
+                    .textInputAutocapitalization(.characters)
                 TextField("ZIP code", text: $zip)
                     .keyboardType(.numberPad)
-                if !zip.isEmpty && !RichlandCounty.contains(zip) {
-                    Text("Use a Richland County ZIP.").font(.footnote).foregroundStyle(.red)
+                if !USAddress.isComplete(street: street, city: city, state: state, zip: zip),
+                   !street.isEmpty || !city.isEmpty || !state.isEmpty || !zip.isEmpty {
+                    Text(USAddress.incompleteMessage).font(.footnote).foregroundStyle(.red)
                 }
                 DatePicker("Date", selection: $date, displayedComponents: .date)
                 if category == .lawn {
@@ -142,6 +149,8 @@ struct PostJobView: View {
                         let ok = await model.postJob(
                             category: category,
                             street: street,
+                            city: city,
+                            state: state,
                             zip: zip,
                             scheduledOn: DayStamp.string(from: date),
                             details: details,
@@ -174,7 +183,7 @@ struct JobDetailView: View {
             VStack(alignment: .leading, spacing: 14) {
                 if let job {
                     Text(job.category.title).font(.subheadline.weight(.semibold)).foregroundStyle(pine)
-                    Text(job.place).font(.title2.weight(.semibold))
+                    Text(job.place(exact: true)).font(.title2.weight(.semibold))
                     Text("\(DayStamp.display(job.scheduledOn)) · \(job.details.summary(for: job.category))")
                         .foregroundStyle(.secondary)
                     if !job.details.notes.isEmpty {

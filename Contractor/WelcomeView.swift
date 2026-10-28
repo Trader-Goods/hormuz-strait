@@ -13,7 +13,7 @@ struct WelcomeView: View {
                     Text("Contractor Pros")
                         .font(.largeTitle.weight(.bold))
                         .foregroundStyle(ink)
-                    Text("Lawn care and moving in Richland County. Pros quote for free and pay a small fee only when you book them.")
+                    Text("Lawn care and moving anywhere in the US. Pros quote for free and pay a small fee only when you book them.")
                         .foregroundStyle(.secondary)
                     DemoBanner()
                     if let error = model.errorMessage {
@@ -73,7 +73,8 @@ struct SignUpView: View {
     @State var email: String
     @State var password: String
     @State private var name = ""
-    @State private var zip = "44903"
+    @State private var zip = ""
+    @State private var radius = 25
     @State private var business = ""
     @State private var lawn = true
     @State private var moving = false
@@ -93,13 +94,14 @@ struct SignUpView: View {
                 SecureField("Password", text: $password)
                 TextField("ZIP code", text: $zip)
                     .keyboardType(.numberPad)
-                if !zip.isEmpty && !RichlandCounty.contains(zip) {
-                    Text("Contractor is launching in Richland County, Ohio.")
+                if !zip.isEmpty && !USAddress.isValidZip(zip) {
+                    Text("Enter a 5-digit US ZIP.")
                         .font(.footnote)
                         .foregroundStyle(.red)
                 }
                 if role == .pro {
                     TextField("Business name", text: $business)
+                    Stepper("Service radius: \(radius) miles", value: $radius, in: 5...200, step: 5)
                     Toggle("Lawn care", isOn: $lawn)
                     Toggle("Moving", isOn: $moving)
                 }
@@ -112,7 +114,7 @@ struct SignUpView: View {
                 Button(model.busy ? "Saving…" : "Create account") {
                     let categories = [lawn ? ServiceCategory.lawn : nil, moving ? ServiceCategory.moving : nil].compactMap { $0 }
                     Task {
-                        await model.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: [zip], acceptedTerms: acceptedTerms)
+                        await model.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: [zip], acceptedTerms: acceptedTerms, radiusMiles: radius)
                     }
                 }
                 .buttonStyle(.borderedProminent)

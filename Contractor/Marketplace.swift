@@ -1,19 +1,62 @@
 import Foundation
 
-enum RichlandCounty {
-    /// ZIP codes that fall in Richland County, Ohio, around Mansfield.
-    static let zips: Set<String> = [
-        "44901", "44902", "44903", "44904", "44905", "44906", "44907",
-        "44813", "44822", "44843", "44875", "44878",
+enum USAddress {
+    static let states: Set<String> = [
+        "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL",
+        "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME",
+        "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH",
+        "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI",
+        "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
     ]
+    static let incompleteMessage = "Please complete full address of job site"
 
-    static func normalize(_ raw: String) -> String {
-        let digits = raw.filter(\.isNumber)
-        return String(digits.prefix(5))
+    static func normalizeZip(_ raw: String) -> String {
+        String(raw.filter(\.isNumber).prefix(5))
     }
 
-    static func contains(_ raw: String) -> Bool {
-        zips.contains(normalize(raw))
+    static func isValidZip(_ raw: String) -> Bool {
+        let zip = normalizeZip(raw)
+        return zip.count == 5 && zip != "00000"
+    }
+
+    static func isComplete(street: String, city: String, state: String, zip: String) -> Bool {
+        !street.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && states.contains(state.trimmingCharacters(in: .whitespacesAndNewlines).uppercased())
+            && isValidZip(zip)
+    }
+}
+
+struct GeoPoint: Equatable {
+    var latitude: Double
+    var longitude: Double
+
+    func miles(to other: GeoPoint) -> Double {
+        let earth = 3958.8
+        let lat1 = latitude * .pi / 180
+        let lat2 = other.latitude * .pi / 180
+        let dLat = (other.latitude - latitude) * .pi / 180
+        let dLon = (other.longitude - longitude) * .pi / 180
+        let a = sin(dLat / 2) * sin(dLat / 2) + cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2)
+        return earth * 2 * atan2(sqrt(a), sqrt(1 - a))
+    }
+
+    /// Stable offset of about a quarter mile so the map does not reveal the street.
+    func approximate(seed: UUID) -> GeoPoint {
+        let bytes = seed.uuid
+        let angle = Double(bytes.0) / 255 * 2 * .pi
+        let meters = 0.25 * 1609.344
+        let latitudeDelta = meters / 111_320 * cos(angle)
+        let longitudeDelta = meters / (111_320 * cos(latitude * .pi / 180)) * sin(angle)
+        return GeoPoint(latitude: latitude + latitudeDelta, longitude: longitude + longitudeDelta)
+    }
+}
+
+enum DistanceLabel {
+    static func text(miles: Double) -> String {
+        if miles < 1 { return "under 1 mi" }
+        let rounded = Int(miles.rounded())
+        return "about \(max(rounded, 1)) mi"
     }
 }
 
@@ -73,8 +116,7 @@ struct MarketplaceBook: Codable, Equatable {
     func openJobs(for pro: UserRecord) -> [JobRecord] {
         jobs.filter { job in
             guard job.status == .open else { return false }
-            guard pro.categories.contains(job.category) else { return false }
-            guard pro.serviceZips.contains(job.zip) else { return false }
+            guard pro.reaches(job) else { return false }
             let existing = quotes(for: job.id)
             if existing.count >= LeadRules.maxQuotes { return false }
             if existing.contains(where: { $0.proID == pro.id }) { return false }
@@ -92,18 +134,19 @@ struct MarketplaceBook: Codable, Equatable {
         business: String,
         categories: [ServiceCategory],
         serviceZips: [String],
-        acceptedTerms: Bool
+        acceptedTerms: Bool,
+        radiusMiles: Int = 25
     ) throws -> UserRecord {
         guard acceptedTerms else { throw MarketplaceError.termsRequired }
         let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cleanZip = RichlandCounty.normalize(zip)
+        let cleanZip = USAddress.normalizeZip(zip)
         guard cleanEmail.contains("@"), cleanEmail.contains("."), password.count >= 6, !cleanName.isEmpty else {
             throw MarketplaceError.invalid
         }
-        guard RichlandCounty.contains(cleanZip) else { throw MarketplaceError.outsideArea }
+        guard USAddress.isValidZip(cleanZip) else { throw MarketplaceError.invalid }
         guard !users.contains(where: { $0.user.email == cleanEmail }) else { throw MarketplaceError.invalid }
-        let chosenZips = serviceZips.isEmpty ? [cleanZip] : serviceZips.map(RichlandCounty.normalize).filter(RichlandCounty.contains)
+        let chosenZips = serviceZips.map(USAddress.normalizeZip).filter(USAddress.isValidZip)
         let record = UserRecord(
             id: UUID(),
             role: role,
@@ -114,6 +157,7 @@ struct MarketplaceBook: Codable, Equatable {
             businessName: business.trimmingCharacters(in: .whitespacesAndNewlines),
             categories: role == .pro ? (categories.isEmpty ? [.lawn] : categories) : [],
             serviceZips: role == .pro ? (chosenZips.isEmpty ? [cleanZip] : chosenZips) : [cleanZip],
+            radiusMiles: role == .pro ? min(200, max(5, radiusMiles)) : 0,
             rating: 0,
             reviewCount: 0
         )
@@ -131,22 +175,34 @@ struct MarketplaceBook: Codable, Equatable {
         customerID: UUID,
         category: ServiceCategory,
         street: String,
+        city: String,
+        state: String,
         zip: String,
+        latitude: Double? = nil,
+        longitude: Double? = nil,
         scheduledOn: String,
         details: JobDetails,
         photoNames: [String]
     ) throws -> JobRecord {
         guard let customer = user(customerID), customer.role == .customer else { throw MarketplaceError.wrongAccount }
         guard customer.phoneVerified else { throw MarketplaceError.notVerified }
-        let cleanZip = RichlandCounty.normalize(zip)
         let cleanStreet = street.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard RichlandCounty.contains(cleanZip), !cleanStreet.isEmpty else { throw MarketplaceError.outsideArea }
+        let cleanCity = city.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanState = state.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        let cleanZip = USAddress.normalizeZip(zip)
+        guard USAddress.isComplete(street: cleanStreet, city: cleanCity, state: cleanState, zip: cleanZip) else {
+            throw MarketplaceError.outsideArea
+        }
         let job = JobRecord(
             id: UUID(),
             customerID: customerID,
             category: category,
             street: cleanStreet,
+            city: cleanCity,
+            state: cleanState,
             zip: cleanZip,
+            latitude: latitude,
+            longitude: longitude,
             scheduledOn: scheduledOn,
             details: details,
             status: .open,
@@ -163,9 +219,7 @@ struct MarketplaceBook: Codable, Equatable {
         guard priceCents > 0 else { throw MarketplaceError.invalid }
         guard let job = jobs.first(where: { $0.id == jobID }) else { throw MarketplaceError.missing }
         guard job.status == .open else { throw MarketplaceError.closed }
-        guard pro.categories.contains(job.category), pro.serviceZips.contains(job.zip) else {
-            throw MarketplaceError.outsideArea
-        }
+        guard pro.reaches(job) else { throw MarketplaceError.outsideArea }
         let existing = quotes(for: jobID)
         if existing.contains(where: { $0.proID == proID }) { throw MarketplaceError.alreadyQuoted }
         if existing.count >= LeadRules.maxQuotes { throw MarketplaceError.quoteLimit }
@@ -211,13 +265,19 @@ struct MarketplaceBook: Codable, Equatable {
         guard let previous = bookings.first(where: { $0.id == bookingID }) else { throw MarketplaceError.missing }
         guard previous.customerID == customerID, previous.paidInApp else { throw MarketplaceError.notPaid }
         guard let source = jobs.first(where: { $0.id == previous.jobID }) else { throw MarketplaceError.missing }
-        guard RichlandCounty.contains(source.zip) else { throw MarketplaceError.outsideArea }
+        guard USAddress.isComplete(street: source.street, city: source.city, state: source.state, zip: source.zip) else {
+            throw MarketplaceError.outsideArea
+        }
         let job = JobRecord(
             id: UUID(),
             customerID: customerID,
             category: source.category,
             street: source.street,
+            city: source.city,
+            state: source.state,
             zip: source.zip,
+            latitude: source.latitude,
+            longitude: source.longitude,
             scheduledOn: scheduledOn,
             details: source.details,
             status: .booked,
@@ -367,20 +427,18 @@ struct MarketplaceBook: Codable, Equatable {
         let moveJob = UUID(uuidString: "30000000-0000-0000-0000-000000000002")!
         let quoteA = UUID(uuidString: "40000000-0000-0000-0000-000000000001")!
         let quoteB = UUID(uuidString: "40000000-0000-0000-0000-000000000002")!
-        let county = Array(RichlandCounty.zips).sorted()
-        let mansfield = ["44901", "44902", "44903", "44904", "44905", "44906", "44907"]
         return MarketplaceBook(
             users: [
-                StoredUser(user: UserRecord(id: maya, role: .customer, email: "maya@contractor.demo", displayName: "Maya Chen", zip: "44903", phoneVerified: true, businessName: "", categories: [], serviceZips: ["44903"], rating: 0, reviewCount: 0), password: "demo1234"),
-                StoredUser(user: UserRecord(id: sam, role: .customer, email: "sam@contractor.demo", displayName: "Sam Ortiz", zip: "44906", phoneVerified: true, businessName: "", categories: [], serviceZips: ["44906"], rating: 0, reviewCount: 0), password: "demo1234"),
-                StoredUser(user: UserRecord(id: greenline, role: .pro, email: "greenline@contractor.demo", displayName: "Avery Cole", zip: "44903", phoneVerified: true, businessName: "Greenline Lawn", categories: [.lawn], serviceZips: mansfield, rating: 0, reviewCount: 0), password: "demo1234"),
-                StoredUser(user: UserRecord(id: shelby, role: .pro, email: "shelby@contractor.demo", displayName: "Jordan Peck", zip: "44875", phoneVerified: true, businessName: "Shelby Yard Co", categories: [.lawn], serviceZips: ["44875", "44903", "44906", "44902"], rating: 0, reviewCount: 0), password: "demo1234"),
-                StoredUser(user: UserRecord(id: movers, role: .pro, email: "northend@contractor.demo", displayName: "Riley Brooks", zip: "44902", phoneVerified: true, businessName: "North End Movers", categories: [.moving], serviceZips: county, rating: 0, reviewCount: 0), password: "demo1234"),
+                StoredUser(user: UserRecord(id: maya, role: .customer, email: "maya@contractor.demo", displayName: "Maya Chen", zip: "44903", phoneVerified: true, businessName: "", categories: [], serviceZips: ["44903"], radiusMiles: 0, latitude: 40.758, longitude: -82.516, rating: 0, reviewCount: 0), password: "demo1234"),
+                StoredUser(user: UserRecord(id: sam, role: .customer, email: "sam@contractor.demo", displayName: "Sam Ortiz", zip: "44906", phoneVerified: true, businessName: "", categories: [], serviceZips: ["44906"], radiusMiles: 0, latitude: 40.760, longitude: -82.590, rating: 0, reviewCount: 0), password: "demo1234"),
+                StoredUser(user: UserRecord(id: greenline, role: .pro, email: "greenline@contractor.demo", displayName: "Avery Cole", zip: "44903", phoneVerified: true, businessName: "Greenline Lawn", categories: [.lawn], serviceZips: ["44903"], radiusMiles: 25, latitude: 40.758, longitude: -82.516, rating: 0, reviewCount: 0), password: "demo1234"),
+                StoredUser(user: UserRecord(id: shelby, role: .pro, email: "shelby@contractor.demo", displayName: "Jordan Peck", zip: "44875", phoneVerified: true, businessName: "Shelby Yard Co", categories: [.lawn], serviceZips: ["44875"], radiusMiles: 30, latitude: 40.881, longitude: -82.662, rating: 0, reviewCount: 0), password: "demo1234"),
+                StoredUser(user: UserRecord(id: movers, role: .pro, email: "northend@contractor.demo", displayName: "Riley Brooks", zip: "44902", phoneVerified: true, businessName: "North End Movers", categories: [.moving], serviceZips: ["44902"], radiusMiles: 40, latitude: 40.770, longitude: -82.520, rating: 0, reviewCount: 0), password: "demo1234"),
             ],
             jobs: [
-                JobRecord(id: lawnJob, customerID: maya, category: .lawn, street: "418 Park Avenue West", zip: "44903", scheduledOn: "2026-11-06", details: JobDetails(lawnSize: "Medium", rooms: 0, stairs: false, notes: "Corner lot. Please edge the sidewalk and blow clippings off the drive."), status: .open, photoNames: [], createdAt: Date(timeIntervalSince1970: 1_761_600_000)),
-                JobRecord(id: moveJob, customerID: sam, category: .moving, street: "90 Lexington Avenue", zip: "44906", scheduledOn: "2026-11-14", details: JobDetails(lawnSize: "", rooms: 2, stairs: true, notes: "Second-floor apartment to a ranch house in Ontario. Washer and a sofa."), status: .open, photoNames: [], createdAt: Date(timeIntervalSince1970: 1_761_700_000)),
-                JobRecord(id: UUID(uuidString: "30000000-0000-0000-0000-000000000003")!, customerID: sam, category: .lawn, street: "12 Maple Street", zip: "44902", scheduledOn: "2026-11-08", details: JobDetails(lawnSize: "Small", rooms: 0, stairs: false, notes: "Front yard only. Gate is on the left."), status: .open, photoNames: [], createdAt: Date(timeIntervalSince1970: 1_761_720_000)),
+                JobRecord(id: lawnJob, customerID: maya, category: .lawn, street: "418 Park Avenue West", city: "Mansfield", state: "OH", zip: "44903", latitude: 40.7584, longitude: -82.5290, scheduledOn: "2026-11-06", details: JobDetails(lawnSize: "Medium", rooms: 0, stairs: false, notes: "Corner lot. Please edge the sidewalk and blow clippings off the drive."), status: .open, photoNames: [], createdAt: Date(timeIntervalSince1970: 1_761_600_000)),
+                JobRecord(id: moveJob, customerID: sam, category: .moving, street: "90 Lexington Avenue", city: "Ontario", state: "OH", zip: "44906", latitude: 40.7597, longitude: -82.5903, scheduledOn: "2026-11-14", details: JobDetails(lawnSize: "", rooms: 2, stairs: true, notes: "Second-floor apartment to a ranch house in Ontario. Washer and a sofa."), status: .open, photoNames: [], createdAt: Date(timeIntervalSince1970: 1_761_700_000)),
+                JobRecord(id: UUID(uuidString: "30000000-0000-0000-0000-000000000003")!, customerID: sam, category: .lawn, street: "12 Maple Street", city: "Mansfield", state: "OH", zip: "44902", latitude: 40.7695, longitude: -82.5482, scheduledOn: "2026-11-08", details: JobDetails(lawnSize: "Small", rooms: 0, stairs: false, notes: "Front yard only. Gate is on the left."), status: .open, photoNames: [], createdAt: Date(timeIntervalSince1970: 1_761_720_000)),
             ],
             quotes: [
                 QuoteRecord(id: quoteA, jobID: lawnJob, proID: greenline, priceCents: 8500, message: "Thursday morning works. Mow, edge, and blow the walk.", status: .sent, createdAt: Date(timeIntervalSince1970: 1_761_610_000)),

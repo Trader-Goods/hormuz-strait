@@ -3,11 +3,18 @@ import SwiftUI
 struct ProHome: View {
     @EnvironmentObject private var model: AppModel
     @State private var section = 0
+    @State private var showMap = true
+    @State private var categoryFilter = "All"
 
     private var openJobs: [JobRecord] {
         guard let me = model.session else { return [] }
         return model.jobs.filter { job in
-            job.status == .open && me.categories.contains(job.category) && me.serviceZips.contains(job.zip) && !model.quotes(for: job.id).contains { $0.proID == me.id } && model.quotes(for: job.id).count < LeadRules.maxQuotes
+            guard job.status == .open, me.reaches(job) else { return false }
+            guard !model.quotes(for: job.id).contains(where: { $0.proID == me.id }) else { return false }
+            guard model.quotes(for: job.id).count < LeadRules.maxQuotes else { return false }
+            if categoryFilter == "Lawn care" { return job.category == .lawn }
+            if categoryFilter == "Moving" { return job.category == .moving }
+            return true
         }
     }
 
@@ -41,17 +48,32 @@ struct ProHome: View {
                     }
                     .pickerStyle(.segmented)
                     if section == 0 {
+                        Picker("Category", selection: $categoryFilter) {
+                            Text("All").tag("All")
+                            Text("Lawn care").tag("Lawn care")
+                            Text("Moving").tag("Moving")
+                        }
+                        .pickerStyle(.segmented)
+                        Picker("Layout", selection: $showMap) {
+                            Text("Map").tag(true)
+                            Text("List").tag(false)
+                        }
+                        .pickerStyle(.segmented)
                         if openJobs.isEmpty {
-                            Text("No open jobs in your ZIPs. Jobs close after 3 pros quote.")
+                            Text("No open jobs in your service area. Jobs close after 3 pros quote.")
                                 .foregroundStyle(.secondary)
                         }
-                        ForEach(openJobs) { job in
-                            NavigationLink {
-                                ProJobView(jobID: job.id)
-                            } label: {
-                                JobCard(job: job, quoteCount: model.quotes(for: job.id).count)
+                        if showMap {
+                            ProJobMap(jobs: openJobs)
+                        } else {
+                            ForEach(openJobs) { job in
+                                NavigationLink {
+                                    ProJobView(jobID: job.id)
+                                } label: {
+                                    JobCard(job: job, quoteCount: model.quotes(for: job.id).count, exact: model.showsExactAddress(job))
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     } else if section == 1 {
                         ForEach(mine) { quote in
@@ -61,7 +83,7 @@ struct ProHome: View {
                                 } label: {
                                     Card {
                                         VStack(alignment: .leading, spacing: 4) {
-                                            Text(job.place).font(.headline).foregroundStyle(ink)
+                                            Text(job.place(exact: model.showsExactAddress(job))).font(.headline).foregroundStyle(ink)
                                             Text("\(Money.string(cents: quote.priceCents)) · \(quote.status.rawValue)")
                                                 .foregroundStyle(.secondary)
                                         }
@@ -75,7 +97,7 @@ struct ProHome: View {
                             if let job = model.jobs.first(where: { $0.id == booking.jobID }) {
                                 Card {
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text(job.place).font(.headline)
+                                        Text(job.place(exact: true)).font(.headline)
                                         Text("\(Money.string(cents: booking.priceCents)) · you receive \(Money.string(cents: booking.charge.proPayoutCents))")
                                             .foregroundStyle(.secondary)
                                         Text(paymentLine(priceCents: booking.priceCents, percent: booking.feePercent)).font(.footnote).foregroundStyle(.secondary)
@@ -122,7 +144,7 @@ struct ProJobView: View {
             VStack(alignment: .leading, spacing: 14) {
                 if let job {
                     Text(job.category.title).foregroundStyle(clay).font(.subheadline.weight(.semibold))
-                    Text(job.place).font(.title2.weight(.semibold))
+                    Text(job.place(exact: model.showsExactAddress(job))).font(.title2.weight(.semibold))
                     Text("\(DayStamp.display(job.scheduledOn)) · \(job.details.summary(for: job.category))")
                         .foregroundStyle(.secondary)
                     Text(job.details.notes)

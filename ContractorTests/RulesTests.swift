@@ -2,12 +2,19 @@ import XCTest
 @testable import Contractor
 
 final class RulesTests: XCTestCase {
-    func testRichlandCountyZips() {
-        XCTAssertTrue(RichlandCounty.contains("44903"))
-        XCTAssertTrue(RichlandCounty.contains("44903-1205"))
-        XCTAssertTrue(RichlandCounty.contains("44875"))
-        XCTAssertFalse(RichlandCounty.contains("43215"))
-        XCTAssertFalse(RichlandCounty.contains("449"))
+    func testAnyFiveDigitUSZipIsAccepted() throws {
+        XCTAssertTrue(USAddress.isValidZip("44903"))
+        XCTAssertTrue(USAddress.isValidZip("44903-1205"))
+        XCTAssertTrue(USAddress.isValidZip("43215"))
+        XCTAssertTrue(USAddress.isValidZip("02139"))
+        XCTAssertFalse(USAddress.isValidZip("449"))
+        XCTAssertFalse(USAddress.isValidZip("00000"))
+        var book = MarketplaceBook.demo()
+        let user = try book.signUp(
+            role: .customer, name: "Alex", email: "alex@example.com", password: "secret1",
+            zip: "02139", business: "", categories: [], serviceZips: [], acceptedTerms: true
+        )
+        XCTAssertEqual(user.zip, "02139")
     }
 
     func testBookingFeeIsEightPercentWithAFiveDollarMinimum() {
@@ -40,14 +47,58 @@ final class RulesTests: XCTestCase {
         }
     }
 
-    func testSignupRejectsZipsOutsideTheCounty() {
+    func testIncompleteJobSiteAddressIsRejected() throws {
         var book = MarketplaceBook.demo()
-        XCTAssertThrowsError(try book.signUp(
-            role: .customer, name: "Alex", email: "alex@example.com", password: "secret1",
-            zip: "43215", business: "", categories: [], serviceZips: [], acceptedTerms: true
+        let customer = try XCTUnwrap(book.users.first { $0.user.email == "maya@contractor.demo" }?.user)
+        XCTAssertEqual(USAddress.incompleteMessage, "Please complete full address of job site")
+        XCTAssertThrowsError(try book.postJob(
+            customerID: customer.id, category: .lawn, street: "1 High Street", city: "", state: "OH", zip: "43215",
+            scheduledOn: "2026-12-01", details: .empty, photoNames: []
         )) { error in
             XCTAssertEqual(error as? MarketplaceError, .outsideArea)
         }
+    }
+
+    func testOpenPinsAreOffsetAboutAQuarterMile() {
+        let home = GeoPoint(latitude: 40.7584, longitude: -82.5290)
+        let id = UUID(uuidString: "30000000-0000-0000-0000-000000000001")!
+        let hidden = home.approximate(seed: id)
+        XCTAssertEqual(home.miles(to: hidden), 0.25, accuracy: 0.02)
+        XCTAssertEqual(hidden, home.approximate(seed: id))
+        let job = JobRecord(
+            id: id, customerID: UUID(), category: .lawn, street: "418 Park Avenue West", city: "Mansfield", state: "OH",
+            zip: "44903", latitude: home.latitude, longitude: home.longitude, scheduledOn: "2026-11-06",
+            details: .empty, status: .open, photoNames: [], createdAt: Date()
+        )
+        XCTAssertEqual(job.place(exact: false), "Near Mansfield, OH 44903")
+        XCTAssertEqual(job.place(exact: true), "418 Park Avenue West, Mansfield, OH 44903")
+        XCTAssertEqual(job.mapCoordinate(exact: true)?.latitude, home.latitude)
+        XCTAssertEqual(job.mapCoordinate(exact: true)?.longitude, home.longitude)
+        XCTAssertEqual(job.mapCoordinate(exact: false)?.miles(to: home) ?? 0, 0.25, accuracy: 0.02)
+        XCTAssertEqual(DistanceLabel.text(miles: 0.4), "under 1 mi")
+        XCTAssertEqual(DistanceLabel.text(miles: 4.2), "about 4 mi")
+    }
+
+    func testServiceRadiusMatchesJobsNationwide() throws {
+        var book = MarketplaceBook.demo()
+        let pro = try book.signUp(
+            role: .pro, name: "Alex", email: "alex@example.com", password: "secret1",
+            zip: "43215", business: "Alex Lawn", categories: [.lawn], serviceZips: ["43215"],
+            acceptedTerms: true, radiusMiles: 10
+        )
+        _ = try book.verifyPhone(pro.id)
+        let index = try XCTUnwrap(book.users.firstIndex { $0.user.id == pro.id })
+        book.users[index].user.latitude = 39.9612
+        book.users[index].user.longitude = -82.9988
+        let maya = try XCTUnwrap(book.users.first { $0.user.email == "maya@contractor.demo" }?.user)
+        let near = try book.postJob(
+            customerID: maya.id, category: .lawn, street: "1 Capitol Square", city: "Columbus", state: "OH", zip: "43215",
+            latitude: 39.9615, longitude: -82.9990, scheduledOn: "2026-12-01", details: .empty, photoNames: []
+        )
+        XCTAssertTrue(try XCTUnwrap(book.user(pro.id)).reaches(near))
+        let far = try XCTUnwrap(book.jobs.first { $0.city == "Mansfield" && $0.category == .lawn })
+        XCTAssertFalse(try XCTUnwrap(book.user(pro.id)).reaches(far))
+        XCTAssertTrue(book.openJobs(for: try XCTUnwrap(book.user(pro.id))).contains { $0.id == near.id })
     }
 
     func testChatHidesContactDetailsUntilBooking() {

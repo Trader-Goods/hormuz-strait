@@ -34,9 +34,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool) async {
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int) async {
         await run {
-            self.session = try await self.api.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms)
+            self.session = try await self.api.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms, radiusMiles: radiusMiles)
             await self.reload()
         }
     }
@@ -88,10 +88,11 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func postJob(category: ServiceCategory, street: String, zip: String, scheduledOn: String, details: JobDetails, photos: [Data]) async -> Bool {
+    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, scheduledOn: String, details: JobDetails, photos: [Data]) async -> Bool {
         var ok = false
+        let point = await SiteGeocoder.locate(street: street, city: city, state: state, zip: zip)
         await run {
-            _ = try await self.api.postJob(category: category, street: street, zip: zip, scheduledOn: scheduledOn, details: details, photos: photos)
+            _ = try await self.api.postJob(category: category, street: street, city: city, state: state, zip: zip, latitude: point?.latitude, longitude: point?.longitude, scheduledOn: scheduledOn, details: details, photos: photos)
             ok = true
             await self.reload()
         }
@@ -138,6 +139,27 @@ final class AppModel: ObservableObject {
             ok = true
         }
         return ok
+    }
+
+    func rememberJobLocation(id: UUID, latitude: Double, longitude: Double) async {
+        if let index = jobs.firstIndex(where: { $0.id == id }) {
+            jobs[index].latitude = latitude
+            jobs[index].longitude = longitude
+        }
+        await api.rememberJobLocation(id: id, latitude: latitude, longitude: longitude)
+    }
+
+    func rememberProLocation(latitude: Double, longitude: Double) async {
+        session?.latitude = latitude
+        session?.longitude = longitude
+        await api.rememberProLocation(latitude: latitude, longitude: longitude)
+    }
+
+    func showsExactAddress(_ job: JobRecord) -> Bool {
+        guard job.status == .booked || job.status == .completed else { return false }
+        guard let me = session else { return false }
+        if me.role == .customer { return job.customerID == me.id }
+        return bookings.contains { $0.jobID == job.id && $0.proID == me.id && $0.paidInApp }
     }
 
     func hasGuarantee(_ proID: UUID) -> Bool {
@@ -198,7 +220,7 @@ final class AppModel: ObservableObject {
     static func describe(_ error: Error) -> String {
         switch error as? MarketplaceError {
         case .outsideArea:
-            return "Use a Richland County ZIP, such as 44903 for Mansfield."
+            return USAddress.incompleteMessage
         case .quoteLimit:
             return "This job already has 3 quotes."
         case .notVerified:

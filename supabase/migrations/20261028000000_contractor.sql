@@ -1,4 +1,5 @@
--- Contractor marketplace for Richland County, Ohio.
+-- Contractor marketplace. Jobs can be anywhere in the United States.
+-- Sample rows may use Mansfield, Ohio addresses. That is not a service limit.
 -- Apply in the Supabase SQL editor, or with the Supabase CLI:
 --   supabase db push
 -- Then create a private storage bucket named job-photos.
@@ -23,6 +24,9 @@ create table if not exists public.pro_profiles (
     business_name text not null,
     categories text[] not null default '{}',
     service_zips text[] not null default '{}',
+    radius_miles integer not null default 25,
+    latitude double precision,
+    longitude double precision,
     rating double precision not null default 0,
     review_count integer not null default 0
 );
@@ -32,7 +36,11 @@ create table if not exists public.jobs (
     customer_id uuid not null references public.profiles (id) on delete cascade,
     category text not null check (category in ('lawn', 'moving')),
     street text not null,
+    city text not null default '',
+    state text not null default '',
     zip text not null,
+    latitude double precision,
+    longitude double precision,
     scheduled_on date not null,
     details jsonb not null default '{}'::jsonb,
     status text not null default 'open' check (status in ('open', 'booked', 'completed', 'cancelled')),
