@@ -156,7 +156,12 @@ def answer_export(auth, build):
 def group_has_build(auth, group, build):
     path = f"/v1/betaGroups/{group}/relationships/builds?limit=200"
     while path:
-        page = api("GET", path, auth)
+        try:
+            page = api("GET", path, auth)
+        except SystemExit as error:
+            if getattr(error, "code", None) == 403:
+                return False
+            raise
         for item in page.get("data", []):
             if item.get("id") == build:
                 return True
@@ -167,7 +172,12 @@ def group_has_build(auth, group, build):
 def build_has_group(auth, build, group):
     path = f"/v1/builds/{build}/relationships/betaGroups?limit=50"
     while path:
-        page = api("GET", path, auth)
+        try:
+            page = api("GET", path, auth)
+        except SystemExit as error:
+            if getattr(error, "code", None) == 403:
+                return False
+            raise
         for item in page.get("data", []):
             if item.get("id") == group:
                 return True
