@@ -52,22 +52,6 @@ struct Card<Content: View>: View {
     }
 }
 
-struct DemoBanner: View {
-    @EnvironmentObject private var model: AppModel
-
-    var body: some View {
-        if model.showsSampleJobs {
-            Text("Live account. Sample jobs on a contractor map are examples on this phone, not real customers.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        } else if !model.live {
-            Text("Demo data on this iPhone. The 5% fee is calculated and the card is authorized, not charged.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
 func paymentLine(priceCents: Int, percent: Int) -> String {
     let fee = BookingFee.feeCents(priceCents: priceCents, percent: percent)
     let payout = BookingFee.payoutCents(priceCents: priceCents, percent: percent)

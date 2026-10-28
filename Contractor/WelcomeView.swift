@@ -13,9 +13,6 @@ struct WelcomeView: View {
                     Text("Contractor Pros")
                         .font(.largeTitle.weight(.bold))
                         .foregroundStyle(ink)
-                    Text("Yard work and moving anywhere in the US. You set a price from a rate card. A contractor accepts it or makes an offer. The platform fee is 5%.")
-                        .foregroundStyle(.secondary)
-                    DemoBanner()
                     if let error = model.errorMessage {
                         Text(error).foregroundStyle(.red)
                     }
@@ -56,9 +53,7 @@ struct WelcomeView: View {
                                 .buttonStyle(.bordered)
                         }
                     }
-                    Text("One contractor is assigned unless you allow more than one. The street stays hidden until the payment is authorized. Customers confirm a phone so the leads are real.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    HelpLinks()
                 }
                 .padding(20)
             }
@@ -117,9 +112,6 @@ struct SignUpView: View {
                             }
                         ))
                     }
-                    Text("Pressure washing, gutters, snow, and junk removal can be added later without a new account type.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
                 Toggle("I agree to the Terms", isOn: $acceptedTerms)
                 Button("Read Terms") { showTerms = true }
@@ -165,8 +157,6 @@ struct VerifyPhoneView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Confirm your phone")
                 .font(.largeTitle.weight(.bold))
-            Text("Verified customers keep leads real. This demo does not send a text. Tap verify to continue. A live build will use a texted code.")
-                .foregroundStyle(.secondary)
             if let error = model.errorMessage {
                 Text(error).foregroundStyle(.red)
             }

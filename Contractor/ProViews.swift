@@ -34,7 +34,6 @@ struct ProHome: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    DemoBanner()
                     if !model.notices.isEmpty {
                         NoticeList()
                     }
@@ -86,7 +85,7 @@ struct ProHome: View {
                         }
                         .pickerStyle(.segmented)
                         if openJobs.isEmpty {
-                            Text("No open jobs in this filter. Listings leave the map when a contractor is booked.")
+                            Text("No open jobs.")
                                 .foregroundStyle(.secondary)
                         }
                         if showMap {
@@ -132,7 +131,7 @@ struct ProHome: View {
                             }
                         }
                     }
-                    HowPayWorksLink()
+                    HelpLinks()
                     if let error = model.errorMessage {
                         Text(error).foregroundStyle(.red)
                     }
@@ -265,11 +264,8 @@ struct ProSetupCard: View {
     var body: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Service area and verification").font(.headline)
-                if let me = model.session {
-                    Text(me.canTakeJobs ? "You can accept jobs. Payouts are marked ready. Stripe is not connected." : "Accept stays off until identity and payouts are recorded.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                Text("Service area").font(.headline)
+                if model.session != nil {
                     Stepper("Radius: \(radius) miles", value: $radius, in: 5...200, step: 5)
                     ForEach(ServiceCatalog.active) { service in
                         Toggle(service.title, isOn: Binding(
@@ -283,23 +279,75 @@ struct ProSetupCard: View {
                         Task { await model.updateServiceArea(serviceTypes: Array(selected), radiusMiles: radius) }
                     }
                     .buttonStyle(.bordered)
-                    if !me.identityVerified {
+                    if model.session?.identityVerified == false {
                         Button("Confirm identity") { Task { await model.verifyIdentity() } }
                             .buttonStyle(.bordered)
                     }
-                    if !me.payoutsReady {
+                    if model.session?.payoutsReady == false {
                         Button("Mark payouts ready") { Task { await model.connectPayouts() } }
                             .buttonStyle(.bordered)
                     }
-                    Text("Identity confirmation is stored on this phone. A live account will use a real identity check and Stripe Connect before payouts.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
             }
         }
         .onAppear {
             radius = model.session?.radiusMiles ?? 25
             selected = Set(model.session?.serviceTypes ?? [])
+        }
+    }
+}
+
+struct HelpLinks: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            AboutLink()
+            HowPayWorksLink()
+        }
+    }
+}
+
+struct AboutLink: View {
+    var body: some View {
+        NavigationLink {
+            AboutView()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "questionmark.circle")
+                Text("About")
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+    }
+}
+
+struct AboutView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                aboutSection("What it is", "Yard work and moving anywhere in the US. You set a price. A contractor accepts it or makes an offer.")
+                aboutSection("Who is assigned", "One contractor gets the job unless you allow more than one. A listing stays up for 14 days.")
+                aboutSection("The map", "Open jobs show as price bubbles about a quarter mile from the site. The street appears after booking and payment authorization.")
+                aboutSection("Sample jobs", "Sample jobs on a contractor map are examples on this phone. They are not real customers and cannot be accepted.")
+                aboutSection("Your phone", "Confirming a phone keeps leads real. This TestFlight build does not send a text.")
+                aboutSection("Payout setup", "Identity and payouts are recorded on this phone until a live identity check and Stripe Connect are connected.")
+                aboutSection("More services", "Pressure washing, gutters, snow removal, and junk removal can be added later.")
+            }
+            .padding(20)
+        }
+        .background(paper)
+        .navigationTitle("About")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func aboutSection(_ title: String, _ body: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.headline)
+            Text(body).foregroundStyle(.secondary)
         }
     }
 }

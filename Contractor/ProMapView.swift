@@ -137,10 +137,6 @@ struct ProJobMap: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            Text("Pins sit about a quarter mile from the job site. The street address appears after the customer books you.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
             if let job = selectedJob {
                 JobPinCard(job: job, distance: distanceText(for: job))
             }

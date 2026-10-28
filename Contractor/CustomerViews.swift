@@ -9,15 +9,14 @@ struct CustomerHome: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    DemoBanner()
                     Text("Your jobs")
                         .font(.title2.weight(.semibold))
                     if !model.notices.isEmpty {
                         NoticeList()
                     }
                     if model.jobs.isEmpty {
-                        Text("Post a yard or moving job with a price. One contractor can accept it, unless you allow more than one.")
-                            .foregroundStyle(.secondary)
+                        NavigationLink("Post a job") { PostJobView() }
+                            .buttonStyle(.borderedProminent)
                     }
                     ForEach(model.jobs) { job in
                         NavigationLink {
@@ -27,7 +26,7 @@ struct CustomerHome: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    HowPayWorksLink()
+                    HelpLinks()
                     if let error = model.errorMessage {
                         Text(error).foregroundStyle(.red)
                     }
@@ -117,9 +116,6 @@ struct PostJobView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Text("The street stays private until a contractor is booked and the payment is authorized.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
                 Picker("Service", selection: $serviceType) {
                     ForEach(ServiceCatalog.active) { item in
                         Text(item.title).tag(item.id)
@@ -176,9 +172,6 @@ struct PostJobView: View {
                     EstimateCard(result: result, offered: $offered)
                 }
                 Toggle("Allow more than one contractor", isOn: $allowsMultiple)
-                Text("Listings stay up for 14 days. The estimate is not a guaranteed quote.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
                 if let error = model.errorMessage {
                     Text(error).foregroundStyle(.red)
                 }
