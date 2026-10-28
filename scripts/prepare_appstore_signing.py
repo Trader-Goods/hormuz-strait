@@ -356,9 +356,8 @@ def ensure_app(auth, bundle_resource, identifier):
     print("bundle id is registered")
     print("create it in App Store Connect if the API cannot: New App, iOS, Contractor, com.tradergoods.contractor, SKU contractor, English (U.S.)")
     print("status", getattr(last, "code", ""))
-    if last is not None:
-        raise last
-    raise SystemExit("app record was not created")
+    print("continuing so the archive can be signed; TestFlight upload needs that app record")
+    return None
 
 
 def main():
