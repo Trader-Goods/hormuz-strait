@@ -73,29 +73,34 @@ def token():
 
 def api(method, path, auth, body=None, quiet=False):
     data = None if body is None else json.dumps(body).encode()
-    request = urllib.request.Request(
-        API + path,
-        data=data,
-        method=method,
-        headers={"Authorization": "Bearer " + auth, "Content-Type": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(request) as response:
-            raw = response.read().decode()
-            return json.loads(raw) if raw else {}
-    except urllib.error.HTTPError as error:
-        raw = error.read().decode()
-        print(f"API {method} {path.split('?')[0]} failed: {error.code}")
+    for attempt in range(5):
+        request = urllib.request.Request(
+            API + path,
+            data=data,
+            method=method,
+            headers={"Authorization": "Bearer " + auth, "Content-Type": "application/json"},
+        )
         try:
-            payload = json.loads(raw)
-        except json.JSONDecodeError:
-            payload = {}
-        if not quiet:
-            for item in payload.get("errors", []):
-                print(item.get("status"), item.get("code"), item.get("title"), item.get("detail"))
-        failure = SystemExit(1)
-        failure.code = error.code
-        raise failure
+            with urllib.request.urlopen(request) as response:
+                raw = response.read().decode()
+                return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as error:
+            raw = error.read().decode()
+            if error.code in (500, 502, 503, 504) and attempt < 4:
+                print(f"API {method} {path.split('?')[0]} returned {error.code}, retrying")
+                time.sleep(15 * (attempt + 1))
+                continue
+            print(f"API {method} {path.split('?')[0]} failed: {error.code}")
+            try:
+                payload = json.loads(raw)
+            except json.JSONDecodeError:
+                payload = {}
+            if not quiet:
+                for item in payload.get("errors", []):
+                    print(item.get("status"), item.get("code"), item.get("title"), item.get("detail"))
+            failure = SystemExit(1)
+            failure.code = error.code
+            raise failure
 
 
 def set_env(key, value):

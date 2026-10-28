@@ -150,3 +150,45 @@ jobs:
           if [ -n "${KEYCHAIN_PATH:-}" ]; then
             security delete-keychain "$KEYCHAIN_PATH" || true
           fi
+
+  assign:
+    name: Add existing build to internal group Me
+    if: contains(github.event.head_commit.message, '[assign-only]')
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    env:
+      BUNDLE_ID: com.tradergoods.contractor
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write API key
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/private_keys"
+          KEY="$HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8"
+          BODY=$(printf '%s' "$APP_STORE_CONNECT_PRIVATE_KEY" | sed -e 's/-----[A-Z ]*-----//g' | tr -d ' \r\n\t')
+          { echo "-----BEGIN PRIVATE KEY-----"; echo "$BODY" | fold -w 64; echo "-----END PRIVATE KEY-----"; } > "$KEY"
+          chmod 600 "$KEY"
+          echo "KEY_PATH=$KEY" >> "$GITHUB_ENV"
+
+      - name: Add build 38 to internal group Me
+        env:
+          KID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISS: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          BUILD_NUMBER: "38"
+        run: python3 scripts/assign_testflight_group.py
+
+      - name: Revoke this run's distribution certificate
+        if: success()
+        env:
+          KID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISS: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          CERTIFICATE_ID: 3W9JNJ6XR9
+        run: python3 scripts/prepare_appstore_signing.py revoke
+
+      - name: Remove API key
+        if: always()
+        run: rm -rf "$HOME/private_keys"
