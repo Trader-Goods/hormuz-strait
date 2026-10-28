@@ -9,6 +9,7 @@ import json
 import os
 import secrets
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -159,11 +160,9 @@ def profile_certificate_ids(auth, profile_id):
 
 
 def revoke_one_distribution_certificate(auth):
-    """Replace only the certificate on the Spam Sweep CI profile.
+    """Replace only the certificate that belongs to Contractor CI.
 
-    Distribution certificates are named for the account, not the app, so a name
-    match cannot tell Spam Sweep apart from Live to Still. A certificate that is
-    also attached to another App Store profile is left alone.
+    A certificate also attached to Spam Sweep CI or Live to Still CI is left alone.
     """
     profiles = app_store_profiles(auth)
     own_ids = set()
@@ -456,16 +455,45 @@ def main():
     if not find_app(auth, identifier):
         raise SystemExit("app record was not found for " + identifier)
     bundle = bundle_id(auth, identifier)
-    certificate_id = choose_shared_certificate(auth)
+    certificate_id, p12_path, password, key_path, pem_path = distribution_certificate(auth, work)
     profile = app_store_profile(auth, bundle, certificate_id)
     name, uuid = install_profile(profile, work)
-    p12_path, password = load_shared_p12(work)
-    keychain = install_keychain(p12_path, password, work)
+    keychain = install_keychain(p12_path, password, work, key_path, pem_path)
     set_env("PROFILE_NAME", name)
     set_env("PROFILE_UUID", uuid)
     set_env("KEYCHAIN_PATH", keychain)
+    set_env("CERTIFICATE_ID", certificate_id)
     print("signing material ready")
 
 
+def revoke_run_certificate():
+    """Drop this run's certificate after the build is accepted.
+
+    Certificates used by Spam Sweep or Live to Still are not revoked.
+    """
+    certificate_id = (os.environ.get("CERTIFICATE_ID") or "").strip()
+    if not certificate_id:
+        print("no certificate id to revoke")
+        return
+    auth = token()
+    protected = set()
+    for item in app_store_profiles(auth):
+        name = (item.get("attributes") or {}).get("name") or ""
+        if name in SHARED_PROFILE_NAMES:
+            protected.update(profile_certificate_ids(auth, item["id"]))
+    if certificate_id in protected:
+        print("left the certificate in place because another app uses it")
+        return
+    try:
+        api("DELETE", "/v1/certificates/" + certificate_id, auth)
+    except SystemExit as error:
+        if getattr(error, "code", None) != 404:
+            raise
+    print("revoked this run's distribution certificate")
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "revoke":
+        revoke_run_certificate()
+    else:
+        main()

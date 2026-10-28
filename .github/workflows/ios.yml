@@ -15,12 +15,6 @@ jobs:
     env:
       TEAM_ID: 35734G7ZCQ
       BUNDLE_ID: com.tradergoods.contractor
-      DISTRIBUTION_P12: ${{ secrets.DISTRIBUTION_P12 }}
-      DISTRIBUTION_P12_PASSWORD: ${{ secrets.DISTRIBUTION_P12_PASSWORD }}
-      APPLE_DISTRIBUTION_P12: ${{ secrets.APPLE_DISTRIBUTION_P12 }}
-      APPLE_DISTRIBUTION_P12_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_P12_PASSWORD }}
-      IOS_DISTRIBUTION_P12: ${{ secrets.IOS_DISTRIBUTION_P12 }}
-      IOS_DISTRIBUTION_P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -141,6 +135,13 @@ jobs:
           ISS: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           BUILD_NUMBER: ${{ github.run_number }}
         run: python3 scripts/assign_testflight_group.py
+
+      - name: Revoke this run's distribution certificate
+        if: success()
+        env:
+          KID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISS: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: python3 scripts/prepare_appstore_signing.py revoke
 
       - name: Remove signing material
         if: always()
