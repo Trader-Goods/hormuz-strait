@@ -8,11 +8,10 @@ struct WelcomeView: View {
 
     var body: some View {
         NavigationStack {
+            VStack(spacing: 0) {
+            BrandHeader()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text("Contractor Pros")
-                        .font(.largeTitle.weight(.bold))
-                        .foregroundStyle(ink)
                     if let error = model.errorMessage {
                         Text(error).foregroundStyle(.red)
                     }
@@ -58,7 +57,9 @@ struct WelcomeView: View {
                 }
                 .padding(20)
             }
+            }
             .background(paper)
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $role) { selected in
                 SignUpView(role: selected, email: email, password: password)
             }

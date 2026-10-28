@@ -7,6 +7,14 @@ struct CustomerHome: View {
 
     var body: some View {
         NavigationStack {
+            VStack(spacing: 0) {
+            BrandHeader {
+                HStack(spacing: 16) {
+                    Button("Sign out") { Task { await model.signOut() } }
+                        .buttonStyle(.plain)
+                    NavigationLink("Post") { PostJobView() }
+                }
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Your jobs")
@@ -33,17 +41,10 @@ struct CustomerHome: View {
                 }
                 .padding(20)
             }
-            .background(paper)
-            .navigationTitle("Contractor Pros")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Sign out") { Task { await model.signOut() } }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink("Post") { PostJobView() }
-                }
-            }
             .refreshable { await model.reload() }
+            }
+            .background(paper)
+            .toolbar(.hidden, for: .navigationBar)
             .task { await model.reload() }
         }
     }

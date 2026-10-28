@@ -32,6 +32,11 @@ struct ProHome: View {
 
     var body: some View {
         NavigationStack {
+            VStack(spacing: 0) {
+            BrandHeader {
+                Button("Sign out") { Task { await model.signOut() } }
+                    .buttonStyle(.plain)
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     if !model.notices.isEmpty {
@@ -138,14 +143,10 @@ struct ProHome: View {
                 }
                 .padding(20)
             }
-            .background(paper)
-            .navigationTitle("Jobs")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Sign out") { Task { await model.signOut() } }
-                }
-            }
             .refreshable { await model.reload() }
+            }
+            .background(paper)
+            .toolbar(.hidden, for: .navigationBar)
             .task { await model.reload() }
             .task(id: showMap) {
                 guard showMap, section == 0 else { return }
