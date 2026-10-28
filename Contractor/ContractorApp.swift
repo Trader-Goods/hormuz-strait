@@ -78,9 +78,9 @@ struct RootView: View {
             if let session = model.session {
                 if session.phoneVerified {
                     if session.role == .customer {
-                        CustomerHome()
+                        CustomerShell()
                     } else {
-                        ProHome()
+                        ProShell()
                     }
                 } else {
                     VerifyPhoneView()
@@ -90,6 +90,28 @@ struct RootView: View {
             }
         }
         .background(paper)
+    }
+}
+
+struct CustomerShell: View {
+    var body: some View {
+        TabView {
+            CustomerHome()
+                .tabItem { Label("Jobs", systemImage: "list.bullet") }
+            NearbyPricesPage(readOnly: true)
+                .tabItem { Label("Map", systemImage: "map") }
+        }
+    }
+}
+
+struct ProShell: View {
+    var body: some View {
+        TabView {
+            ProHome()
+                .tabItem { Label("Jobs", systemImage: "list.bullet") }
+            NearbyPricesPage(readOnly: false)
+                .tabItem { Label("Map", systemImage: "map") }
+        }
     }
 }
 

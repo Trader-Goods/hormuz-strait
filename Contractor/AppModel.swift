@@ -9,6 +9,7 @@ struct PendingSignIn: Equatable {
 final class AppModel: ObservableObject {
     @Published var session: UserRecord?
     @Published var jobs: [JobRecord] = []
+    @Published var priceJobs: [JobRecord] = []
     @Published var quotes: [QuoteRecord] = []
     @Published var bookings: [BookingRecord] = []
     @Published var people: [UUID: UserRecord] = [:]
@@ -110,6 +111,7 @@ final class AppModel: ObservableObject {
         await api.signOut()
         session = nil
         jobs = []
+        priceJobs = []
         quotes = []
         bookings = []
     }
@@ -157,6 +159,13 @@ final class AppModel: ObservableObject {
                     } else {
                         self.jobs.append(job)
                     }
+                }
+            }
+            self.priceJobs = (try? await self.api.priceJobs()) ?? []
+            if self.showSampleJobs, let me = self.session, self.live {
+                let samples = SampleJobs.near(me).map { $0.publicPriceCopy() }
+                for sample in samples where !self.priceJobs.contains(where: { $0.id == sample.id }) {
+                    self.priceJobs.append(sample)
                 }
             }
             if self.showSampleJobs, let me = self.session, me.role == .pro, self.live {

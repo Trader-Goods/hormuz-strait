@@ -219,6 +219,11 @@ final class RulesTests: XCTestCase {
             XCTAssertTrue(sample.details.notes.hasPrefix("SAMPLE — not a real customer."))
             XCTAssertTrue(pro.reaches(sample))
         }
+        let price = samples[0].publicPriceCopy()
+        XCTAssertEqual(price.street, "")
+        XCTAssertEqual(price.details.notes, "")
+        XCTAssertEqual(price.photoNames, [])
+        XCTAssertEqual(price.customerID, UUID(uuidString: "00000000-0000-0000-0000-000000000000"))
         XCTAssertEqual(AppModel.describe(MarketplaceError.confirmEmail), "Check your email")
         XCTAssertEqual(AuthCallback.redirect, "contractorpros://auth-callback")
         let url = URL(string: "contractorpros://auth-callback#access_token=abc&refresh_token=def&type=signup")!

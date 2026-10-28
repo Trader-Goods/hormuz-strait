@@ -236,6 +236,16 @@ struct JobRecord: Codable, Equatable, Identifiable {
         return copy
     }
 
+    /// Nearby-price pin. No street, photos, notes, or customer id.
+    func publicPriceCopy() -> JobRecord {
+        var copy = listingCopy()
+        copy.customerID = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
+        copy.details = JobDetails(lawnSize: "", lotSize: "", rooms: 0, stairs: false, obstacles: "", notes: "")
+        copy.photoNames = []
+        copy.estimate = nil
+        return copy
+    }
+
     var coordinate: GeoPoint? {
         guard let latitude, let longitude else { return nil }
         return GeoPoint(latitude: latitude, longitude: longitude)

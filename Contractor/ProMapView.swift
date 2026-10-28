@@ -79,6 +79,8 @@ final class AreaLocator: NSObject, CLLocationManagerDelegate {
 struct ProJobMap: View {
     @EnvironmentObject private var model: AppModel
     var jobs: [JobRecord]
+    var readOnly = false
+    var expands = false
     @State private var position: MapCameraPosition = .automatic
     @State private var selectedID: UUID?
     @State private var origin: GeoPoint?
@@ -129,7 +131,7 @@ struct ProJobMap: View {
                     latitudeDelta = next
                 }
             }
-            .frame(height: 360)
+            .frame(maxWidth: .infinity, minHeight: expands ? 480 : 360, maxHeight: expands ? .infinity : 360)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             if locating {
@@ -138,7 +140,7 @@ struct ProJobMap: View {
                     .foregroundStyle(.secondary)
             }
             if let job = selectedJob {
-                JobPinCard(job: job, distance: distanceText(for: job))
+                JobPinCard(job: job, distance: distanceText(for: job), readOnly: readOnly)
             }
         }
         .task(id: jobs.map(\.id)) {
@@ -150,12 +152,12 @@ struct ProJobMap: View {
         let cell = max(latitudeDelta / 14, 0.01)
         var groups: [String: [JobRecord]] = [:]
         for job in jobs {
-            guard let point = job.mapCoordinate(exact: model.showsExactAddress(job)) else { continue }
+            guard let point = job.mapCoordinate(exact: readOnly ? false : model.showsExactAddress(job)) else { continue }
             let key = "\(Int((point.latitude / cell).rounded())):\(Int((point.longitude / cell).rounded()))"
             groups[key, default: []].append(job)
         }
         return groups.map { key, grouped in
-            let points = grouped.compactMap { $0.mapCoordinate(exact: model.showsExactAddress($0)) }
+            let points = grouped.compactMap { $0.mapCoordinate(exact: readOnly ? false : model.showsExactAddress($0)) }
             let latitude = points.map(\.latitude).reduce(0, +) / Double(max(points.count, 1))
             let longitude = points.map(\.longitude).reduce(0, +) / Double(max(points.count, 1))
             let label: String
@@ -181,11 +183,15 @@ struct ProJobMap: View {
         var center = model.session?.coordinate
         if center == nil, let device = await AreaLocator.shared.point() {
             center = device
-            await model.rememberProLocation(latitude: device.latitude, longitude: device.longitude)
+            if !readOnly {
+                await model.rememberProLocation(latitude: device.latitude, longitude: device.longitude)
+            }
         }
         if center == nil, let zip = model.session?.zip, let zipPoint = await SiteGeocoder.locate(zip: zip) {
             center = zipPoint
-            await model.rememberProLocation(latitude: zipPoint.latitude, longitude: zipPoint.longitude)
+            if !readOnly {
+                await model.rememberProLocation(latitude: zipPoint.latitude, longitude: zipPoint.longitude)
+            }
         }
         origin = center ?? model.session?.coordinate
         if let origin {
@@ -197,7 +203,7 @@ struct ProJobMap: View {
                 span: MKCoordinateSpan(latitudeDelta: latitudeDelta, longitudeDelta: longitudeDelta)
             ))
         }
-        for job in jobs where (job.latitude == nil || job.longitude == nil) && !job.street.isEmpty {
+        for job in jobs where !readOnly && (job.latitude == nil || job.longitude == nil) && !job.street.isEmpty {
             if let point = await SiteGeocoder.locate(street: job.street, city: job.city, state: job.state, zip: job.zip) {
                 await model.rememberJobLocation(id: job.id, latitude: point.latitude, longitude: point.longitude)
             }
@@ -218,42 +224,105 @@ private struct JobPinCard: View {
     @EnvironmentObject private var model: AppModel
     var job: JobRecord
     var distance: String
+    var readOnly: Bool
 
     var body: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
-                Label(job.category.title, systemImage: job.category.symbol)
+                Label(job.serviceTitle, systemImage: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(job.category == .lawn ? pine : clay)
+                    .foregroundStyle(job.category == .moving ? clay : pine)
                 if SampleJobs.contains(job.id) {
                     Text("Sample — not a real customer").font(.caption.weight(.semibold)).foregroundStyle(clay)
                 }
-                Text(job.place(exact: model.showsExactAddress(job)))
+                Text(Money.string(cents: job.offeredPriceCents)).font(.title3.weight(.semibold))
+                Text(job.place(exact: readOnly ? false : model.showsExactAddress(job)))
                     .font(.headline)
                     .foregroundStyle(ink)
-                Text(job.details.summary(for: job.category))
+                if !readOnly {
+                    Text(job.details.summary(for: job.category))
+                }
                 Text("\(DayStamp.display(job.scheduledOn)) · \(distance)")
                     .foregroundStyle(.secondary)
+                if !job.status.isListed {
+                    Text(job.status == .completed || job.status == .approved ? "Completed price" : "Accepted price")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
                 if job.estimatedMinutes > 0 {
                     Text("About \(job.estimatedMinutes) minutes").font(.footnote).foregroundStyle(.secondary)
                 }
-                if let estimate = job.estimate {
+                if !readOnly, let estimate = job.estimate {
                     Text(estimate.explanation).font(.footnote)
                 }
-                if model.session?.canTakeJobs == true && job.status.isListed && !SampleJobs.contains(job.id) {
+                if !readOnly && model.session?.canTakeJobs == true && job.status.isListed && !SampleJobs.contains(job.id) {
                     Button("Accept \(Money.compact(cents: job.offeredPriceCents))") {
                         Task { _ = await model.acceptListing(jobID: job.id) }
                     }
                     .buttonStyle(.borderedProminent)
+                    NavigationLink {
+                        ProJobView(jobID: job.id)
+                    } label: {
+                        Text("View and quote")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
                 }
-                NavigationLink {
-                    ProJobView(jobID: job.id)
-                } label: {
-                    Text("View and quote")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
             }
         }
+    }
+}
+
+struct NearbyPricesPage: View {
+    @EnvironmentObject private var model: AppModel
+    var readOnly: Bool
+    var showsBrandHeader = true
+    @State private var typeFilter = "All"
+    @State private var includeAccepted = true
+
+    private var jobs: [JobRecord] {
+        let source: [JobRecord]
+        if readOnly {
+            source = model.priceJobs
+        } else if let me = model.session {
+            source = model.jobs.filter { $0.status.isListed && me.reaches($0) && $0.offeredPriceCents > 0 }
+        } else {
+            source = []
+        }
+        return source.filter { job in
+            if typeFilter != "All" && job.serviceType != typeFilter { return false }
+            if readOnly && !includeAccepted && !job.status.isListed { return false }
+            return true
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if showsBrandHeader {
+                BrandHeader()
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                Menu(typeFilter == "All" ? "All services" : (ServiceCatalog.find(typeFilter)?.title ?? "Service")) {
+                    Button("All services") { typeFilter = "All" }
+                    ForEach(ServiceCatalog.active) { service in
+                        Button(service.title) { typeFilter = service.id }
+                    }
+                }
+                if readOnly {
+                    Toggle("Accepted prices", isOn: $includeAccepted)
+                        .font(.subheadline)
+                }
+                if jobs.isEmpty {
+                    Text("No prices on the map yet.")
+                        .foregroundStyle(.secondary)
+                }
+                ProJobMap(jobs: jobs, readOnly: readOnly, expands: true)
+            }
+            .padding(showsBrandHeader ? 16 : 0)
+        }
+        .background(paper)
+        .navigationTitle(showsBrandHeader ? "" : "Nearby prices")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await model.reload() }
     }
 }

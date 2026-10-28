@@ -171,6 +171,9 @@ struct PostJobView: View {
                     .buttonStyle(.bordered)
                 if let result {
                     EstimateCard(result: result, offered: $offered)
+                    NavigationLink("See nearby prices") {
+                        NearbyPricesPage(readOnly: true, showsBrandHeader: false)
+                    }
                 }
                 Toggle("Allow more than one contractor", isOn: $allowsMultiple)
                 if let error = model.errorMessage {

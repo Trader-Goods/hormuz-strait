@@ -62,6 +62,7 @@ protocol ContractorAPI: AnyObject {
     func refresh(_ user: UserRecord) async throws -> UserRecord
     func customerJobs() async throws -> [JobRecord]
     func openJobs() async throws -> [JobRecord]
+    func priceJobs() async throws -> [JobRecord]
     func quotes(for jobID: UUID) async throws -> [QuoteRecord]
     func myQuotes() async throws -> [QuoteRecord]
     func bookings() async throws -> [BookingRecord]
@@ -214,6 +215,13 @@ final class MockBackend: ContractorAPI {
     func openJobs() async throws -> [JobRecord] {
         guard let sessionID, let pro = book.user(sessionID) else { return [] }
         return book.openJobs(for: pro)
+    }
+
+    func priceJobs() async throws -> [JobRecord] {
+        book.jobs.filter { job in
+            job.offeredPriceCents > 0 && (job.status.isListed || job.status == .booked || job.status == .completed || job.status == .approved)
+        }
+        .map { $0.publicPriceCopy() }
     }
 
     func quotes(for jobID: UUID) async throws -> [QuoteRecord] {
@@ -492,6 +500,31 @@ final class SupabaseBackend: ContractorAPI {
         }
     }
 
+    func priceJobs() async throws -> [JobRecord] {
+        let rows: [PricePinDTO] = try await get("/rest/v1/price_board?select=*&order=created_at.desc")
+        return rows.map { pin in
+            JobRecord(
+                id: pin.id,
+                customerID: UUID(uuidString: "00000000-0000-0000-0000-000000000000")!,
+                category: pin.category,
+                street: "",
+                city: pin.city,
+                state: pin.state,
+                zip: pin.zip,
+                latitude: pin.latitude,
+                longitude: pin.longitude,
+                scheduledOn: pin.scheduledOn,
+                details: .empty,
+                status: pin.status,
+                photoNames: [],
+                createdAt: pin.createdAt,
+                serviceType: pin.serviceType,
+                offeredPriceCents: pin.offeredPriceCents,
+                estimatedMinutes: pin.estimatedMinutes
+            )
+        }
+    }
+
     func quotes(for jobID: UUID) async throws -> [QuoteRecord] {
         try await get("/rest/v1/quotes?job_id=eq.\(jobID.uuidString)&select=*")
     }
@@ -707,6 +740,22 @@ final class SupabaseBackend: ContractorAPI {
         if let row = rows.first { return row }
         let board: [JobRecord] = try await get("/rest/v1/job_board?id=eq.\(id.uuidString)&select=*")
         return board.first
+    }
+
+    private struct PricePinDTO: Decodable {
+        var id: UUID
+        var category: ServiceCategory
+        var serviceType: String
+        var city: String
+        var state: String
+        var zip: String
+        var latitude: Double?
+        var longitude: Double?
+        var offeredPriceCents: Int
+        var estimatedMinutes: Int
+        var status: JobStatus
+        var scheduledOn: String
+        var createdAt: Date
     }
 
     private struct ProfileDTO: Decodable {

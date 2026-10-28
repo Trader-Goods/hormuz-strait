@@ -3,7 +3,6 @@ import SwiftUI
 struct ProHome: View {
     @EnvironmentObject private var model: AppModel
     @State private var section = 0
-    @State private var showMap = true
     @State private var typeFilter = "All"
     @State private var maxDollars = 500
     @State private var maxMiles = 40.0
@@ -84,26 +83,17 @@ struct ProHome: View {
                                 Button(DayStamp.display(day)) { dateFilter = day }
                             }
                         }
-                        Picker("Layout", selection: $showMap) {
-                            Text("Map").tag(true)
-                            Text("List").tag(false)
-                        }
-                        .pickerStyle(.segmented)
                         if openJobs.isEmpty {
                             Text("No open jobs.")
                                 .foregroundStyle(.secondary)
                         }
-                        if showMap {
-                            ProJobMap(jobs: openJobs)
-                        } else {
-                            ForEach(openJobs) { job in
-                                NavigationLink {
-                                    ProJobView(jobID: job.id)
-                                } label: {
-                                    JobCard(job: job, quoteCount: model.quotes(for: job.id).count, exact: model.showsExactAddress(job))
-                                }
-                                .buttonStyle(.plain)
+                        ForEach(openJobs) { job in
+                            NavigationLink {
+                                ProJobView(jobID: job.id)
+                            } label: {
+                                JobCard(job: job, quoteCount: model.quotes(for: job.id).count, exact: model.showsExactAddress(job))
                             }
+                            .buttonStyle(.plain)
                         }
                     } else if section == 1 {
                         ForEach(mine) { quote in
@@ -148,13 +138,6 @@ struct ProHome: View {
             .background(paper)
             .toolbar(.hidden, for: .navigationBar)
             .task { await model.reload() }
-            .task(id: showMap) {
-                guard showMap, section == 0 else { return }
-                while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 20_000_000_000)
-                    await model.reloadQuietly()
-                }
-            }
         }
     }
 }
