@@ -194,6 +194,68 @@ def revoke_one_distribution_certificate(auth):
         raise SystemExit("certificate limit reached; other apps' certificates were left in place")
 
 
+SHARED_PROFILE_NAMES = ("Spam Sweep CI", "Live to Still CI")
+
+
+def choose_shared_certificate(auth):
+    """Use the distribution certificate already attached to the other apps.
+
+    Does not create or revoke a certificate.
+    """
+    profiles = app_store_profiles(auth)
+    used = []
+    for item in profiles:
+        name = (item.get("attributes") or {}).get("name") or ""
+        if name not in SHARED_PROFILE_NAMES:
+            continue
+        ids = profile_certificate_ids(auth, item["id"])
+        print(f"profile {name} has an existing distribution certificate")
+        used.extend(ids)
+    known = list_distribution_certificates(auth)
+    by_id = {item["id"]: item for item in known}
+    if not used:
+        used = list(by_id)
+        print("using an existing account distribution certificate")
+    if not used:
+        raise SystemExit("no existing distribution certificate to reuse")
+    def expiry(certificate_id):
+        attributes = (by_id.get(certificate_id) or {}).get("attributes") or {}
+        return attributes.get("expirationDate") or ""
+    chosen = sorted(set(used), key=expiry, reverse=True)[0]
+    attributes = (by_id.get(chosen) or {}).get("attributes") or {}
+    print("reusing existing distribution certificate")
+    print(attributes.get("displayName") or attributes.get("name") or "distribution")
+    print(attributes.get("expirationDate") or "")
+    return chosen
+
+
+def load_shared_p12(work):
+    encoded = ""
+    password = ""
+    for name, pass_name in (
+        ("DISTRIBUTION_P12", "DISTRIBUTION_P12_PASSWORD"),
+        ("APPLE_DISTRIBUTION_P12", "APPLE_DISTRIBUTION_P12_PASSWORD"),
+        ("IOS_DISTRIBUTION_P12", "IOS_DISTRIBUTION_P12_PASSWORD"),
+    ):
+        raw = (os.environ.get(name) or "").strip()
+        if raw:
+            encoded = raw
+            password = os.environ.get(pass_name) or ""
+            break
+    if not encoded:
+        raise SystemExit("missing DISTRIBUTION_P12 for the existing distribution certificate")
+    try:
+        blob = base64.b64decode(encoded)
+    except Exception:
+        raise SystemExit("DISTRIBUTION_P12 is not valid base64")
+    path = os.path.join(work, "dist.p12")
+    with open(path, "wb") as handle:
+        handle.write(blob)
+    os.chmod(path, 0o600)
+    print("existing distribution p12 loaded")
+    return path, password
+
+
 def distribution_certificate(auth, work, replaced=False):
     key_path = os.path.join(work, "dist.key")
     csr_path = os.path.join(work, "dist.csr")
@@ -283,19 +345,19 @@ def import_identity(p12_path, password, keychain):
     )
 
 
-def install_keychain(p12_path, password, work, key_path, pem_path):
+def install_keychain(p12_path, password, work, key_path=None, pem_path=None):
     keychain = os.path.join(work, "build.keychain-db")
     quiet(["security", "create-keychain", "-p", password, keychain])
     quiet(["security", "set-keychain-settings", "-lut", "21600", keychain])
     quiet(["security", "unlock-keychain", "-p", password, keychain])
     imported = import_identity(p12_path, password, keychain)
-    if imported.returncode != 0:
+    if imported.returncode != 0 and key_path and pem_path:
         print("retrying certificate import")
         export_p12(key_path, pem_path, p12_path, password, legacy=True)
         imported = import_identity(p12_path, password, keychain)
-        if imported.returncode != 0:
-            print("certificate import failed")
-            raise SystemExit(1)
+    if imported.returncode != 0:
+        print("certificate import failed")
+        raise SystemExit(1)
     quiet(["security", "set-key-partition-list", "-S", "apple-tool:,apple:,codesign:", "-s", "-k", password, keychain])
     existing = subprocess.check_output(["security", "list-keychains", "-d", "user"], text=True)
     paths = [line.strip().strip('"') for line in existing.splitlines() if line.strip()]
@@ -308,6 +370,29 @@ def install_keychain(p12_path, password, work, key_path, pem_path):
         raise SystemExit(1)
     print("distribution identity installed")
     return keychain
+
+
+def find_app(auth, identifier):
+    query = urllib.parse.urlencode({"filter[bundleId]": identifier, "limit": 5})
+    found = api("GET", "/v1/apps?" + query, auth).get("data", [])
+    for item in found:
+        if item.get("attributes", {}).get("bundleId") == identifier:
+            return item["id"]
+    return None
+
+
+def wait_for_app(identifier):
+    deadline = time.time() + 2 * 60 * 60
+    while True:
+        app = find_app(token(), identifier)
+        if app:
+            print("app record found")
+            return app
+        remaining = int(deadline - time.time())
+        if remaining <= 0:
+            raise SystemExit("app record did not appear within 2 hours")
+        print(f"waiting for the App Store app record, {remaining} seconds left")
+        time.sleep(180)
 
 
 def ensure_app(auth, bundle_resource, identifier):
@@ -367,13 +452,15 @@ def main():
     work = os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"), "signing")
     os.makedirs(work, exist_ok=True)
     os.chmod(work, 0o700)
+    p12_path, password = load_shared_p12(work)
+    identifier = os.environ["BUNDLE_ID"]
+    wait_for_app(identifier)
     auth = token()
-    bundle = bundle_id(auth, os.environ["BUNDLE_ID"])
-    ensure_app(auth, bundle, os.environ["BUNDLE_ID"])
-    certificate_id, p12_path, password, key_path, pem_path = distribution_certificate(auth, work)
+    bundle = bundle_id(auth, identifier)
+    certificate_id = choose_shared_certificate(auth)
     profile = app_store_profile(auth, bundle, certificate_id)
     name, uuid = install_profile(profile, work)
-    keychain = install_keychain(p12_path, password, work, key_path, pem_path)
+    keychain = install_keychain(p12_path, password, work)
     set_env("PROFILE_NAME", name)
     set_env("PROFILE_UUID", uuid)
     set_env("KEYCHAIN_PATH", keychain)

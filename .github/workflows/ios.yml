@@ -11,9 +11,16 @@ jobs:
     name: Build, sign and upload to TestFlight
     if: ${{ !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[assign-only]') }}
     runs-on: macos-15-intel
+    timeout-minutes: 170
     env:
       TEAM_ID: 35734G7ZCQ
       BUNDLE_ID: com.tradergoods.contractor
+      DISTRIBUTION_P12: ${{ secrets.DISTRIBUTION_P12 }}
+      DISTRIBUTION_P12_PASSWORD: ${{ secrets.DISTRIBUTION_P12_PASSWORD }}
+      APPLE_DISTRIBUTION_P12: ${{ secrets.APPLE_DISTRIBUTION_P12 }}
+      APPLE_DISTRIBUTION_P12_PASSWORD: ${{ secrets.APPLE_DISTRIBUTION_P12_PASSWORD }}
+      IOS_DISTRIBUTION_P12: ${{ secrets.IOS_DISTRIBUTION_P12 }}
+      IOS_DISTRIBUTION_P12_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_P12_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
