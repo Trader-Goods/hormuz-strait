@@ -1,0 +1,399 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA1000000000000000000021 /* ContractorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000011 /* ContractorApp.swift */; };
+		AA1000000000000000000022 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000012 /* Models.swift */; };
+		AA1000000000000000000023 /* Marketplace.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000013 /* Marketplace.swift */; };
+		AA1000000000000000000024 /* Backend.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000014 /* Backend.swift */; };
+		AA1000000000000000000025 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000015 /* AppModel.swift */; };
+		AA1000000000000000000026 /* WelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000016 /* WelcomeView.swift */; };
+		AA1000000000000000000027 /* CustomerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000017 /* CustomerViews.swift */; };
+		AA1000000000000000000028 /* ProViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000018 /* ProViews.swift */; };
+		AA1000000000000000000029 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000019 /* ChatView.swift */; };
+		AA100000000000000000002A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000001A /* Assets.xcassets */; };
+		AA100000000000000000002B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000001B /* PrivacyInfo.xcprivacy */; };
+		BB2000000000000000000021 /* RulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2000000000000000000011 /* RulesTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		AA1000000000000000000011 /* ContractorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContractorApp.swift; sourceTree = "<group>"; };
+		AA1000000000000000000012 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		AA1000000000000000000013 /* Marketplace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Marketplace.swift; sourceTree = "<group>"; };
+		AA1000000000000000000014 /* Backend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Backend.swift; sourceTree = "<group>"; };
+		AA1000000000000000000015 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		AA1000000000000000000016 /* WelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		AA1000000000000000000017 /* CustomerViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CustomerViews.swift; sourceTree = "<group>"; };
+		AA1000000000000000000018 /* ProViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProViews.swift; sourceTree = "<group>"; };
+		AA1000000000000000000019 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		AA100000000000000000001A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AA100000000000000000001C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		AA100000000000000000001B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		AA1000000000000000000009 /* Contractor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Contractor.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB2000000000000000000011 /* RulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RulesTests.swift; sourceTree = "<group>"; };
+		BB2000000000000000000009 /* ContractorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ContractorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AA1000000000000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB2000000000000000000004 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AA1000000000000000000006 = {
+			isa = PBXGroup;
+			children = (
+				AA1000000000000000000007 /* Contractor */,
+				BB2000000000000000000007 /* ContractorTests */,
+				AA1000000000000000000008 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AA1000000000000000000007 /* Contractor */ = {
+			isa = PBXGroup;
+			children = (
+				AA1000000000000000000011 /* ContractorApp.swift */,
+				AA1000000000000000000012 /* Models.swift */,
+				AA1000000000000000000013 /* Marketplace.swift */,
+				AA1000000000000000000014 /* Backend.swift */,
+				AA1000000000000000000015 /* AppModel.swift */,
+				AA1000000000000000000016 /* WelcomeView.swift */,
+				AA1000000000000000000017 /* CustomerViews.swift */,
+				AA1000000000000000000018 /* ProViews.swift */,
+				AA1000000000000000000019 /* ChatView.swift */,
+				AA100000000000000000001A /* Assets.xcassets */,
+				AA100000000000000000001C /* Info.plist */,
+				AA100000000000000000001B /* PrivacyInfo.xcprivacy */,
+			);
+			path = Contractor;
+			sourceTree = "<group>";
+		};
+		BB2000000000000000000007 /* ContractorTests */ = {
+			isa = PBXGroup;
+			children = (
+				BB2000000000000000000011 /* RulesTests.swift */,
+			);
+			path = ContractorTests;
+			sourceTree = "<group>";
+		};
+		AA1000000000000000000008 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AA1000000000000000000009 /* Contractor.app */,
+				BB2000000000000000000009 /* ContractorTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AA1000000000000000000001 /* Contractor */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA1000000000000000000036 /* Build configuration list for PBXNativeTarget "Contractor" */;
+			buildPhases = (
+				AA1000000000000000000003 /* Sources */,
+				AA1000000000000000000004 /* Frameworks */,
+				AA1000000000000000000005 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Contractor;
+			productName = Contractor;
+			productReference = AA1000000000000000000009 /* Contractor.app */;
+			productType = "com.apple.product-type.application";
+		};
+		BB2000000000000000000001 /* ContractorTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB2000000000000000000036 /* Build configuration list for PBXNativeTarget "ContractorTests" */;
+			buildPhases = (
+				BB2000000000000000000003 /* Sources */,
+				BB2000000000000000000004 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				BB200000000000000000000B /* PBXTargetDependency */,
+			);
+			name = ContractorTests;
+			productName = ContractorTests;
+			productReference = BB2000000000000000000009 /* ContractorTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AA1000000000000000000002 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				ORGANIZATIONNAME = "Trader Goods";
+				TargetAttributes = {
+					AA1000000000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = AA1000000000000000000035 /* Build configuration list for PBXProject "Contractor" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AA1000000000000000000006;
+			productRefGroup = AA1000000000000000000008 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AA1000000000000000000001 /* Contractor */,
+				BB2000000000000000000001 /* ContractorTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXContainerItemProxy section */
+		BB200000000000000000000A /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA1000000000000000000002 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA1000000000000000000001;
+			remoteInfo = Contractor;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		BB200000000000000000000B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA1000000000000000000001 /* Contractor */;
+			targetProxy = BB200000000000000000000A /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AA1000000000000000000005 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA100000000000000000002A /* Assets.xcassets in Resources */,
+				AA100000000000000000002B /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AA1000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA1000000000000000000021 /* ContractorApp.swift in Sources */,
+				AA1000000000000000000022 /* Models.swift in Sources */,
+				AA1000000000000000000023 /* Marketplace.swift in Sources */,
+				AA1000000000000000000024 /* Backend.swift in Sources */,
+				AA1000000000000000000025 /* AppModel.swift in Sources */,
+				AA1000000000000000000026 /* WelcomeView.swift in Sources */,
+				AA1000000000000000000027 /* CustomerViews.swift in Sources */,
+				AA1000000000000000000028 /* ProViews.swift in Sources */,
+				AA1000000000000000000029 /* ChatView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BB2000000000000000000003 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB2000000000000000000021 /* RulesTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		AA1000000000000000000031 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AA1000000000000000000032 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		AA1000000000000000000033 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 35734G7ZCQ;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Contractor/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tradergoods.contractor;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		AA1000000000000000000034 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Apple Distribution";
+				CODE_SIGN_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 35734G7ZCQ;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Contractor/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tradergoods.contractor;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "Contractor CI";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		BB2000000000000000000033 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 35734G7ZCQ;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tradergoods.contractor.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Contractor.app/Contractor";
+			};
+			name = Debug;
+		};
+		BB2000000000000000000034 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 35734G7ZCQ;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tradergoods.contractor.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Contractor.app/Contractor";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AA1000000000000000000035 /* Build configuration list for PBXProject "Contractor" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA1000000000000000000031 /* Debug */,
+				AA1000000000000000000032 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA1000000000000000000036 /* Build configuration list for PBXNativeTarget "Contractor" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA1000000000000000000033 /* Debug */,
+				AA1000000000000000000034 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BB2000000000000000000036 /* Build configuration list for PBXNativeTarget "ContractorTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB2000000000000000000033 /* Debug */,
+				BB2000000000000000000034 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = AA1000000000000000000002 /* Project object */;
+}
