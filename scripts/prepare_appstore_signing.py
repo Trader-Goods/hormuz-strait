@@ -457,16 +457,10 @@ def main():
         raise SystemExit("app record was not found for " + identifier)
     bundle = bundle_id(auth, identifier)
     certificate_id = choose_shared_certificate(auth)
-    try:
-        p12_path, password = load_shared_p12(work)
-        key_path = None
-        pem_path = None
-    except SystemExit:
-        print("no stored p12; signing the same way as the other apps")
-        certificate_id, p12_path, password, key_path, pem_path = distribution_certificate(auth, work)
     profile = app_store_profile(auth, bundle, certificate_id)
     name, uuid = install_profile(profile, work)
-    keychain = install_keychain(p12_path, password, work, key_path, pem_path)
+    p12_path, password = load_shared_p12(work)
+    keychain = install_keychain(p12_path, password, work)
     set_env("PROFILE_NAME", name)
     set_env("PROFILE_UUID", uuid)
     set_env("KEYCHAIN_PATH", keychain)
