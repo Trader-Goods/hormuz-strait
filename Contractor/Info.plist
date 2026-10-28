@@ -6,6 +6,8 @@
 	<string>Contractor Pros</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>NSCameraUsageDescription</key>
+	<string>Contractor Pros uses the camera so you can photograph the yard or the move.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Contractor Pros uses your location to center the job map on your service area.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

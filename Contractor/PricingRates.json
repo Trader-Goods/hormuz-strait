@@ -1,0 +1,19 @@
+{
+  "disclaimer": "Default regional rates are editable configuration. They are not a survey of local prices, and photos are not used to measure the job.",
+  "regions": [
+    {
+      "id": "default",
+      "name": "US default",
+      "zipPrefixes": [],
+      "services": {
+        "mowing": {"smallCents": 5500, "mediumCents": 8500, "largeCents": 13000, "smallMinutes": 45, "mediumMinutes": 60, "largeMinutes": 90, "obstacleCents": 1500, "obstacleMinutes": 15},
+        "edging": {"smallCents": 3500, "mediumCents": 5000, "largeCents": 7500, "smallMinutes": 30, "mediumMinutes": 40, "largeMinutes": 55, "obstacleCents": 1000, "obstacleMinutes": 10},
+        "trimming": {"smallCents": 4500, "mediumCents": 7000, "largeCents": 11000, "smallMinutes": 40, "mediumMinutes": 55, "largeMinutes": 80, "obstacleCents": 2000, "obstacleMinutes": 20},
+        "leafCleanup": {"smallCents": 6000, "mediumCents": 9500, "largeCents": 15000, "smallMinutes": 50, "mediumMinutes": 75, "largeMinutes": 110, "obstacleCents": 2000, "obstacleMinutes": 20},
+        "landscaping": {"smallCents": 12000, "mediumCents": 20000, "largeCents": 35000, "smallMinutes": 90, "mediumMinutes": 150, "largeMinutes": 240, "obstacleCents": 4000, "obstacleMinutes": 30},
+        "yardOther": {"smallCents": 5000, "mediumCents": 8000, "largeCents": 12000, "smallMinutes": 45, "mediumMinutes": 60, "largeMinutes": 90, "obstacleCents": 1500, "obstacleMinutes": 15},
+        "moving": {"smallCents": 18000, "mediumCents": 32000, "largeCents": 48000, "smallMinutes": 120, "mediumMinutes": 210, "largeMinutes": 300, "obstacleCents": 5000, "obstacleMinutes": 30}
+      }
+    }
+  ]
+}

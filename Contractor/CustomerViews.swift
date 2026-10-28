@@ -1,5 +1,6 @@
 import PhotosUI
 import SwiftUI
+import UIKit
 
 struct CustomerHome: View {
     @EnvironmentObject private var model: AppModel
@@ -11,8 +12,11 @@ struct CustomerHome: View {
                     DemoBanner()
                     Text("Your jobs")
                         .font(.title2.weight(.semibold))
+                    if !model.notices.isEmpty {
+                        NoticeList()
+                    }
                     if model.jobs.isEmpty {
-                        Text("Post a lawn or moving job. Up to 3 local pros can quote, for free.")
+                        Text("Post a yard or moving job with a price. One contractor can accept it, unless you allow more than one.")
                             .foregroundStyle(.secondary)
                     }
                     ForEach(model.jobs) { job in
@@ -55,9 +59,9 @@ struct JobCard: View {
         Card {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Label(job.category.title, systemImage: job.category.symbol)
+                    Label(job.serviceTitle, systemImage: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(job.category == .lawn ? pine : clay)
+                        .foregroundStyle(job.category == .moving ? clay : pine)
                     Spacer()
                     Text(job.status.title)
                         .font(.caption.weight(.semibold))
@@ -69,7 +73,11 @@ struct JobCard: View {
                 Text("\(DayStamp.display(job.scheduledOn)) · \(job.details.summary(for: job.category))")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Text(quoteCount == 0 ? "No quotes yet" : "\(quoteCount) of 3 quotes")
+                if job.offeredPriceCents > 0 {
+                    Text("Offered \(Money.string(cents: job.offeredPriceCents))")
+                        .font(.subheadline.weight(.semibold))
+                }
+                Text(quoteCount == 0 ? "No offers yet" : "\(quoteCount) offer\(quoteCount == 1 ? "" : "s")")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -80,54 +88,73 @@ struct JobCard: View {
 struct PostJobView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
-    @State private var category = ServiceCategory.lawn
+    @State private var serviceType = "mowing"
     @State private var street = ""
     @State private var city = ""
     @State private var state = ""
     @State private var zip = ""
     @State private var date = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
-    @State private var lawnSize = "Medium"
+    @State private var lawnSize = "Unknown"
+    @State private var lotSize = ""
     @State private var rooms = 2
     @State private var stairs = false
+    @State private var obstacles = ""
     @State private var notes = ""
     @State private var picker: [PhotosPickerItem] = []
     @State private var photos: [Data] = []
+    @State private var showCamera = false
+    @State private var cameraImage: UIImage?
+    @State private var result: PricingResult?
+    @State private var offered = ""
+    @State private var allowsMultiple = false
+
+    private var service: ServiceType? { ServiceCatalog.find(serviceType) }
+    private var addressReady: Bool { USAddress.isComplete(street: street, city: city, state: state, zip: zip) }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Picker("Category", selection: $category) {
-                    ForEach(ServiceCategory.allCases) { item in
-                        Text(item.title).tag(item)
+                Text("The street stays private until a contractor is booked and the payment is authorized.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Picker("Service", selection: $serviceType) {
+                    ForEach(ServiceCatalog.active) { item in
+                        Text(item.title).tag(item.id)
                     }
                 }
-                .pickerStyle(.segmented)
                 TextField("Street address", text: $street)
                 TextField("City", text: $city)
                 TextField("State", text: $state)
                     .textInputAutocapitalization(.characters)
                 TextField("ZIP code", text: $zip)
                     .keyboardType(.numberPad)
-                if !USAddress.isComplete(street: street, city: city, state: state, zip: zip),
-                   !street.isEmpty || !city.isEmpty || !state.isEmpty || !zip.isEmpty {
+                if !addressReady, !street.isEmpty || !city.isEmpty || !state.isEmpty || !zip.isEmpty {
                     Text(USAddress.incompleteMessage).font(.footnote).foregroundStyle(.red)
                 }
-                DatePicker("Date", selection: $date, displayedComponents: .date)
-                if category == .lawn {
-                    Picker("Lawn size", selection: $lawnSize) {
+                DatePicker("Preferred date", selection: $date, displayedComponents: .date)
+                if service?.category == .moving {
+                    Stepper("Rooms: \(rooms)", value: $rooms, in: 1...8)
+                    Toggle("Stairs", isOn: $stairs)
+                } else {
+                    Picker("Yard size", selection: $lawnSize) {
+                        Text("Unknown").tag("Unknown")
                         Text("Small").tag("Small")
                         Text("Medium").tag("Medium")
                         Text("Large").tag("Large")
                     }
                     .pickerStyle(.segmented)
-                } else {
-                    Stepper("Rooms: \(rooms)", value: $rooms, in: 1...8)
-                    Toggle("Stairs", isOn: $stairs)
+                    TextField("Lot size, if you know it", text: $lotSize)
                 }
-                TextField("Details", text: $notes, axis: .vertical)
+                TextField("Obstacles", text: $obstacles)
+                TextField("Instructions", text: $notes, axis: .vertical)
                     .lineLimit(3...6)
-                PhotosPicker(selection: $picker, maxSelectionCount: 4, matching: .images) {
-                    Label(photos.isEmpty ? "Add photos" : "\(photos.count) photos", systemImage: "photo")
+                HStack {
+                    PhotosPicker(selection: $picker, maxSelectionCount: 4, matching: .images) {
+                        Label(photos.isEmpty ? "Photo library" : "\(photos.count) photos", systemImage: "photo")
+                    }
+                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                        Button("Camera") { showCamera = true }
+                    }
                 }
                 .onChange(of: picker) { _, items in
                     Task {
@@ -140,33 +167,142 @@ struct PostJobView: View {
                         photos = loaded
                     }
                 }
+                Button("Estimate price") { Task { await estimate() } }
+                    .buttonStyle(.bordered)
+                if let result {
+                    EstimateCard(result: result, offered: $offered)
+                }
+                Toggle("Allow more than one contractor", isOn: $allowsMultiple)
+                Text("Listings stay up for 14 days. The estimate is not a guaranteed quote.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 if let error = model.errorMessage {
                     Text(error).foregroundStyle(.red)
                 }
-                Button(model.busy ? "Posting…" : "Post job") {
-                    let details = JobDetails(lawnSize: lawnSize, rooms: rooms, stairs: stairs, notes: notes)
-                    Task {
-                        let ok = await model.postJob(
-                            category: category,
-                            street: street,
-                            city: city,
-                            state: state,
-                            zip: zip,
-                            scheduledOn: DayStamp.string(from: date),
-                            details: details,
-                            photos: photos
-                        )
-                        if ok { dismiss() }
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(model.busy)
+                Button(model.busy ? "Saving…" : "Save draft") { Task { await save(publish: false) } }
+                    .buttonStyle(.bordered)
+                Button(model.busy ? "Publishing…" : "Publish offered price") { Task { await save(publish: true) } }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.busy || result?.suggestedCents == nil || !addressReady)
             }
             .padding(20)
         }
         .background(paper)
         .navigationTitle("New job")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showCamera) {
+            CameraPicker(image: $cameraImage)
+        }
+        .onChange(of: cameraImage) { _, image in
+            if let image, let data = image.jpegData(compressionQuality: 0.7) {
+                photos.append(data)
+            }
+        }
+    }
+
+    private func estimate() async {
+        let engine = PricingEngine()
+        let pricing = await engine.estimate(request)
+        result = pricing
+        if offered.isEmpty, let cents = pricing.suggestedCents {
+            offered = String(cents / 100)
+        }
+    }
+
+    private var request: PricingRequest {
+        PricingRequest(
+            serviceType: serviceType,
+            yardSize: lawnSize,
+            lotSize: lotSize,
+            rooms: rooms,
+            obstacles: stairs ? [obstacles, "Stairs"].filter { !$0.isEmpty }.joined(separator: ", ") : obstacles,
+            details: notes,
+            photoCount: photos.count,
+            zip: zip
+        )
+    }
+
+    private func save(publish: Bool) async {
+        let dollars = Decimal(string: offered.filter { $0.isNumber || $0 == "." }) ?? 0
+        let cents = NSDecimalNumber(decimal: dollars * 100).intValue
+        let details = JobDetails(lawnSize: lawnSize, lotSize: lotSize, rooms: rooms, stairs: stairs, obstacles: request.obstacles, notes: notes)
+        let savedEstimate = result.flatMap { $0.suggestedCents == nil ? nil : PriceEstimate($0) }
+        let ok = await model.postJob(
+            category: service?.category ?? .lawn,
+            street: street,
+            city: city,
+            state: state,
+            zip: zip,
+            scheduledOn: DayStamp.string(from: date),
+            details: details,
+            photos: photos,
+            offeredPriceCents: cents,
+            serviceType: serviceType,
+            estimate: savedEstimate,
+            allowsMultiple: allowsMultiple,
+            publish: publish
+        )
+        if ok { dismiss() }
+    }
+}
+
+struct EstimateCard: View {
+    var result: PricingResult
+    @Binding var offered: String
+
+    var body: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Estimate, not a guaranteed quote").font(.headline)
+                Text(result.explanation)
+                if !result.questions.isEmpty {
+                    ForEach(result.questions, id: \.self) { question in
+                        Text(question).foregroundStyle(.red)
+                    }
+                }
+                ForEach(result.assumptions, id: \.self) { line in
+                    Text(line).font(.footnote).foregroundStyle(.secondary)
+                }
+                Text(result.disclaimer).font(.footnote).foregroundStyle(.secondary)
+                if result.suggestedCents != nil {
+                    TextField("Your offered price", text: $offered)
+                        .keyboardType(.decimalPad)
+                    Text("You can change the suggested price before publishing.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+}
+
+struct CameraPicker: UIViewControllerRepresentable {
+    @Binding var image: UIImage?
+    @Environment(\.dismiss) private var dismiss
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: CameraPicker
+        init(_ parent: CameraPicker) { self.parent = parent }
+
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            parent.image = info[.originalImage] as? UIImage
+            parent.dismiss()
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
+        }
     }
 }
 
@@ -182,34 +318,45 @@ struct JobDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 if let job {
-                    Text(job.category.title).font(.subheadline.weight(.semibold)).foregroundStyle(pine)
+                    Text(job.serviceTitle).font(.subheadline.weight(.semibold)).foregroundStyle(job.category == .moving ? clay : pine)
                     Text(job.place(exact: true)).font(.title2.weight(.semibold))
+                    Text(job.status.title).font(.subheadline)
+                    if job.offeredPriceCents > 0 {
+                        Text("Offered \(Money.string(cents: job.offeredPriceCents))").font(.headline)
+                    }
                     Text("\(DayStamp.display(job.scheduledOn)) · \(job.details.summary(for: job.category))")
                         .foregroundStyle(.secondary)
+                    if let estimate = job.estimate {
+                        Text(estimate.explanation)
+                        Text(estimate.disclaimer).font(.footnote).foregroundStyle(.secondary)
+                        Text("About \(estimate.estimatedMinutes) minutes · \(estimate.difficulty)")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                     if !job.details.notes.isEmpty {
                         Text(job.details.notes)
                     }
-                    photoRow(job.photoNames)
-                    Text("Quotes").font(.headline)
+                    JobPhotos(names: job.photoNames)
+                    Text("Offers").font(.headline)
                     let rows = model.quotes(for: job.id)
-                    if rows.isEmpty {
-                        Text("Up to 3 pros can quote. You compare them here and book one.")
+                    if rows.isEmpty && job.status.isListed {
+                        Text("Waiting for a contractor to accept \(Money.string(cents: job.offeredPriceCents)) or send an offer.")
                             .foregroundStyle(.secondary)
                     }
                     ForEach(rows) { quote in
                         QuoteCard(quote: quote, job: job)
                     }
-                    if job.status == .booked {
+                    if job.status == .booked || job.status == .completed {
                         reviewBox
                     }
-                    if let booking = model.booking(for: job.id), job.status != .open {
+                    ForEach(model.bookings.filter { $0.jobID == job.id }) { booking in
                         Text(paymentLine(priceCents: booking.priceCents, percent: booking.feePercent))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
-                        Text("Paid in the app. Card charge is stubbed for this demo.")
+                        Text("Payment status: \(booking.charge.status). You are not charged while the status is authorized.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
-                        if job.category == .lawn || job.status == .completed || job.status == .booked {
+                        if job.category == .lawn {
                             bookAgain(booking)
                         }
                     }
@@ -227,7 +374,7 @@ struct JobDetailView: View {
 
     private func bookAgain(_ booking: BookingRecord) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Book again at \(FeeSchedule.launch.repeatPercent)%").font(.headline)
+            Text("Book again at \(FeeSchedule.launch.percent)%").font(.headline)
             Button("Book the same pro again") {
                 Task { _ = await model.bookAgain(bookingID: booking.id, scheduledOn: DayStamp.string(from: Date().addingTimeInterval(7 * 24 * 3600)), recurrence: "") }
             }
@@ -248,7 +395,10 @@ struct JobDetailView: View {
     private var reviewBox: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Rate the job").font(.headline)
+                Text("Review the contractor").font(.headline)
+                Text("This records a review for a booked job. It does not approve the work or start a payout.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
                 Stepper("Stars: \(rating)", value: $rating, in: 1...5)
                 TextField("How did it go?", text: $review, axis: .vertical)
                 Button("Submit review") {
@@ -261,24 +411,6 @@ struct JobDetailView: View {
         }
     }
 
-    @ViewBuilder
-    private func photoRow(_ names: [String]) -> some View {
-        if !names.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack {
-                    ForEach(names, id: \.self) { name in
-                        if let image = PhotoStore.image(name) {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 120, height: 90)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 struct QuoteCard: View {
@@ -312,8 +444,8 @@ struct QuoteCard: View {
                 Text(quote.status == .sent ? "Waiting" : quote.status.rawValue.capitalized)
                     .font(.caption)
                 HStack {
-                    if job.status == .open && quote.status == .sent {
-                        Button("Pay and book") {
+                    if job.status.isListed && quote.status == .sent {
+                        Button("Accept offer") {
                             Task { _ = await model.book(quoteID: quote.id) }
                         }
                         .buttonStyle(.borderedProminent)
@@ -328,6 +460,43 @@ struct QuoteCard: View {
         .task {
             if let person = await model.person(quote.proID) {
                 name = person.publicName
+            }
+        }
+    }
+}
+
+struct JobPhotos: View {
+    var names: [String]
+
+    var body: some View {
+        if !names.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack {
+                    ForEach(names, id: \.self) { name in
+                        if let image = PhotoStore.image(name) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 120, height: 90)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct NoticeList: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        ForEach(model.notices.prefix(3)) { notice in
+            Card {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(notice.title).font(.headline)
+                    Text(notice.body).font(.subheadline).foregroundStyle(.secondary)
+                }
             }
         }
     }

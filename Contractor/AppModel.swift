@@ -9,6 +9,7 @@ final class AppModel: ObservableObject {
     @Published var people: [UUID: UserRecord] = [:]
     @Published var errorMessage: String?
     @Published var busy = false
+    @Published var notices: [NoticeRecord] = []
 
     let live = BackendConfig.isLive
     private let api: any ContractorAPI
@@ -34,9 +35,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int) async {
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int, serviceTypes: [String]) async {
         await run {
-            self.session = try await self.api.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms, radiusMiles: radiusMiles)
+            self.session = try await self.api.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms, radiusMiles: radiusMiles, serviceTypes: serviceTypes)
             await self.reload()
         }
     }
@@ -44,6 +45,24 @@ final class AppModel: ObservableObject {
     func verifyPhone() async {
         await run {
             self.session = try await self.api.verifyPhone()
+        }
+    }
+
+    func verifyIdentity() async {
+        await run {
+            self.session = try await self.api.verifyIdentity()
+        }
+    }
+
+    func connectPayouts() async {
+        await run {
+            self.session = try await self.api.connectPayouts()
+        }
+    }
+
+    func updateServiceArea(serviceTypes: [String], radiusMiles: Int) async {
+        await run {
+            self.session = try await self.api.updateServiceArea(serviceTypes: serviceTypes, radiusMiles: radiusMiles)
         }
     }
 
@@ -57,7 +76,15 @@ final class AppModel: ObservableObject {
 
     func reload() async {
         guard session != nil else { return }
-        await run {
+        await run { try await self.load() }
+    }
+
+    func reloadQuietly() async {
+        guard session != nil else { return }
+        try? await load()
+    }
+
+    private func load() async throws {
             if self.session?.role == .customer {
                 self.jobs = try await self.api.customerJobs()
             } else {
@@ -82,17 +109,39 @@ final class AppModel: ObservableObject {
                 }
             }
             self.quotes = all
+            for id in self.bookings.map(\.jobID) {
+                if let job = try await self.api.job(id: id) {
+                    if let index = self.jobs.firstIndex(where: { $0.id == id }) {
+                        self.jobs[index] = job
+                    } else {
+                        self.jobs.append(job)
+                    }
+                }
+            }
+            self.notices = try await self.api.notices()
             if let session = self.session {
                 self.session = try await self.api.refresh(session)
             }
-        }
     }
 
-    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, scheduledOn: String, details: JobDetails, photos: [Data]) async -> Bool {
+    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool) async -> Bool {
         var ok = false
-        let point = await SiteGeocoder.locate(street: street, city: city, state: state, zip: zip)
+        var point = await SiteGeocoder.locate(street: street, city: city, state: state, zip: zip)
+        if point == nil {
+            point = await SiteGeocoder.locate(zip: zip)
+        }
         await run {
-            _ = try await self.api.postJob(category: category, street: street, city: city, state: state, zip: zip, latitude: point?.latitude, longitude: point?.longitude, scheduledOn: scheduledOn, details: details, photos: photos)
+            _ = try await self.api.postJob(category: category, street: street, city: city, state: state, zip: zip, latitude: point?.latitude, longitude: point?.longitude, scheduledOn: scheduledOn, details: details, photos: photos, offeredPriceCents: offeredPriceCents, serviceType: serviceType, estimate: estimate, allowsMultiple: allowsMultiple, publish: publish)
+            ok = true
+            await self.reload()
+        }
+        return ok
+    }
+
+    func acceptListing(jobID: UUID) async -> Bool {
+        var ok = false
+        await run {
+            _ = try await self.api.acceptListing(jobID: jobID)
             ok = true
             await self.reload()
         }
@@ -156,10 +205,12 @@ final class AppModel: ObservableObject {
     }
 
     func showsExactAddress(_ job: JobRecord) -> Bool {
-        guard job.status == .booked || job.status == .completed else { return false }
         guard let me = session else { return false }
         if me.role == .customer { return job.customerID == me.id }
-        return bookings.contains { $0.jobID == job.id && $0.proID == me.id && $0.paidInApp }
+        return bookings.contains { booking in
+            booking.jobID == job.id && booking.proID == me.id && booking.paidInApp
+                && (booking.charge.status == "authorized" || booking.charge.status == "captured")
+        }
     }
 
     func hasGuarantee(_ proID: UUID) -> Bool {
@@ -222,11 +273,15 @@ final class AppModel: ObservableObject {
         case .outsideArea:
             return USAddress.incompleteMessage
         case .quoteLimit:
-            return "This job already has 3 quotes."
+            return "That offer could not be sent."
+        case .taken:
+            return "Another contractor already accepted this job."
+        case .notReady:
+            return "Confirm your identity and mark payouts ready before accepting a job. Stripe Connect is not live in this demo."
         case .notVerified:
-            return "Verify your phone before posting or quoting."
+            return "Verify your phone before posting or accepting."
         case .alreadyQuoted:
-            return "You already sent a quote for this job."
+            return "You already sent an offer for this job."
         case .chatLocked:
             return "Chat opens after a quote is sent."
         case .invalid:
@@ -234,7 +289,7 @@ final class AppModel: ObservableObject {
         case .closed:
             return "That job is no longer open."
         case .notPaid:
-            return "Reviews and the Contractor Guarantee are only for jobs booked and paid in the app."
+            return "Reviews are only for jobs booked in the app."
         case .termsRequired:
             return "Accept the Terms to create an account."
         case .wrongAccount, .missing, .none:

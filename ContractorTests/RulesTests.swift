@@ -17,34 +17,36 @@ final class RulesTests: XCTestCase {
         XCTAssertEqual(user.zip, "02139")
     }
 
-    func testBookingFeeIsEightPercentWithAFiveDollarMinimum() {
-        XCTAssertEqual(BookingFee.feeCents(priceCents: 8_500), 680)
-        XCTAssertEqual(BookingFee.feeCents(priceCents: 2_000), 500)
+    func testBookingFeeIsFivePercent() {
+        XCTAssertEqual(FeeSchedule.launch.percent, 5)
+        XCTAssertEqual(BookingFee.feeCents(priceCents: 8_500), 425)
+        XCTAssertEqual(BookingFee.feeCents(priceCents: 2_000), 100)
         XCTAssertEqual(BookingFee.feeCents(priceCents: 0), 0)
+        XCTAssertEqual(BookingFee.payoutCents(priceCents: 8_500, percent: 5), 8_075)
     }
 
-    func testAJobStopsAtThreeQuotes() throws {
+    func testOneAcceptWinsUnlessTheCustomerAllowsMore() throws {
         var book = MarketplaceBook.demo()
         let job = try XCTUnwrap(book.jobs.first { $0.street.contains("Park") })
-        XCTAssertEqual(book.quotes(for: job.id).count, 2)
-        let third = try book.signUp(
-            role: .pro, name: "Pat Lane", email: "pat@example.com", password: "secret1",
-            zip: "44903", business: "Pat Lawn", categories: [.lawn], serviceZips: ["44903"],
-            acceptedTerms: true
-        )
-        _ = try book.verifyPhone(third.id)
-        _ = try book.sendQuote(proID: third.id, jobID: job.id, priceCents: 9_000, message: "Saturday works.")
-        XCTAssertEqual(book.quotes(for: job.id).count, 3)
-        XCTAssertTrue(book.openJobs(for: try XCTUnwrap(book.user(third.id))).allSatisfy { $0.id != job.id })
-        let fourth = try book.signUp(
-            role: .pro, name: "Casey", email: "casey@example.com", password: "secret1",
-            zip: "44903", business: "Casey Cuts", categories: [.lawn], serviceZips: ["44903"],
-            acceptedTerms: true
-        )
-        _ = try book.verifyPhone(fourth.id)
-        XCTAssertThrowsError(try book.sendQuote(proID: fourth.id, jobID: job.id, priceCents: 7_000, message: "I can come Sunday.")) { error in
-            XCTAssertEqual(error as? MarketplaceError, .quoteLimit)
-        }
+        let greenline = try XCTUnwrap(book.users.first { $0.user.email == "greenline@contractor.demo" }?.user)
+        let first = try book.acceptListing(proID: greenline.id, jobID: job.id)
+        XCTAssertEqual(first.feePercent, 5)
+        XCTAssertEqual(first.charge.status, "authorized")
+        XCTAssertEqual(book.bookings.filter { $0.jobID == job.id }.count, 1)
+        let other = try readyPro(&book, email: "pat@example.com", categories: [.lawn])
+        XCTAssertThrowsError(try book.acceptListing(proID: other.id, jobID: job.id))
+        var shared = MarketplaceBook.demo()
+        let index = try XCTUnwrap(shared.jobs.firstIndex { $0.street.contains("Maple") })
+        shared.jobs[index].allowsMultiple = true
+        let maple = shared.jobs[index]
+        let firstPro = try readyPro(&shared, email: "pat@example.com", categories: [.lawn])
+        let secondPro = try readyPro(&shared, email: "casey@example.com", categories: [.lawn])
+        try place(&shared, proID: firstPro.id, near: maple)
+        try place(&shared, proID: secondPro.id, near: maple)
+        _ = try shared.acceptListing(proID: firstPro.id, jobID: maple.id)
+        _ = try shared.acceptListing(proID: secondPro.id, jobID: maple.id)
+        XCTAssertEqual(shared.bookings.filter { $0.jobID == maple.id }.count, 2)
+        XCTAssertTrue(shared.jobs[index].status.isListed)
     }
 
     func testIncompleteJobSiteAddressIsRejected() throws {
@@ -93,7 +95,7 @@ final class RulesTests: XCTestCase {
         let maya = try XCTUnwrap(book.users.first { $0.user.email == "maya@contractor.demo" }?.user)
         let near = try book.postJob(
             customerID: maya.id, category: .lawn, street: "1 Capitol Square", city: "Columbus", state: "OH", zip: "43215",
-            latitude: 39.9615, longitude: -82.9990, scheduledOn: "2026-12-01", details: .empty, photoNames: []
+            latitude: 39.9615, longitude: -82.9990, scheduledOn: "2026-12-01", details: .empty, photoNames: [], offeredPriceCents: 8_500, serviceType: "mowing"
         )
         XCTAssertTrue(try XCTUnwrap(book.user(pro.id)).reaches(near))
         let far = try XCTUnwrap(book.jobs.first { $0.city == "Mansfield" && $0.category == .lawn })
@@ -130,10 +132,12 @@ final class RulesTests: XCTestCase {
         let job = try XCTUnwrap(book.jobs.first { $0.id == quote.jobID })
         let first = try book.book(customerID: job.customerID, quoteID: quote.id)
         XCTAssertTrue(first.paidInApp)
-        XCTAssertEqual(first.feePercent, 8)
-        XCTAssertEqual(first.charge.status, "stubbed")
-        XCTAssertEqual(first.charge.applicationFeeCents, 680)
-        XCTAssertEqual(first.charge.proPayoutCents, 8_500 - 680)
+        XCTAssertEqual(first.feePercent, 5)
+        XCTAssertEqual(first.charge.status, "authorized")
+        XCTAssertEqual(first.charge.processingCents, 0)
+        XCTAssertEqual(first.charge.applicationFeeCents, 425)
+        XCTAssertEqual(first.charge.proPayoutCents, 8_500 - 425)
+        XCTAssertNotEqual(book.jobs.first { $0.id == job.id }?.status, .completed)
         XCTAssertTrue(book.hasGuarantee(quote.proID))
         let again = try book.bookAgain(customerID: job.customerID, bookingID: first.id, scheduledOn: "2026-11-20", recurrence: "weekly")
         XCTAssertEqual(again.feePercent, 5)
@@ -144,5 +148,75 @@ final class RulesTests: XCTestCase {
         XCTAssertThrowsError(try book.review(customerID: job.customerID, jobID: job.id, rating: 5, body: "Great")) { error in
             XCTAssertEqual(error as? MarketplaceError, .notPaid)
         }
+    }
+
+    func testRuleEstimatorAsksInsteadOfGuessingAndUsesTheRateCard() {
+        let estimator = RuleBasedEstimator(rates: .starter)
+        let missing = estimator.estimateSync(PricingRequest(
+            serviceType: "mowing", yardSize: "Unknown", lotSize: "", rooms: 0, obstacles: "",
+            details: "Hi", photoCount: 2, zip: "94110"
+        ))
+        XCTAssertNil(missing.suggestedCents)
+        XCTAssertFalse(missing.questions.isEmpty)
+        XCTAssertFalse(missing.isGuaranteedQuote)
+        let priced = estimator.estimateSync(PricingRequest(
+            serviceType: "mowing", yardSize: "Medium", lotSize: "", rooms: 0, obstacles: "",
+            details: "Please mow the front and back.", photoCount: 1, zip: "94110"
+        ))
+        XCTAssertEqual(priced.suggestedCents, 8_500)
+        XCTAssertEqual(priced.lowCents, 6_800)
+        XCTAssertEqual(priced.highCents, 10_200)
+        XCTAssertEqual(priced.estimatedMinutes, 60)
+        XCTAssertEqual(priced.rateName, "US default")
+        XCTAssertTrue(priced.disclaimer.contains("not a survey"))
+        XCTAssertFalse(priced.isGuaranteedQuote)
+        XCTAssertTrue(priced.assumptions.contains { $0.contains("Photos are not measured") })
+        XCTAssertTrue(priced.assumptions.contains { $0.contains("not live market data") })
+        var card = RegionalRateCard.starter
+        card.regions.insert(RateRegion(id: "bay", name: "Bay config", zipPrefixes: ["941"], services: card.regions[0].services), at: 0)
+        let bay = RuleBasedEstimator(rates: card).estimateSync(PricingRequest(
+            serviceType: "mowing", yardSize: "Medium", lotSize: "", rooms: 0, obstacles: "",
+            details: "Please mow the front and back.", photoCount: 0, zip: "94110"
+        ))
+        XCTAssertEqual(bay.rateName, "Bay config")
+        XCTAssertEqual(bay.suggestedCents, 8_500)
+    }
+
+    func testMarketplaceHidesTheStreetUntilAnAuthorizedBooking() throws {
+        var book = MarketplaceBook.demo()
+        let original = try XCTUnwrap(book.jobs.first { $0.street.contains("Park") })
+        let greenline = try XCTUnwrap(book.user(UUID(uuidString: "20000000-0000-0000-0000-000000000001")!))
+        let listed = try XCTUnwrap(book.openJobs(for: greenline).first { $0.id == original.id })
+        XCTAssertEqual(listed.street, "")
+        XCTAssertEqual(listed.place(exact: true), "Near Mansfield, OH 44903")
+        let shifted = try XCTUnwrap(listed.coordinate)
+        let home = try XCTUnwrap(original.coordinate)
+        XCTAssertEqual(home.miles(to: shifted), 0.25, accuracy: 0.02)
+        let fresh = try book.signUp(role: .pro, name: "New", email: "new@example.com", password: "secret1", zip: "44903", business: "New Yard", categories: [.lawn], serviceZips: ["44903"], acceptedTerms: true)
+        _ = try book.verifyPhone(fresh.id)
+        XCTAssertThrowsError(try book.acceptListing(proID: fresh.id, jobID: original.id)) { error in
+            XCTAssertEqual(error as? MarketplaceError, .notReady)
+        }
+        _ = try book.acceptListing(proID: greenline.id, jobID: original.id)
+        XCTAssertTrue(book.canSeeExactAddress(original, viewer: greenline))
+        let stored = try XCTUnwrap(book.jobs.first { $0.id == original.id })
+        XCTAssertEqual(stored.street, original.street)
+        XCTAssertFalse(book.openJobs(for: greenline).contains { $0.id == original.id })
+    }
+
+    private func readyPro(_ book: inout MarketplaceBook, email: String, categories: [ServiceCategory]) throws -> UserRecord {
+        let user = try book.signUp(
+            role: .pro, name: "Pat", email: email, password: "secret1", zip: "44903",
+            business: "Yard", categories: categories, serviceZips: ["44903"], acceptedTerms: true
+        )
+        _ = try book.verifyPhone(user.id)
+        _ = try book.verifyIdentity(user.id)
+        return try book.connectPayouts(user.id)
+    }
+
+    private func place(_ book: inout MarketplaceBook, proID: UUID, near job: JobRecord) throws {
+        let index = try XCTUnwrap(book.users.firstIndex { $0.user.id == proID })
+        book.users[index].user.latitude = job.latitude
+        book.users[index].user.longitude = job.longitude
     }
 }

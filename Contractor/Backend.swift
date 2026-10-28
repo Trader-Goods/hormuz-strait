@@ -22,9 +22,12 @@ enum BackendConfig {
 @MainActor
 protocol ContractorAPI: AnyObject {
     func restore() async throws -> UserRecord?
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int) async throws -> UserRecord
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int, serviceTypes: [String]) async throws -> UserRecord
     func signIn(email: String, password: String) async throws -> UserRecord
     func verifyPhone() async throws -> UserRecord
+    func verifyIdentity() async throws -> UserRecord
+    func connectPayouts() async throws -> UserRecord
+    func updateServiceArea(serviceTypes: [String], radiusMiles: Int) async throws -> UserRecord
     func signOut() async
     func refresh(_ user: UserRecord) async throws -> UserRecord
     func customerJobs() async throws -> [JobRecord]
@@ -32,7 +35,9 @@ protocol ContractorAPI: AnyObject {
     func quotes(for jobID: UUID) async throws -> [QuoteRecord]
     func myQuotes() async throws -> [QuoteRecord]
     func bookings() async throws -> [BookingRecord]
-    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data]) async throws -> JobRecord
+    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool) async throws -> JobRecord
+    func acceptListing(jobID: UUID) async throws -> BookingRecord
+    func notices() async throws -> [NoticeRecord]
     func rememberJobLocation(id: UUID, latitude: Double, longitude: Double) async
     func rememberProLocation(latitude: Double, longitude: Double) async
     func sendQuote(jobID: UUID, priceCents: Int, message: String) async throws -> QuoteRecord
@@ -100,8 +105,8 @@ final class MockBackend: ContractorAPI {
         return book.user(sessionID)
     }
 
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int) async throws -> UserRecord {
-        let user = try book.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms, radiusMiles: radiusMiles)
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int, serviceTypes: [String]) async throws -> UserRecord {
+        let user = try book.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms, radiusMiles: radiusMiles, serviceTypes: serviceTypes)
         sessionID = user.id
         UserDefaults.standard.set(user.id.uuidString, forKey: "contractor.session")
         persist()
@@ -121,6 +126,27 @@ final class MockBackend: ContractorAPI {
     func verifyPhone() async throws -> UserRecord {
         guard let sessionID else { throw MarketplaceError.wrongAccount }
         let user = try book.verifyPhone(sessionID)
+        persist()
+        return user
+    }
+
+    func verifyIdentity() async throws -> UserRecord {
+        guard let sessionID else { throw MarketplaceError.wrongAccount }
+        let user = try book.verifyIdentity(sessionID)
+        persist()
+        return user
+    }
+
+    func connectPayouts() async throws -> UserRecord {
+        guard let sessionID else { throw MarketplaceError.wrongAccount }
+        let user = try book.connectPayouts(sessionID)
+        persist()
+        return user
+    }
+
+    func updateServiceArea(serviceTypes: [String], radiusMiles: Int) async throws -> UserRecord {
+        guard let sessionID else { throw MarketplaceError.wrongAccount }
+        let user = try book.updateServiceArea(proID: sessionID, serviceTypes: serviceTypes, radiusMiles: radiusMiles)
         persist()
         return user
     }
@@ -158,12 +184,24 @@ final class MockBackend: ContractorAPI {
         return book.bookings.filter { $0.proID == sessionID || $0.customerID == sessionID }
     }
 
-    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data]) async throws -> JobRecord {
+    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool) async throws -> JobRecord {
         guard let sessionID else { throw MarketplaceError.wrongAccount }
         let names = photos.compactMap { PhotoStore.save($0) }
-        let job = try book.postJob(customerID: sessionID, category: category, street: street, city: city, state: state, zip: zip, latitude: latitude, longitude: longitude, scheduledOn: scheduledOn, details: details, photoNames: names)
+        let job = try book.postJob(customerID: sessionID, category: category, street: street, city: city, state: state, zip: zip, latitude: latitude, longitude: longitude, scheduledOn: scheduledOn, details: details, photoNames: names, offeredPriceCents: offeredPriceCents, serviceType: serviceType, estimate: estimate, allowsMultiple: allowsMultiple, publish: publish)
         persist()
         return job
+    }
+
+    func acceptListing(jobID: UUID) async throws -> BookingRecord {
+        guard let sessionID else { throw MarketplaceError.wrongAccount }
+        let booking = try book.acceptListing(proID: sessionID, jobID: jobID)
+        persist()
+        return booking
+    }
+
+    func notices() async throws -> [NoticeRecord] {
+        guard let sessionID else { return [] }
+        return book.notices.filter { $0.userID == sessionID }.sorted { $0.createdAt > $1.createdAt }
     }
 
     func rememberJobLocation(id: UUID, latitude: Double, longitude: Double) async {
@@ -230,7 +268,9 @@ final class MockBackend: ContractorAPI {
     }
 
     func job(id: UUID) async throws -> JobRecord? {
-        book.jobs.first { $0.id == id }
+        guard let job = book.jobs.first(where: { $0.id == id }) else { return nil }
+        guard let sessionID, let viewer = book.user(sessionID) else { return job.listingCopy() }
+        return book.canSeeExactAddress(job, viewer: viewer) ? job : job.listingCopy()
     }
 
     private func persist() {
@@ -255,7 +295,7 @@ final class SupabaseBackend: ContractorAPI {
 
     func restore() async throws -> UserRecord? { nil }
 
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int) async throws -> UserRecord {
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int, serviceTypes: [String]) async throws -> UserRecord {
         guard acceptedTerms else { throw MarketplaceError.termsRequired }
         guard USAddress.isValidZip(zip) else { throw MarketplaceError.invalid }
         let payload: [String: Any] = [
@@ -281,6 +321,10 @@ final class SupabaseBackend: ContractorAPI {
                 "categories": categories.map(\.rawValue),
                 "service_zips": serviceZips.isEmpty ? [USAddress.normalizeZip(zip)] : serviceZips,
                 "radius_miles": radiusMiles,
+                "service_types": serviceTypes,
+                "identity_verified": false,
+                "payouts_ready": false,
+                "stripe_account_id": "",
             ]
             _ = try await send(path: "/rest/v1/pro_profiles", method: "POST", body: pro, auth: true)
         }
@@ -303,6 +347,29 @@ final class SupabaseBackend: ContractorAPI {
         return try await currentUser()
     }
 
+    func verifyIdentity() async throws -> UserRecord {
+        guard let userID else { throw MarketplaceError.wrongAccount }
+        _ = try await send(path: "/rest/v1/pro_profiles?id=eq.\(userID.uuidString)", method: "PATCH", body: ["identity_verified": true], auth: true)
+        return try await currentUser()
+    }
+
+    func connectPayouts() async throws -> UserRecord {
+        guard let userID else { throw MarketplaceError.wrongAccount }
+        _ = try await send(path: "/rest/v1/pro_profiles?id=eq.\(userID.uuidString)", method: "PATCH", body: ["payouts_ready": true, "stripe_account_id": ""], auth: true)
+        return try await currentUser()
+    }
+
+    func updateServiceArea(serviceTypes: [String], radiusMiles: Int) async throws -> UserRecord {
+        guard let userID else { throw MarketplaceError.wrongAccount }
+        let categories = ServiceCatalog.categories(in: serviceTypes).map(\.rawValue)
+        _ = try await send(path: "/rest/v1/pro_profiles?id=eq.\(userID.uuidString)", method: "PATCH", body: [
+            "service_types": serviceTypes,
+            "categories": categories,
+            "radius_miles": radiusMiles,
+        ], auth: true)
+        return try await currentUser()
+    }
+
     func signOut() async {
         accessToken = nil
         userID = nil
@@ -319,7 +386,7 @@ final class SupabaseBackend: ContractorAPI {
 
     func openJobs() async throws -> [JobRecord] {
         let me = try await currentUser()
-        let jobs: [JobRecord] = try await get("/rest/v1/jobs?status=eq.open&select=*")
+        let jobs: [JobRecord] = try await get("/rest/v1/job_board?status=in.(open,posted,awaitingAcceptance)&select=*")
         return jobs.filter { job in
             me.reaches(job)
         }
@@ -358,8 +425,9 @@ final class SupabaseBackend: ContractorAPI {
         )
     }
 
-    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data]) async throws -> JobRecord {
+    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool) async throws -> JobRecord {
         guard let userID else { throw MarketplaceError.wrongAccount }
+        if publish && offeredPriceCents <= 0 { throw MarketplaceError.invalid }
         var names: [String] = []
         for photo in photos {
             if let name = try await upload(photo) { names.append(name) }
@@ -376,16 +444,48 @@ final class SupabaseBackend: ContractorAPI {
             "scheduled_on": scheduledOn,
             "details": [
                 "lawnSize": details.lawnSize,
+                "lotSize": details.lotSize,
                 "rooms": details.rooms,
                 "stairs": details.stairs,
+                "obstacles": details.obstacles,
                 "notes": details.notes,
             ],
-            "status": "open",
+            "status": publish ? "awaitingAcceptance" : "draft",
             "photo_names": names,
+            "service_type": serviceType.isEmpty ? category.defaultType : serviceType,
+            "offered_price_cents": offeredPriceCents,
+            "allows_multiple": allowsMultiple,
+            "estimated_minutes": estimate?.estimatedMinutes ?? 0,
         ]
-        let rows: [JobRecord] = try await post("/rest/v1/jobs", body: body)
+        var payload = body
+        if let estimate {
+            payload["estimate"] = [
+                "lowCents": estimate.lowCents,
+                "highCents": estimate.highCents,
+                "suggestedCents": estimate.suggestedCents,
+                "estimatedMinutes": estimate.estimatedMinutes,
+                "difficulty": estimate.difficulty,
+                "explanation": estimate.explanation,
+                "assumptions": estimate.assumptions,
+                "rateName": estimate.rateName,
+                "disclaimer": estimate.disclaimer,
+                "isGuaranteedQuote": false,
+            ] as [String: Any]
+        }
+        let rows: [JobRecord] = try await post("/rest/v1/jobs", body: payload)
         guard let job = rows.first else { throw MarketplaceError.missing }
         return job
+    }
+
+    func acceptListing(jobID: UUID) async throws -> BookingRecord {
+        let json = try await send(path: "/rest/v1/rpc/accept_listing", method: "POST", body: ["p_job_id": jobID.uuidString], auth: true)
+        let data = try JSONSerialization.data(withJSONObject: json)
+        return try decoder().decode(BookingRecord.self, from: data)
+    }
+
+    func notices() async throws -> [NoticeRecord] {
+        guard let userID else { return [] }
+        return try await get("/rest/v1/notices?user_id=eq.\(userID.uuidString)&select=*&order=created_at.desc")
     }
 
     func sendQuote(jobID: UUID, priceCents: Int, message: String) async throws -> QuoteRecord {
@@ -403,32 +503,9 @@ final class SupabaseBackend: ContractorAPI {
     }
 
     func book(quoteID: UUID) async throws -> BookingRecord {
-        let quotes: [QuoteRecord] = try await get("/rest/v1/quotes?id=eq.\(quoteID.uuidString)&select=*")
-        guard let quote = quotes.first, let userID else { throw MarketplaceError.missing }
-        _ = try await send(path: "/rest/v1/quotes?id=eq.\(quote.id.uuidString)", method: "PATCH", body: ["status": "accepted"], auth: true)
-        _ = try await send(path: "/rest/v1/jobs?id=eq.\(quote.jobID.uuidString)", method: "PATCH", body: ["status": "booked"], auth: true)
-        let body: [String: Any] = [
-            "job_id": quote.jobID.uuidString,
-            "quote_id": quote.id.uuidString,
-            "pro_id": quote.proID.uuidString,
-            "customer_id": userID.uuidString,
-            "price_cents": quote.priceCents,
-            "fee_cents": BookingFee.feeCents(priceCents: quote.priceCents),
-            "fee_percent": FeeSchedule.launch.standardPercent,
-            "paid_in_app": true,
-            "recurrence": "",
-            "charge": [
-                "amountCents": quote.priceCents,
-                "applicationFeeCents": BookingFee.feeCents(priceCents: quote.priceCents),
-                "proPayoutCents": BookingFee.payoutCents(priceCents: quote.priceCents, percent: FeeSchedule.launch.standardPercent),
-                "currency": "usd",
-                "status": "stubbed",
-                "connectedAccountID": "",
-            ],
-        ]
-        let rows: [BookingRecord] = try await post("/rest/v1/bookings", body: body)
-        guard let booking = rows.first else { throw MarketplaceError.missing }
-        return booking
+        let json = try await send(path: "/rest/v1/rpc/accept_offer", method: "POST", body: ["p_offer_id": quoteID.uuidString], auth: true)
+        let data = try JSONSerialization.data(withJSONObject: json)
+        return try decoder().decode(BookingRecord.self, from: data)
     }
 
     func bookAgain(bookingID: UUID, scheduledOn: String, recurrence: String) async throws -> BookingRecord {
@@ -500,13 +577,19 @@ final class SupabaseBackend: ContractorAPI {
             latitude: pro?.latitude,
             longitude: pro?.longitude,
             rating: pro?.rating ?? 0,
-            reviewCount: pro?.reviewCount ?? 0
+            reviewCount: pro?.reviewCount ?? 0,
+            serviceTypes: pro?.serviceTypes ?? [],
+            identityVerified: pro?.identityVerified ?? false,
+            payoutsReady: pro?.payoutsReady ?? false,
+            stripeAccountID: pro?.stripeAccountID ?? ""
         )
     }
 
     func job(id: UUID) async throws -> JobRecord? {
         let rows: [JobRecord] = try await get("/rest/v1/jobs?id=eq.\(id.uuidString)&select=*")
-        return rows.first
+        if let row = rows.first { return row }
+        let board: [JobRecord] = try await get("/rest/v1/job_board?id=eq.\(id.uuidString)&select=*")
+        return board.first
     }
 
     private struct ProfileDTO: Decodable {
@@ -527,6 +610,10 @@ final class SupabaseBackend: ContractorAPI {
         var longitude: Double?
         var rating: Double?
         var reviewCount: Int?
+        var serviceTypes: [String]?
+        var identityVerified: Bool?
+        var payoutsReady: Bool?
+        var stripeAccountID: String?
     }
 
     private struct AnyKey: CodingKey {

@@ -43,27 +43,31 @@ final class AreaLocator: NSObject, CLLocationManagerDelegate {
         }
     }
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        switch manager.authorizationStatus {
-        case .authorizedAlways, .authorizedWhenInUse:
-            manager.requestLocation()
-        case .denied, .restricted:
-            finish(nil)
-        default:
-            break
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        Task { @MainActor in
+            switch status {
+            case .authorizedAlways, .authorizedWhenInUse:
+                self.manager.requestLocation()
+            case .denied, .restricted:
+                self.finish(nil)
+            default:
+                break
+            }
         }
     }
 
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.first else {
-            finish(nil)
-            return
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        let point = locations.first.map { GeoPoint(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude) }
+        Task { @MainActor in
+            self.finish(point)
         }
-        finish(GeoPoint(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude))
     }
 
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        finish(nil)
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in
+            self.finish(nil)
+        }
     }
 
     private func finish(_ point: GeoPoint?) {
@@ -79,6 +83,7 @@ struct ProJobMap: View {
     @State private var selectedID: UUID?
     @State private var origin: GeoPoint?
     @State private var locating = false
+    @State private var latitudeDelta = 0.45
 
     private var selectedJob: JobRecord? {
         jobs.first { $0.id == selectedID }
@@ -94,23 +99,36 @@ struct ProJobMap: View {
                     )
                     .foregroundStyle(pine.opacity(0.18))
                 }
-                ForEach(pins) { pin in
-                    Annotation(pin.job.category.title, coordinate: pin.coordinate) {
+                ForEach(bubbles) { bubble in
+                    Annotation(bubble.title, coordinate: bubble.coordinate) {
                         Button {
-                            selectedID = pin.id
+                            if bubble.jobs.count == 1 {
+                                selectedID = bubble.jobs[0].id
+                            } else if let first = bubble.jobs.first?.mapCoordinate(exact: false) {
+                                let next = max(latitudeDelta / 4, 0.02)
+                                position = .region(MKCoordinateRegion(
+                                    center: CLLocationCoordinate2D(latitude: first.latitude, longitude: first.longitude),
+                                    span: MKCoordinateSpan(latitudeDelta: next, longitudeDelta: next)
+                                ))
+                            }
                         } label: {
-                            Image(systemName: pin.job.category.symbol)
-                                .font(.body.weight(.bold))
+                            Text(bubble.label)
+                                .font(.caption2.weight(.bold))
                                 .foregroundStyle(.white)
-                                .padding(8)
-                                .background(pin.job.category == .lawn ? pine : clay, in: Circle())
-                                .overlay(Circle().stroke(.white, lineWidth: selectedID == pin.id ? 2 : 0))
+                                .frame(width: bubble.jobs.count == 1 ? 46 : 36, height: bubble.jobs.count == 1 ? 46 : 36)
+                                .background(bubble.jobs.allSatisfy { $0.category == .moving } ? clay : pine, in: Circle())
                         }
                         .buttonStyle(.plain)
                     }
                 }
             }
             .mapStyle(.standard)
+            .onMapCameraChange(frequency: .onEnd) { context in
+                let next = context.region.span.latitudeDelta
+                if abs(next - latitudeDelta) > 0.0001 {
+                    latitudeDelta = next
+                }
+            }
             .frame(height: 360)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
@@ -132,10 +150,28 @@ struct ProJobMap: View {
         }
     }
 
-    private var pins: [JobPin] {
-        jobs.compactMap { job in
-            guard let point = job.mapCoordinate(exact: model.showsExactAddress(job)) else { return nil }
-            return JobPin(id: job.id, job: job, coordinate: CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude))
+    private var bubbles: [JobBubble] {
+        let cell = max(latitudeDelta / 14, 0.01)
+        var groups: [String: [JobRecord]] = [:]
+        for job in jobs {
+            guard let point = job.mapCoordinate(exact: model.showsExactAddress(job)) else { continue }
+            let key = "\(Int((point.latitude / cell).rounded())):\(Int((point.longitude / cell).rounded()))"
+            groups[key, default: []].append(job)
+        }
+        return groups.map { key, grouped in
+            let points = grouped.compactMap { $0.mapCoordinate(exact: model.showsExactAddress($0)) }
+            let latitude = points.map(\.latitude).reduce(0, +) / Double(max(points.count, 1))
+            let longitude = points.map(\.longitude).reduce(0, +) / Double(max(points.count, 1))
+            let label: String
+            let title: String
+            if grouped.count == 1, let job = grouped.first {
+                label = Money.compact(cents: job.offeredPriceCents)
+                title = job.serviceTitle
+            } else {
+                label = "\(grouped.count)"
+                title = "\(grouped.count) jobs"
+            }
+            return JobBubble(id: key, jobs: grouped, coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude), label: label, title: title)
         }
     }
 
@@ -165,7 +201,7 @@ struct ProJobMap: View {
                 span: MKCoordinateSpan(latitudeDelta: latitudeDelta, longitudeDelta: longitudeDelta)
             ))
         }
-        for job in jobs where job.latitude == nil || job.longitude == nil {
+        for job in jobs where (job.latitude == nil || job.longitude == nil) && !job.street.isEmpty {
             if let point = await SiteGeocoder.locate(street: job.street, city: job.city, state: job.state, zip: job.zip) {
                 await model.rememberJobLocation(id: job.id, latitude: point.latitude, longitude: point.longitude)
             }
@@ -174,10 +210,12 @@ struct ProJobMap: View {
     }
 }
 
-private struct JobPin: Identifiable {
-    var id: UUID
-    var job: JobRecord
+private struct JobBubble: Identifiable {
+    var id: String
+    var jobs: [JobRecord]
     var coordinate: CLLocationCoordinate2D
+    var label: String
+    var title: String
 }
 
 private struct JobPinCard: View {
@@ -197,6 +235,18 @@ private struct JobPinCard: View {
                 Text(job.details.summary(for: job.category))
                 Text("\(DayStamp.display(job.scheduledOn)) · \(distance)")
                     .foregroundStyle(.secondary)
+                if job.estimatedMinutes > 0 {
+                    Text("About \(job.estimatedMinutes) minutes").font(.footnote).foregroundStyle(.secondary)
+                }
+                if let estimate = job.estimate {
+                    Text(estimate.explanation).font(.footnote)
+                }
+                if model.session?.canTakeJobs == true && job.status.isListed {
+                    Button("Accept \(Money.compact(cents: job.offeredPriceCents))") {
+                        Task { _ = await model.acceptListing(jobID: job.id) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
                 NavigationLink {
                     ProJobView(jobID: job.id)
                 } label: {

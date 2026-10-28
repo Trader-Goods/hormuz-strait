@@ -13,7 +13,7 @@ struct WelcomeView: View {
                     Text("Contractor Pros")
                         .font(.largeTitle.weight(.bold))
                         .foregroundStyle(ink)
-                    Text("Lawn care and moving anywhere in the US. Pros quote for free and pay a small fee only when you book them.")
+                    Text("Yard work and moving anywhere in the US. You set a price from a rate card. A contractor accepts it or makes an offer. The platform fee is 5%.")
                         .foregroundStyle(.secondary)
                     DemoBanner()
                     if let error = model.errorMessage {
@@ -49,7 +49,7 @@ struct WelcomeView: View {
                                 .buttonStyle(.bordered)
                         }
                     }
-                    Text("Each job goes to at most 3 pros. Customers confirm a phone so the leads are real.")
+                    Text("One contractor is assigned unless you allow more than one. The street stays hidden until the payment is authorized. Customers confirm a phone so the leads are real.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -76,8 +76,7 @@ struct SignUpView: View {
     @State private var zip = ""
     @State private var radius = 25
     @State private var business = ""
-    @State private var lawn = true
-    @State private var moving = false
+    @State private var selectedServices: Set<String> = ["mowing"]
     @State private var acceptedTerms = false
     @State private var showTerms = false
 
@@ -102,8 +101,18 @@ struct SignUpView: View {
                 if role == .pro {
                     TextField("Business name", text: $business)
                     Stepper("Service radius: \(radius) miles", value: $radius, in: 5...200, step: 5)
-                    Toggle("Lawn care", isOn: $lawn)
-                    Toggle("Moving", isOn: $moving)
+                    Text("Services").font(.headline)
+                    ForEach(ServiceCatalog.active) { service in
+                        Toggle(service.title, isOn: Binding(
+                            get: { selectedServices.contains(service.id) },
+                            set: { on in
+                                if on { selectedServices.insert(service.id) } else { selectedServices.remove(service.id) }
+                            }
+                        ))
+                    }
+                    Text("Pressure washing, gutters, snow, and junk removal can be added later without a new account type.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
                 Toggle("I agree to the Terms", isOn: $acceptedTerms)
                 Button("Read Terms") { showTerms = true }
@@ -112,9 +121,10 @@ struct SignUpView: View {
                     Text(error).foregroundStyle(.red)
                 }
                 Button(model.busy ? "Saving…" : "Create account") {
-                    let categories = [lawn ? ServiceCategory.lawn : nil, moving ? ServiceCategory.moving : nil].compactMap { $0 }
+                    let types = ServiceCatalog.active.map(\.id).filter { selectedServices.contains($0) }
+                    let categories = ServiceCatalog.categories(in: types)
                     Task {
-                        await model.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: [zip], acceptedTerms: acceptedTerms, radiusMiles: radius)
+                        await model.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: [zip], acceptedTerms: acceptedTerms, radiusMiles: radius, serviceTypes: types)
                     }
                 }
                 .buttonStyle(.borderedProminent)

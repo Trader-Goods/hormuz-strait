@@ -18,6 +18,8 @@
 		AA1000000000000000000029 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000019 /* ChatView.swift */; };
 		AA100000000000000000002C /* Trust.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000001D /* Trust.swift */; };
 		AA100000000000000000002D /* ProMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000001E /* ProMapView.swift */; };
+		AA100000000000000000002E /* Pricing.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000001F /* Pricing.swift */; };
+		AA100000000000000000002F /* PricingRates.json in Resources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000020 /* PricingRates.json */; };
 		AA100000000000000000002A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000001A /* Assets.xcassets */; };
 		AA100000000000000000002B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000001B /* PrivacyInfo.xcprivacy */; };
 		BB2000000000000000000021 /* RulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2000000000000000000011 /* RulesTests.swift */; };
@@ -35,6 +37,8 @@
 		AA1000000000000000000019 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		AA100000000000000000001D /* Trust.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Trust.swift; sourceTree = "<group>"; };
 		AA100000000000000000001E /* ProMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProMapView.swift; sourceTree = "<group>"; };
+		AA100000000000000000001F /* Pricing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pricing.swift; sourceTree = "<group>"; };
+		AA1000000000000000000020 /* PricingRates.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = PricingRates.json; sourceTree = "<group>"; };
 		AA100000000000000000001A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AA100000000000000000001C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		AA100000000000000000001B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -84,6 +88,8 @@
 				AA1000000000000000000019 /* ChatView.swift */,
 				AA100000000000000000001D /* Trust.swift */,
 				AA100000000000000000001E /* ProMapView.swift */,
+				AA100000000000000000001F /* Pricing.swift */,
+				AA1000000000000000000020 /* PricingRates.json */,
 				AA100000000000000000001A /* Assets.xcassets */,
 				AA100000000000000000001C /* Info.plist */,
 				AA100000000000000000001B /* PrivacyInfo.xcprivacy */,
@@ -204,6 +210,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AA100000000000000000002A /* Assets.xcassets in Resources */,
+				AA100000000000000000002F /* PricingRates.json in Resources */,
 				AA100000000000000000002B /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -226,6 +233,7 @@
 				AA1000000000000000000029 /* ChatView.swift in Sources */,
 				AA100000000000000000002C /* Trust.swift in Sources */,
 				AA100000000000000000002D /* ProMapView.swift in Sources */,
+				AA100000000000000000002E /* Pricing.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

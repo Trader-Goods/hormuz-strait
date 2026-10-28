@@ -1,11 +1,41 @@
 import Foundation
 
 struct FeeSchedule: Codable, Equatable {
-    var standardPercent = 8
-    var repeatPercent = 5
-    var minimumCents = 500
+    /// Flat platform fee. The contractor receives the rest, before any separately disclosed processing cost.
+    var percent: Int = 5
 
     static let launch = FeeSchedule()
+
+    var standardPercent: Int { percent }
+    var repeatPercent: Int { percent }
+    var minimumCents: Int { 0 }
+
+    var processingNote: String {
+        "Card processing is $0 in this demo. A live Stripe charge shows any processing cost before you confirm. The 5% platform fee is separate."
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case percent
+        case standardPercent
+    }
+
+    init(percent: Int = 5) {
+        self.percent = percent
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let percent = try container.decodeIfPresent(Int.self, forKey: .percent) {
+            self.percent = percent
+        } else {
+            self.percent = 5
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(percent, forKey: .percent)
+    }
 }
 
 struct PlatformCharge: Codable, Equatable {
@@ -15,15 +45,17 @@ struct PlatformCharge: Codable, Equatable {
     var applicationFeeCents: Int
     var proPayoutCents: Int
     var currency: String
-    /// `stubbed` until a Stripe Connect charge is live.
+    /// `authorized`, `captured`, `failed`, `refunded`, or `canceled`. The demo records `authorized` and does not capture.
     var status: String
-    /// The pro's Stripe Connect account. Empty in the demo.
+    /// The pro's Stripe Connect account. Empty until Stripe onboarding is live.
     var connectedAccountID: String
+    /// Separately disclosed card-processing cost. Zero until Stripe reports one.
+    var processingCents: Int = 0
 }
 
 enum ContactFilter {
     static let replacement = "[hidden until booking]"
-    static let notice = "Phone numbers, emails, and links stay hidden until this job is booked and paid in the app."
+    static let notice = "Phone numbers, emails, and links stay hidden until this job is booked and the payment is authorized in the app."
 
     static func display(_ text: String, unlocked: Bool) -> (text: String, masked: Bool) {
         if unlocked { return (text, false) }
@@ -85,15 +117,17 @@ enum ContactFilter {
 enum Terms {
     static let title = "Terms"
     static let body = """
-    Contractor is for jobs booked and paid in the app. If you meet a customer or a pro here, you agree not to take that work off the app to avoid the booking fee.
+    Contractor Pros is for jobs booked in the app. If you meet a customer or a contractor here, you agree not to take that work off the app to avoid the platform fee.
 
-    Quotes are free. The customer pays the quoted price in the app. Contractor keeps a platform fee before the pro is paid. The first booking fee is \(FeeSchedule.launch.standardPercent)%. Booking the same pro again, including recurring lawn service, is \(FeeSchedule.launch.repeatPercent)%.
+    The customer sets an offered price. A contractor may accept that price or send a counter-offer. Only one contractor is assigned unless the customer allows more than one. The platform fee is \(FeeSchedule.launch.percent)% of the agreed price. The contractor receives the rest, minus any card-processing cost shown before confirmation. This demo authorizes that amount and does not capture a card.
 
-    Reviews and the Contractor Guarantee apply only to jobs booked and paid in the app. Phone numbers, emails, and links in chat stay hidden until then.
+    The street address is shown to the assigned contractor only after that authorization. Reviews apply only to jobs booked in the app. Phone numbers, emails, and links in chat stay hidden until then.
+
+    A later review window (planned at 72 hours after the contractor submits completion) will be disclosed before it can approve a payout. This build does not auto-approve work or send a payout.
     """
 }
 
 enum Guarantee {
     static let title = "Contractor Guarantee"
-    static let detail = "Shown only after a job is booked and paid in the app."
+    static let detail = "Shown after a job is booked and the payment is authorized in the app."
 }

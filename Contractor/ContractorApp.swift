@@ -57,7 +57,7 @@ struct DemoBanner: View {
 
     var body: some View {
         if !model.live {
-            Text("Demo data on this iPhone. Quotes are free. The booking fee is shown and not charged.")
+            Text("Demo data on this iPhone. The 5% fee is calculated and the card is authorized, not charged.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -67,5 +67,5 @@ struct DemoBanner: View {
 func paymentLine(priceCents: Int, percent: Int) -> String {
     let fee = BookingFee.feeCents(priceCents: priceCents, percent: percent)
     let payout = BookingFee.payoutCents(priceCents: priceCents, percent: percent)
-    return "You pay \(Money.string(cents: priceCents)). The \(percent)% fee (\(Money.string(cents: fee))) comes out before the pro is paid \(Money.string(cents: payout))."
+    return "Agreed price \(Money.string(cents: priceCents)). Contractor keeps \(percent)% (\(Money.string(cents: fee))). The contractor receives \(Money.string(cents: payout)), before processing. \(FeeSchedule.launch.processingNote) Status: authorized, not captured."
 }
