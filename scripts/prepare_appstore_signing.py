@@ -373,26 +373,25 @@ def install_keychain(p12_path, password, work, key_path=None, pem_path=None):
 
 
 def find_app(auth, identifier):
+    known = os.environ.get("ASC_APP_ID", "6828019050")
+    if known:
+        try:
+            item = api("GET", "/v1/apps/" + known, auth).get("data") or {}
+            bundle = (item.get("attributes") or {}).get("bundleId")
+            if item.get("id") and bundle == identifier:
+                print("app record found")
+                print((item.get("attributes") or {}).get("name") or "")
+                return item["id"]
+        except SystemExit:
+            print("known app id was not readable")
     query = urllib.parse.urlencode({"filter[bundleId]": identifier, "limit": 5})
     found = api("GET", "/v1/apps?" + query, auth).get("data", [])
     for item in found:
         if item.get("attributes", {}).get("bundleId") == identifier:
+            print("app record found")
+            print(item.get("attributes", {}).get("name") or "")
             return item["id"]
     return None
-
-
-def wait_for_app(identifier):
-    deadline = time.time() + 2 * 60 * 60
-    while True:
-        app = find_app(token(), identifier)
-        if app:
-            print("app record found")
-            return app
-        remaining = int(deadline - time.time())
-        if remaining <= 0:
-            raise SystemExit("app record did not appear within 2 hours")
-        print(f"waiting for the App Store app record, {remaining} seconds left")
-        time.sleep(180)
 
 
 def ensure_app(auth, bundle_resource, identifier):
@@ -452,15 +451,22 @@ def main():
     work = os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"), "signing")
     os.makedirs(work, exist_ok=True)
     os.chmod(work, 0o700)
-    p12_path, password = load_shared_p12(work)
     identifier = os.environ["BUNDLE_ID"]
-    wait_for_app(identifier)
     auth = token()
+    if not find_app(auth, identifier):
+        raise SystemExit("app record was not found for " + identifier)
     bundle = bundle_id(auth, identifier)
     certificate_id = choose_shared_certificate(auth)
+    try:
+        p12_path, password = load_shared_p12(work)
+        key_path = None
+        pem_path = None
+    except SystemExit:
+        print("no stored p12; signing the same way as the other apps")
+        certificate_id, p12_path, password, key_path, pem_path = distribution_certificate(auth, work)
     profile = app_store_profile(auth, bundle, certificate_id)
     name, uuid = install_profile(profile, work)
-    keychain = install_keychain(p12_path, password, work)
+    keychain = install_keychain(p12_path, password, work, key_path, pem_path)
     set_env("PROFILE_NAME", name)
     set_env("PROFILE_UUID", uuid)
     set_env("KEYCHAIN_PATH", keychain)

@@ -31,7 +31,7 @@ struct CustomerHome: View {
                 .padding(20)
             }
             .background(paper)
-            .navigationTitle("Contractor")
+            .navigationTitle("Contractor Pros")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Sign out") { Task { await model.signOut() } }

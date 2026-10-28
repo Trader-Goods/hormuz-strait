@@ -10,7 +10,7 @@ struct WelcomeView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text("Contractor")
+                    Text("Contractor Pros")
                         .font(.largeTitle.weight(.bold))
                         .foregroundStyle(ink)
                     Text("Lawn care and moving in Richland County. Pros quote for free and pay a small fee only when you book them.")
