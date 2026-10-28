@@ -132,6 +132,8 @@ struct UserRecord: Codable, Equatable, Identifiable {
     var identityVerified: Bool = false
     var payoutsReady: Bool = false
     var stripeAccountID: String = ""
+    /// E.164, such as `+14195550100`. Empty when the number is hidden or not collected.
+    var phone: String = ""
 
     var canTakeJobs: Bool {
         role == .pro && phoneVerified && identityVerified && payoutsReady

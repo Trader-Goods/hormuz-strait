@@ -333,7 +333,7 @@ struct AboutView: View {
                 aboutSection("Who is assigned", "One contractor gets the job unless you allow more than one. A listing stays up for 14 days.")
                 aboutSection("The map", "Open jobs show as price bubbles about a quarter mile from the site. The street appears after booking and payment authorization.")
                 aboutSection("Sample jobs", "Sample jobs on a contractor map are examples on this phone. They are not real customers and cannot be accepted.")
-                aboutSection("Your phone", "Confirming a phone keeps leads real. This TestFlight build does not send a text.")
+                aboutSection("Your phone", "Contractors enter a US phone number when they sign up. Customers do not see that number until the job is booked and the payment is authorized. This build does not send a text.")
                 aboutSection("Payout setup", "Identity and payouts are recorded on this phone until a live identity check and Stripe Connect are connected.")
                 aboutSection("More services", "Pressure washing, gutters, snow removal, and junk removal can be added later.")
             }

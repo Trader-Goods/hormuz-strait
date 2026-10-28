@@ -22,7 +22,7 @@ enum BackendConfig {
 @MainActor
 protocol ContractorAPI: AnyObject {
     func restore() async throws -> UserRecord?
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int, serviceTypes: [String]) async throws -> UserRecord
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int, serviceTypes: [String], phone: String) async throws -> UserRecord
     func signIn(email: String, password: String) async throws -> UserRecord
     func verifyPhone() async throws -> UserRecord
     func verifyIdentity() async throws -> UserRecord
@@ -119,8 +119,8 @@ final class MockBackend: ContractorAPI {
         return book.user(sessionID)
     }
 
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int, serviceTypes: [String]) async throws -> UserRecord {
-        let user = try book.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms, radiusMiles: radiusMiles, serviceTypes: serviceTypes)
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int, serviceTypes: [String], phone: String) async throws -> UserRecord {
+        let user = try book.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms, radiusMiles: radiusMiles, serviceTypes: serviceTypes, phone: phone)
         sessionID = user.id
         UserDefaults.standard.set(user.id.uuidString, forKey: "contractor.session")
         persist()
@@ -278,7 +278,11 @@ final class MockBackend: ContractorAPI {
     }
 
     func user(id: UUID) async throws -> UserRecord? {
-        book.user(id)
+        guard var record = book.user(id) else { return nil }
+        if let sessionID, let viewer = book.user(sessionID), !book.canSeePhone(of: id, viewer: viewer) {
+            record.phone = ""
+        }
+        return record
     }
 
     func job(id: UUID) async throws -> JobRecord? {
@@ -325,9 +329,16 @@ final class SupabaseBackend: ContractorAPI {
         return try? await currentUser()
     }
 
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int, serviceTypes: [String]) async throws -> UserRecord {
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int, serviceTypes: [String], phone: String) async throws -> UserRecord {
         guard acceptedTerms else { throw MarketplaceError.termsRequired }
         guard USAddress.isValidZip(zip) else { throw MarketplaceError.invalid }
+        let storedPhone: String
+        if role == .pro {
+            guard let number = USPhone.e164(phone) else { throw MarketplaceError.invalid }
+            storedPhone = number
+        } else {
+            storedPhone = USPhone.e164(phone) ?? ""
+        }
         let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let metadata: [String: Any] = [
             "role": role.rawValue,
@@ -338,6 +349,7 @@ final class SupabaseBackend: ContractorAPI {
             "service_zips": serviceZips.isEmpty ? [USAddress.normalizeZip(zip)] : serviceZips,
             "radius_miles": radiusMiles,
             "service_types": serviceTypes,
+            "phone": storedPhone,
         ]
         let payload: [String: Any] = [
             "email": cleanEmail,
@@ -584,17 +596,33 @@ final class SupabaseBackend: ContractorAPI {
     }
 
     func user(id: UUID) async throws -> UserRecord? {
-        let profiles: [ProfileDTO] = try await get("/rest/v1/profiles?id=eq.\(id.uuidString)&select=*")
-        guard let profile = profiles.first else { return nil }
+        let json: [String: Any]
+        if let card = try? await send(path: "/rest/v1/rpc/profile_card", method: "POST", body: ["p_id": id.uuidString], auth: true),
+           card["id"] != nil {
+            json = card
+        } else {
+            let profiles: [ProfileDTO] = try await get("/rest/v1/profiles?id=eq.\(id.uuidString)&select=id,role,email,display_name,zip,phone_verified")
+            guard let profile = profiles.first else { return nil }
+            json = [
+                "id": profile.id.uuidString,
+                "role": profile.role.rawValue,
+                "email": profile.email ?? "",
+                "display_name": profile.displayName,
+                "zip": profile.zip,
+                "phone_verified": profile.phoneVerified,
+            ]
+        }
+        guard let idString = json["id"] as? String, let uuid = UUID(uuidString: idString) else { return nil }
+        let role = UserRole(rawValue: json["role"] as? String ?? "") ?? .customer
         let pros: [ProDTO] = (try? await get("/rest/v1/pro_profiles?id=eq.\(id.uuidString)&select=*")) ?? []
         let pro = pros.first
         return UserRecord(
-            id: profile.id,
-            role: profile.role,
-            email: profile.email ?? "",
-            displayName: profile.displayName,
-            zip: profile.zip,
-            phoneVerified: profile.phoneVerified,
+            id: uuid,
+            role: role,
+            email: json["email"] as? String ?? "",
+            displayName: json["display_name"] as? String ?? "",
+            zip: json["zip"] as? String ?? "",
+            phoneVerified: json["phone_verified"] as? Bool ?? false,
             businessName: pro?.businessName ?? "",
             categories: pro?.categories ?? [],
             serviceZips: pro?.serviceZips ?? [],
@@ -606,7 +634,8 @@ final class SupabaseBackend: ContractorAPI {
             serviceTypes: pro?.serviceTypes ?? [],
             identityVerified: pro?.identityVerified ?? false,
             payoutsReady: pro?.payoutsReady ?? false,
-            stripeAccountID: pro?.stripeAccountID ?? ""
+            stripeAccountID: pro?.stripeAccountID ?? "",
+            phone: json["phone"] as? String ?? ""
         )
     }
 
@@ -728,7 +757,7 @@ final class SupabaseBackend: ContractorAPI {
         let name = (metadata["display_name"] as? String) ?? "New member"
         let zip = USAddress.normalizeZip(metadata["zip"] as? String ?? "")
         guard USAddress.isValidZip(zip) else { return }
-        let profile: [String: Any] = [
+        var profile: [String: Any] = [
             "id": userID.uuidString,
             "role": role.rawValue,
             "email": email,
@@ -736,6 +765,9 @@ final class SupabaseBackend: ContractorAPI {
             "zip": zip,
             "phone_verified": false,
         ]
+        if let number = metadata["phone"] as? String, !number.isEmpty {
+            profile["phone"] = number
+        }
         _ = try? await send(path: "/rest/v1/profiles", method: "POST", body: profile, auth: true)
         if role == .pro {
             let categories = Self.strings(metadata["categories"])

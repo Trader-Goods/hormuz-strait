@@ -86,7 +86,7 @@ final class RulesTests: XCTestCase {
         let pro = try book.signUp(
             role: .pro, name: "Alex", email: "alex@example.com", password: "secret1",
             zip: "43215", business: "Alex Lawn", categories: [.lawn], serviceZips: ["43215"],
-            acceptedTerms: true, radiusMiles: 10
+            acceptedTerms: true, radiusMiles: 10, phone: "419-555-0191"
         )
         _ = try book.verifyPhone(pro.id)
         let index = try XCTUnwrap(book.users.firstIndex { $0.user.id == pro.id })
@@ -192,7 +192,7 @@ final class RulesTests: XCTestCase {
         let shifted = try XCTUnwrap(listed.coordinate)
         let home = try XCTUnwrap(original.coordinate)
         XCTAssertEqual(home.miles(to: shifted), 0.25, accuracy: 0.02)
-        let fresh = try book.signUp(role: .pro, name: "New", email: "new@example.com", password: "secret1", zip: "44903", business: "New Yard", categories: [.lawn], serviceZips: ["44903"], acceptedTerms: true)
+        let fresh = try book.signUp(role: .pro, name: "New", email: "new@example.com", password: "secret1", zip: "44903", business: "New Yard", categories: [.lawn], serviceZips: ["44903"], acceptedTerms: true, phone: "419-555-0192")
         _ = try book.verifyPhone(fresh.id)
         XCTAssertThrowsError(try book.acceptListing(proID: fresh.id, jobID: original.id)) { error in
             XCTAssertEqual(error as? MarketplaceError, .notReady)
@@ -222,10 +222,37 @@ final class RulesTests: XCTestCase {
         XCTAssertEqual(AppModel.describe(MarketplaceError.confirmEmail), "Check your email")
     }
 
+    func testContractorPhoneIsStoredAndHiddenUntilBooking() throws {
+        XCTAssertEqual(USPhone.e164("(419) 555-0100"), "+14195550100")
+        XCTAssertEqual(USPhone.e164("1-419-555-0100"), "+14195550100")
+        XCTAssertEqual(USPhone.e164("+1 419 555 0100"), "+14195550100")
+        XCTAssertNil(USPhone.e164("555-0100"))
+        XCTAssertNil(USPhone.e164("123-555-0100"))
+        XCTAssertEqual(USPhone.display("+14195550100"), "(419) 555-0100")
+        var book = MarketplaceBook.demo()
+        XCTAssertThrowsError(try book.signUp(
+            role: .pro, name: "No Phone", email: "nophone@example.com", password: "secret1",
+            zip: "44903", business: "None", categories: [.lawn], serviceZips: ["44903"], acceptedTerms: true
+        ))
+        let pro = try book.signUp(
+            role: .pro, name: "With Phone", email: "withphone@example.com", password: "secret1",
+            zip: "44903", business: "Yard", categories: [.lawn], serviceZips: ["44903"],
+            acceptedTerms: true, phone: "(419) 555-0194"
+        )
+        XCTAssertEqual(pro.phone, "+14195550194")
+        let maya = try XCTUnwrap(book.users.first { $0.user.email == "maya@contractor.demo" }?.user)
+        let greenline = try XCTUnwrap(book.users.first { $0.user.email == "greenline@contractor.demo" }?.user)
+        XCTAssertFalse(greenline.phone.isEmpty)
+        XCTAssertFalse(book.canSeePhone(of: greenline.id, viewer: maya))
+        let quote = try XCTUnwrap(book.quotes.first { $0.proID == greenline.id })
+        _ = try book.book(customerID: maya.id, quoteID: quote.id)
+        XCTAssertTrue(book.canSeePhone(of: greenline.id, viewer: maya))
+    }
+
     private func readyPro(_ book: inout MarketplaceBook, email: String, categories: [ServiceCategory]) throws -> UserRecord {
         let user = try book.signUp(
             role: .pro, name: "Pat", email: email, password: "secret1", zip: "44903",
-            business: "Yard", categories: categories, serviceZips: ["44903"], acceptedTerms: true
+            business: "Yard", categories: categories, serviceZips: ["44903"], acceptedTerms: true, phone: "419-555-0193"
         )
         _ = try book.verifyPhone(user.id)
         _ = try book.verifyIdentity(user.id)

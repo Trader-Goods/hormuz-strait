@@ -46,9 +46,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int, serviceTypes: [String]) async {
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int, serviceTypes: [String], phone: String) async {
         await run {
-            self.session = try await self.api.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms, radiusMiles: radiusMiles, serviceTypes: serviceTypes)
+            self.session = try await self.api.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms, radiusMiles: radiusMiles, serviceTypes: serviceTypes, phone: phone)
             await self.reload()
         }
     }
@@ -96,6 +96,7 @@ final class AppModel: ObservableObject {
     }
 
     private func load() async throws {
+            self.people = [:]
             if self.session?.role == .customer {
                 self.jobs = try await self.api.customerJobs()
             } else {

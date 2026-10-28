@@ -18,6 +18,37 @@ enum USAddress {
         let zip = normalizeZip(raw)
         return zip.count == 5 && zip != "00000"
     }
+}
+
+enum USPhone {
+    /// US numbers become `+1` and ten digits. Empty input is not a number.
+    static func e164(_ raw: String) -> String? {
+        let digits = raw.filter(\.isNumber)
+        let national: String
+        if digits.count == 10 {
+            national = digits
+        } else if digits.count == 11, digits.first == "1" {
+            national = String(digits.dropFirst())
+        } else {
+            return nil
+        }
+        guard national.count == 10,
+              let area = national.first, area >= "2" && area <= "9",
+              let exchange = national.dropFirst(3).first, exchange >= "2" && exchange <= "9" else {
+            return nil
+        }
+        return "+1" + national
+    }
+
+    static func display(_ e164: String) -> String {
+        let digits = e164.filter(\.isNumber)
+        let national = digits.count == 11 ? String(digits.dropFirst()) : digits
+        guard national.count == 10 else { return e164 }
+        let area = national.prefix(3)
+        let exchange = national.dropFirst(3).prefix(3)
+        let line = national.suffix(4)
+        return "(\(area)) \(exchange)-\(line)"
+    }
 
     static func isComplete(street: String, city: String, state: String, zip: String) -> Bool {
         !street.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -115,6 +146,16 @@ struct MarketplaceBook: Codable, Equatable {
         quotes.filter { $0.jobID == jobID }.sorted { $0.priceCents < $1.priceCents }
     }
 
+    func canSeePhone(of personID: UUID, viewer: UserRecord) -> Bool {
+        if viewer.id == personID { return true }
+        return bookings.contains { booking in
+            let paired = (booking.customerID == viewer.id && booking.proID == personID)
+                || (booking.proID == viewer.id && booking.customerID == personID)
+            return paired && booking.paidInApp
+                && (booking.charge.status == "authorized" || booking.charge.status == "captured")
+        }
+    }
+
     func canSeeExactAddress(_ job: JobRecord, viewer: UserRecord) -> Bool {
         if viewer.id == job.customerID { return true }
         return bookings.contains { booking in
@@ -148,7 +189,8 @@ struct MarketplaceBook: Codable, Equatable {
         serviceZips: [String],
         acceptedTerms: Bool,
         radiusMiles: Int = 25,
-        serviceTypes: [String] = []
+        serviceTypes: [String] = [],
+        phone: String = ""
     ) throws -> UserRecord {
         guard acceptedTerms else { throw MarketplaceError.termsRequired }
         let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -159,6 +201,13 @@ struct MarketplaceBook: Codable, Equatable {
         }
         guard USAddress.isValidZip(cleanZip) else { throw MarketplaceError.invalid }
         guard !users.contains(where: { $0.user.email == cleanEmail }) else { throw MarketplaceError.invalid }
+        let storedPhone: String
+        if role == .pro {
+            guard let number = USPhone.e164(phone) else { throw MarketplaceError.invalid }
+            storedPhone = number
+        } else {
+            storedPhone = USPhone.e164(phone) ?? ""
+        }
         let chosenZips = serviceZips.map(USAddress.normalizeZip).filter(USAddress.isValidZip)
         let chosenTypes: [String]
         if role == .pro {
@@ -180,7 +229,8 @@ struct MarketplaceBook: Codable, Equatable {
             radiusMiles: role == .pro ? min(200, max(5, radiusMiles)) : 0,
             rating: 0,
             reviewCount: 0,
-            serviceTypes: chosenTypes
+            serviceTypes: chosenTypes,
+            phone: storedPhone
         )
         users.append(StoredUser(user: record, password: password))
         return record
@@ -577,10 +627,15 @@ struct MarketplaceBook: Codable, Equatable {
             fees: .launch
         )
         let estimator = RuleBasedEstimator(rates: .starter)
+        var proNumber = 1
         for index in book.users.indices where book.users[index].user.role == .pro {
             book.users[index].user.identityVerified = true
             book.users[index].user.payoutsReady = true
             book.users[index].user.serviceTypes = ServiceCatalog.ids(matching: book.users[index].user.categories)
+            if book.users[index].user.phone.isEmpty {
+                book.users[index].user.phone = "+1419555010\(proNumber)"
+                proNumber += 1
+            }
         }
         for index in book.jobs.indices {
             let job = book.jobs[index]

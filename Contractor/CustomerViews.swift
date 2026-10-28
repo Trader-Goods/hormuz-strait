@@ -307,6 +307,7 @@ struct JobDetailView: View {
     var jobID: UUID
     @State private var rating = 5
     @State private var review = ""
+    @State private var proPhone = ""
 
     private var job: JobRecord? { model.jobs.first { $0.id == jobID } }
 
@@ -345,6 +346,9 @@ struct JobDetailView: View {
                     if job.status == .booked || job.status == .completed {
                         reviewBox
                     }
+                    if model.contactUnlocked(jobID: job.id), !proPhone.isEmpty {
+                        Text(proPhone).font(.headline)
+                    }
                     ForEach(model.bookings.filter { $0.jobID == job.id }) { booking in
                         Text(paymentLine(priceCents: booking.priceCents, percent: booking.feePercent))
                             .font(.footnote)
@@ -366,6 +370,14 @@ struct JobDetailView: View {
         .background(paper)
         .navigationTitle("Job")
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: jobID) {
+            proPhone = ""
+            guard model.contactUnlocked(jobID: jobID),
+                  let booking = model.booking(for: jobID),
+                  let person = await model.person(booking.proID),
+                  !person.phone.isEmpty else { return }
+            proPhone = USPhone.display(person.phone)
+        }
     }
 
     private func bookAgain(_ booking: BookingRecord) -> some View {

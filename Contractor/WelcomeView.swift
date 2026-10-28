@@ -79,6 +79,7 @@ struct SignUpView: View {
     @State private var radius = 25
     @State private var business = ""
     @State private var selectedServices: Set<String> = ["mowing"]
+    @State private var phone = ""
     @State private var acceptedTerms = false
     @State private var showTerms = false
 
@@ -101,6 +102,14 @@ struct SignUpView: View {
                         .foregroundStyle(.red)
                 }
                 if role == .pro {
+                    TextField("Mobile phone", text: $phone)
+                        .keyboardType(.phonePad)
+                        .textContentType(.telephoneNumber)
+                    if !phone.isEmpty && USPhone.e164(phone) == nil {
+                        Text("Enter a US phone number.")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
                     TextField("Business name", text: $business)
                     Stepper("Service radius: \(radius) miles", value: $radius, in: 5...200, step: 5)
                     Text("Services").font(.headline)
@@ -123,11 +132,11 @@ struct SignUpView: View {
                     let types = ServiceCatalog.active.map(\.id).filter { selectedServices.contains($0) }
                     let categories = ServiceCatalog.categories(in: types)
                     Task {
-                        await model.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: [zip], acceptedTerms: acceptedTerms, radiusMiles: radius, serviceTypes: types)
+                        await model.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: [zip], acceptedTerms: acceptedTerms, radiusMiles: radius, serviceTypes: types, phone: phone)
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(model.busy || !acceptedTerms)
+                .disabled(model.busy || !acceptedTerms || (role == .pro && USPhone.e164(phone) == nil))
                 .sheet(isPresented: $showTerms) {
                     NavigationStack {
                         ScrollView {
