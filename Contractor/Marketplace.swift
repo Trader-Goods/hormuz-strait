@@ -18,6 +18,13 @@ enum USAddress {
         let zip = normalizeZip(raw)
         return zip.count == 5 && zip != "00000"
     }
+
+    static func isComplete(street: String, city: String, state: String, zip: String) -> Bool {
+        !street.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && states.contains(state.trimmingCharacters(in: .whitespacesAndNewlines).uppercased())
+            && isValidZip(zip)
+    }
 }
 
 enum USPhone {
@@ -48,13 +55,6 @@ enum USPhone {
         let exchange = national.dropFirst(3).prefix(3)
         let line = national.suffix(4)
         return "(\(area)) \(exchange)-\(line)"
-    }
-
-    static func isComplete(street: String, city: String, state: String, zip: String) -> Bool {
-        !street.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && states.contains(state.trimmingCharacters(in: .whitespacesAndNewlines).uppercased())
-            && isValidZip(zip)
     }
 }
 
