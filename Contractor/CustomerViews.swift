@@ -27,7 +27,7 @@ struct CustomerHome: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    AccountNote()
+                    HowPayWorksLink()
                     if let error = model.errorMessage {
                         Text(error).foregroundStyle(.red)
                     }

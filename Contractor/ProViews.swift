@@ -132,7 +132,7 @@ struct ProHome: View {
                             }
                         }
                     }
-                    AccountNote()
+                    HowPayWorksLink()
                     if let error = model.errorMessage {
                         Text(error).foregroundStyle(.red)
                     }
@@ -304,21 +304,56 @@ struct ProSetupCard: View {
     }
 }
 
-struct AccountNote: View {
+struct HowPayWorksLink: View {
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("How pay works").font(.headline)
-                Text("The customer sets the price. You can accept it or make an offer. Contractor keeps \(FeeSchedule.launch.percent)%. You receive the rest, before any processing cost. \(FeeSchedule.launch.processingNote) This demo authorizes the card and does not capture it. Stripe Connect onboarding is not live.")
-                    .font(.subheadline)
+        NavigationLink {
+            HowPayWorksView()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle")
+                Text("How pay works")
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+    }
+}
+
+struct HowPayWorksView: View {
+    private var percent: Int { FeeSchedule.launch.percent }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                Text("The customer pays the agreed price in the app. Contractor keeps \(percent)%. The contractor receives the rest.")
                     .foregroundStyle(.secondary)
-                Text(Terms.body)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Text("A live charge needs a Stripe Connect platform, an Express account for each pro, and a PaymentIntent for the quote price with application_fee_amount set to the platform fee. The rest is transferred to the pro.")
+                paySection("The fee", "The platform fee is a flat \(percent)% of the agreed price. The contractor receives \(100 - percent)%, minus any card-processing cost shown before the customer confirms. Processing is $0 in this TestFlight build and will be shown separately when a live card is charged.")
+                paySection("When the card is used", "Booking authorizes the agreed price. The charge is captured only after the customer approves the finished work, or after the 72-hour review window ends with no response. Nothing is captured at the moment someone accepts.")
+                paySection("The street address", "The contractor sees an approximate pin and “Near city, ST ZIP” until the job is booked and the payment is authorized. The street address is shown only to the assigned contractor after that.")
+                paySection("Finishing the job", "The contractor uploads completion photos and taps Submit Completed Job. That saves the photos and tells the customer. It does not approve the work or start a payout. The customer then chooses Work Looks Complete or Report a Problem. The customer has 72 hours, with reminders during that window. If the customer does not respond, the job is approved and the payout starts. That automatic approval is part of these rules.")
+                paySection("A problem with the work", "Report a Problem asks for an explanation and photos. The job moves to Disputed. Both sides can add evidence. The payout waits until the dispute is resolved. A resolution can refund the customer, pay the contractor, or split the difference. The \(percent)% fee follows the customer’s payment: it is refunded when that payment is refunded.")
+                paySection("Refunds and cancellations", "The customer can cancel a listing before anyone is booked. Nothing is captured. After authorization, canceling before the work is submitted releases the authorization. A no-show or a failed payment leaves the job unpaid. After approval, a refund is a separate adjustment and does not happen by itself.")
+                paySection("Contractor payouts", "Payouts go through Stripe Connect. The contractor finishes identity and Connect setup before accepting jobs or receiving money. A failed payout stays in Payout Processing and is retried. The job is not marked paid until the payout succeeds.")
+                paySection("Why the job stays in the app", "Reviews and the Contractor Guarantee are only for jobs booked and paid in the app. Taking a job off the app with someone you met here breaks the terms. Phone numbers, emails, and links in chat stay hidden until the job is booked and the payment is authorized.")
+                Text("This TestFlight build records the authorization and does not capture a card or send a Stripe payout yet.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+            .padding(20)
+        }
+        .background(paper)
+        .navigationTitle("How Pay Works")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func paySection(_ title: String, _ body: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.headline)
+            Text(body).foregroundStyle(.secondary)
         }
     }
 }
