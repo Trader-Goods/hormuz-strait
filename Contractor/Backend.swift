@@ -19,11 +19,41 @@ enum BackendConfig {
     }
 }
 
+enum AuthCallback {
+    /// Add this exact value under Supabase Auth → URL Configuration → Redirect URLs.
+    static let redirect = "contractorpros://auth-callback"
+
+    static func signupPath() -> String {
+        var components = URLComponents()
+        components.queryItems = [URLQueryItem(name: "redirect_to", value: redirect)]
+        let query = components.percentEncodedQuery ?? ""
+        return "/auth/v1/signup?\(query)"
+    }
+
+    static func params(from url: URL) -> [String: String] {
+        guard url.scheme == "contractorpros" else { return [:] }
+        var values: [String: String] = [:]
+        if let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems {
+            for item in items {
+                if let value = item.value { values[item.name] = value }
+            }
+        }
+        if let fragment = url.fragment, !fragment.isEmpty,
+           let items = URLComponents(string: "https://callback.invalid/?\(fragment)")?.queryItems {
+            for item in items {
+                if let value = item.value { values[item.name] = value }
+            }
+        }
+        return values
+    }
+}
+
 @MainActor
 protocol ContractorAPI: AnyObject {
     func restore() async throws -> UserRecord?
     func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int, serviceTypes: [String], phone: String) async throws -> UserRecord
     func signIn(email: String, password: String) async throws -> UserRecord
+    func completeAuthCallback(_ url: URL) async throws -> UserRecord?
     func verifyPhone() async throws -> UserRecord
     func verifyIdentity() async throws -> UserRecord
     func connectPayouts() async throws -> UserRecord
@@ -136,6 +166,8 @@ final class MockBackend: ContractorAPI {
         UserDefaults.standard.set(stored.user.id.uuidString, forKey: "contractor.session")
         return stored.user
     }
+
+    func completeAuthCallback(_ url: URL) async throws -> UserRecord? { nil }
 
     func verifyPhone() async throws -> UserRecord {
         guard let sessionID else { throw MarketplaceError.wrongAccount }
@@ -356,7 +388,7 @@ final class SupabaseBackend: ContractorAPI {
             "password": password,
             "data": metadata,
         ]
-        let response = try await send(path: "/auth/v1/signup", method: "POST", body: payload, auth: false)
+        let response = try await send(path: AuthCallback.signupPath(), method: "POST", body: payload, auth: false)
         do {
             try storeSession(response)
         } catch MarketplaceError.confirmEmail {
@@ -377,6 +409,37 @@ final class SupabaseBackend: ContractorAPI {
         let metadata = (user["user_metadata"] as? [String: Any]) ?? [:]
         try await ensureProfile(metadata: metadata, email: payload["email"] ?? "")
         return try await currentUser()
+    }
+
+    func completeAuthCallback(_ url: URL) async throws -> UserRecord? {
+        let params = AuthCallback.params(from: url)
+        guard let access = params["access_token"], let refresh = params["refresh_token"],
+              let user = Self.userID(fromJWT: access) else {
+            return nil
+        }
+        try storeSession([
+            "access_token": access,
+            "refresh_token": refresh,
+            "user": ["id": user.uuidString],
+        ])
+        if let authUser = try? await send(path: "/auth/v1/user", method: "GET", body: nil, auth: true) {
+            let metadata = authUser["user_metadata"] as? [String: Any] ?? [:]
+            let email = authUser["email"] as? String ?? ""
+            try await ensureProfile(metadata: metadata, email: email)
+        }
+        return try await currentUser()
+    }
+
+    private static func userID(fromJWT token: String) -> UUID? {
+        let parts = token.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        let remainder = payload.count % 4
+        if remainder > 0 { payload += String(repeating: "=", count: 4 - remainder) }
+        guard let data = Data(base64Encoded: payload),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let subject = json["sub"] as? String else { return nil }
+        return UUID(uuidString: subject)
     }
 
     func verifyPhone() async throws -> UserRecord {

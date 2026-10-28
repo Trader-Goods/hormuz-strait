@@ -220,6 +220,14 @@ final class RulesTests: XCTestCase {
             XCTAssertTrue(pro.reaches(sample))
         }
         XCTAssertEqual(AppModel.describe(MarketplaceError.confirmEmail), "Check your email")
+        XCTAssertEqual(AuthCallback.redirect, "contractorpros://auth-callback")
+        let url = URL(string: "contractorpros://auth-callback#access_token=abc&refresh_token=def&type=signup")!
+        let params = AuthCallback.params(from: url)
+        XCTAssertEqual(params["access_token"], "abc")
+        XCTAssertEqual(params["refresh_token"], "def")
+        let path = AuthCallback.signupPath()
+        let components = URLComponents(string: "https://example.com" + path)
+        XCTAssertEqual(components?.queryItems?.first { $0.name == "redirect_to" }?.value, AuthCallback.redirect)
     }
 
     func testContractorPhoneIsStoredAndHiddenUntilBooking() throws {

@@ -9,6 +9,9 @@ struct ContractorApp: App {
             RootView()
                 .environmentObject(model)
                 .tint(pine)
+                .onOpenURL { url in
+                    Task { await model.handleAuthCallback(url) }
+                }
         }
     }
 }

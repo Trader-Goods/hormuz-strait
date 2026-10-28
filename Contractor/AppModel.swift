@@ -1,5 +1,10 @@
 import Foundation
 
+struct PendingSignIn: Equatable {
+    var email: String
+    var password: String
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var session: UserRecord?
@@ -11,6 +16,7 @@ final class AppModel: ObservableObject {
     @Published var busy = false
     @Published var notices: [NoticeRecord] = []
     @Published var showSampleJobs: Bool
+    @Published var pendingConfirmation: PendingSignIn?
 
     var showsSampleJobs: Bool { live && showSampleJobs }
 
@@ -42,14 +48,37 @@ final class AppModel: ObservableObject {
     func signIn(email: String, password: String) async {
         await run {
             self.session = try await self.api.signIn(email: email, password: password)
+            self.pendingConfirmation = nil
             await self.reload()
+        }
+    }
+
+    func signInAfterConfirm() async {
+        guard let pending = pendingConfirmation else { return }
+        await signIn(email: pending.email, password: pending.password)
+    }
+
+    func handleAuthCallback(_ url: URL) async {
+        guard AuthCallback.params(from: url)["access_token"] != nil else { return }
+        await run {
+            if let user = try await self.api.completeAuthCallback(url) {
+                self.session = user
+                self.pendingConfirmation = nil
+                await self.reload()
+            }
         }
     }
 
     func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool, radiusMiles: Int, serviceTypes: [String], phone: String) async {
         await run {
-            self.session = try await self.api.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms, radiusMiles: radiusMiles, serviceTypes: serviceTypes, phone: phone)
-            await self.reload()
+            do {
+                self.session = try await self.api.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms, radiusMiles: radiusMiles, serviceTypes: serviceTypes, phone: phone)
+                self.pendingConfirmation = nil
+                await self.reload()
+            } catch MarketplaceError.confirmEmail {
+                self.pendingConfirmation = PendingSignIn(email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), password: password)
+                throw MarketplaceError.confirmEmail
+            }
         }
     }
 

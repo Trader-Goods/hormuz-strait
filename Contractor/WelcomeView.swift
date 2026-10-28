@@ -16,6 +16,7 @@ struct WelcomeView: View {
                     if let error = model.errorMessage {
                         Text(error).foregroundStyle(.red)
                     }
+                    ConfirmSignInButton()
                     if !model.live {
                         Card {
                             VStack(alignment: .leading, spacing: 10) {
@@ -128,6 +129,7 @@ struct SignUpView: View {
                 if let error = model.errorMessage {
                     Text(error).foregroundStyle(.red)
                 }
+                ConfirmSignInButton()
                 Button(model.busy ? "Saving…" : "Create account") {
                     let types = ServiceCatalog.active.map(\.id).filter { selectedServices.contains($0) }
                     let categories = ServiceCatalog.categories(in: types)
@@ -156,6 +158,20 @@ struct SignUpView: View {
         .background(paper)
         .navigationTitle("Sign up")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct ConfirmSignInButton: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        if model.pendingConfirmation != nil {
+            Button(model.busy ? "Signing in…" : "I confirmed, sign in") {
+                Task { await model.signInAfterConfirm() }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(model.busy)
+        }
     }
 }
 
