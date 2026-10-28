@@ -22,7 +22,7 @@ enum BackendConfig {
 @MainActor
 protocol ContractorAPI: AnyObject {
     func restore() async throws -> UserRecord?
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String]) async throws -> UserRecord
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool) async throws -> UserRecord
     func signIn(email: String, password: String) async throws -> UserRecord
     func verifyPhone() async throws -> UserRecord
     func signOut() async
@@ -35,6 +35,8 @@ protocol ContractorAPI: AnyObject {
     func postJob(category: ServiceCategory, street: String, zip: String, scheduledOn: String, details: JobDetails, photos: [Data]) async throws -> JobRecord
     func sendQuote(jobID: UUID, priceCents: Int, message: String) async throws -> QuoteRecord
     func book(quoteID: UUID) async throws -> BookingRecord
+    func bookAgain(bookingID: UUID, scheduledOn: String, recurrence: String) async throws -> BookingRecord
+    func report(userID: UUID, jobID: UUID?, reason: String) async throws
     func messages(jobID: UUID, proID: UUID) async throws -> [MessageRecord]
     func sendMessage(jobID: UUID, proID: UUID, body: String) async throws -> MessageRecord
     func review(jobID: UUID, rating: Int, body: String) async throws -> ReviewRecord
@@ -96,8 +98,8 @@ final class MockBackend: ContractorAPI {
         return book.user(sessionID)
     }
 
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String]) async throws -> UserRecord {
-        let user = try book.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips)
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool) async throws -> UserRecord {
+        let user = try book.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms)
         sessionID = user.id
         UserDefaults.standard.set(user.id.uuidString, forKey: "contractor.session")
         persist()
@@ -176,6 +178,19 @@ final class MockBackend: ContractorAPI {
         return booking
     }
 
+    func bookAgain(bookingID: UUID, scheduledOn: String, recurrence: String) async throws -> BookingRecord {
+        guard let sessionID else { throw MarketplaceError.wrongAccount }
+        let booking = try book.bookAgain(customerID: sessionID, bookingID: bookingID, scheduledOn: scheduledOn, recurrence: recurrence)
+        persist()
+        return booking
+    }
+
+    func report(userID: UUID, jobID: UUID?, reason: String) async throws {
+        guard let sessionID else { throw MarketplaceError.wrongAccount }
+        _ = try book.report(reporterID: sessionID, reportedUserID: userID, jobID: jobID, reason: reason)
+        persist()
+    }
+
     func messages(jobID: UUID, proID: UUID) async throws -> [MessageRecord] {
         book.messages.filter { $0.jobID == jobID && $0.proID == proID }.sorted { $0.createdAt < $1.createdAt }
     }
@@ -224,7 +239,8 @@ final class SupabaseBackend: ContractorAPI {
 
     func restore() async throws -> UserRecord? { nil }
 
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String]) async throws -> UserRecord {
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool) async throws -> UserRecord {
+        guard acceptedTerms else { throw MarketplaceError.termsRequired }
         guard RichlandCounty.contains(zip) else { throw MarketplaceError.outsideArea }
         let payload: [String: Any] = [
             "email": email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
@@ -358,10 +374,38 @@ final class SupabaseBackend: ContractorAPI {
             "customer_id": userID.uuidString,
             "price_cents": quote.priceCents,
             "fee_cents": BookingFee.feeCents(priceCents: quote.priceCents),
+            "fee_percent": FeeSchedule.launch.standardPercent,
+            "paid_in_app": true,
+            "recurrence": "",
+            "charge": [
+                "amountCents": quote.priceCents,
+                "applicationFeeCents": BookingFee.feeCents(priceCents: quote.priceCents),
+                "proPayoutCents": BookingFee.payoutCents(priceCents: quote.priceCents, percent: FeeSchedule.launch.standardPercent),
+                "currency": "usd",
+                "status": "stubbed",
+                "connectedAccountID": "",
+            ],
         ]
         let rows: [BookingRecord] = try await post("/rest/v1/bookings", body: body)
         guard let booking = rows.first else { throw MarketplaceError.missing }
         return booking
+    }
+
+    func bookAgain(bookingID: UUID, scheduledOn: String, recurrence: String) async throws -> BookingRecord {
+        throw MarketplaceError.invalid
+    }
+
+    func report(userID: UUID, jobID: UUID?, reason: String) async throws {
+        guard let reporter = self.userID else { throw MarketplaceError.wrongAccount }
+        var payload: [String: Any] = [
+            "reporter_id": reporter.uuidString,
+            "reported_user_id": userID.uuidString,
+            "reason": reason,
+        ]
+        if let jobID {
+            payload["job_id"] = jobID.uuidString
+        }
+        _ = try await send(path: "/rest/v1/reports", method: "POST", body: payload, auth: true)
     }
 
     func messages(jobID: UUID, proID: UUID) async throws -> [MessageRecord] {

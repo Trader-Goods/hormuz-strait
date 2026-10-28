@@ -77,6 +77,8 @@ struct SignUpView: View {
     @State private var business = ""
     @State private var lawn = true
     @State private var moving = false
+    @State private var acceptedTerms = false
+    @State private var showTerms = false
 
     var body: some View {
         ScrollView {
@@ -101,17 +103,33 @@ struct SignUpView: View {
                     Toggle("Lawn care", isOn: $lawn)
                     Toggle("Moving", isOn: $moving)
                 }
+                Toggle("I agree to the Terms", isOn: $acceptedTerms)
+                Button("Read Terms") { showTerms = true }
+                    .buttonStyle(.bordered)
                 if let error = model.errorMessage {
                     Text(error).foregroundStyle(.red)
                 }
                 Button(model.busy ? "Saving…" : "Create account") {
                     let categories = [lawn ? ServiceCategory.lawn : nil, moving ? ServiceCategory.moving : nil].compactMap { $0 }
                     Task {
-                        await model.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: [zip])
+                        await model.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: [zip], acceptedTerms: acceptedTerms)
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(model.busy)
+                .disabled(model.busy || !acceptedTerms)
+                .sheet(isPresented: $showTerms) {
+                    NavigationStack {
+                        ScrollView {
+                            Text(Terms.body).padding(20)
+                        }
+                        .navigationTitle(Terms.title)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button("Done") { showTerms = false }
+                            }
+                        }
+                    }
+                }
             }
             .padding(20)
         }

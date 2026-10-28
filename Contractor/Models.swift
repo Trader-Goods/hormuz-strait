@@ -117,6 +117,20 @@ struct BookingRecord: Codable, Equatable, Identifiable {
     var customerID: UUID
     var priceCents: Int
     var feeCents: Int
+    var feePercent: Int
+    var paidInApp: Bool
+    var charge: PlatformCharge
+    var repeatOfBookingID: UUID?
+    var recurrence: String
+    var createdAt: Date
+}
+
+struct ReportRecord: Codable, Equatable, Identifiable {
+    var id: UUID
+    var reporterID: UUID
+    var reportedUserID: UUID
+    var jobID: UUID?
+    var reason: String
     var createdAt: Date
 }
 

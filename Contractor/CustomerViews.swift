@@ -194,9 +194,15 @@ struct JobDetailView: View {
                         reviewBox
                     }
                     if let booking = model.booking(for: job.id), job.status != .open {
-                        Text("Booked at \(Money.string(cents: booking.priceCents)). \(feeLine(booking.priceCents))")
+                        Text(paymentLine(priceCents: booking.priceCents, percent: booking.feePercent))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+                        Text("Paid in the app. Card charge is stubbed for this demo.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        if job.category == .lawn || job.status == .completed || job.status == .booked {
+                            bookAgain(booking)
+                        }
                     }
                 }
                 if let error = model.errorMessage {
@@ -208,6 +214,26 @@ struct JobDetailView: View {
         .background(paper)
         .navigationTitle("Job")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func bookAgain(_ booking: BookingRecord) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Book again at \(FeeSchedule.launch.repeatPercent)%").font(.headline)
+            Button("Book the same pro again") {
+                Task { _ = await model.bookAgain(bookingID: booking.id, scheduledOn: DayStamp.string(from: Date().addingTimeInterval(7 * 24 * 3600)), recurrence: "") }
+            }
+            .buttonStyle(.borderedProminent)
+            if job?.category == .lawn {
+                Button("Weekly lawn service") {
+                    Task { _ = await model.bookAgain(bookingID: booking.id, scheduledOn: DayStamp.string(from: Date().addingTimeInterval(7 * 24 * 3600)), recurrence: "weekly") }
+                }
+                .buttonStyle(.bordered)
+                Button("Every 2 weeks") {
+                    Task { _ = await model.bookAgain(bookingID: booking.id, scheduledOn: DayStamp.string(from: Date().addingTimeInterval(14 * 24 * 3600)), recurrence: "biweekly") }
+                }
+                .buttonStyle(.bordered)
+            }
+        }
     }
 
     private var reviewBox: some View {
@@ -260,17 +286,25 @@ struct QuoteCard: View {
                     Spacer()
                     Text(Money.string(cents: quote.priceCents)).font(.headline)
                 }
-                if !quote.message.isEmpty {
-                    Text(quote.message).foregroundStyle(.secondary)
+                if model.hasGuarantee(quote.proID) {
+                    Text(Guarantee.title)
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(pine.opacity(0.12), in: Capsule())
                 }
-                Text(feeLine(quote.priceCents))
+                if !quote.message.isEmpty {
+                    let unlocked = model.contactUnlocked(jobID: job.id)
+                    Text(ContactFilter.display(quote.message, unlocked: unlocked).text).foregroundStyle(.secondary)
+                }
+                Text(paymentLine(priceCents: quote.priceCents, percent: FeeSchedule.launch.standardPercent))
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 Text(quote.status == .sent ? "Waiting" : quote.status.rawValue.capitalized)
                     .font(.caption)
                 HStack {
                     if job.status == .open && quote.status == .sent {
-                        Button("Book") {
+                        Button("Pay and book") {
                             Task { _ = await model.book(quoteID: quote.id) }
                         }
                         .buttonStyle(.borderedProminent)

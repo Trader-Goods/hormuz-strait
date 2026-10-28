@@ -23,6 +23,9 @@ struct ProHome: View {
                     DemoBanner()
                     if let me = model.session {
                         Text(me.publicName).font(.title2.weight(.semibold))
+                        if model.hasGuarantee(me.id) {
+                            Text(Guarantee.title).font(.caption.weight(.semibold)).foregroundStyle(pine)
+                        }
                         Text(me.categories.map(\.title).joined(separator: " · "))
                             .foregroundStyle(.secondary)
                         if me.reviewCount > 0 {
@@ -73,9 +76,9 @@ struct ProHome: View {
                                 Card {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(job.place).font(.headline)
-                                        Text("\(Money.string(cents: booking.priceCents)) · fee \(Money.string(cents: booking.feeCents))")
+                                        Text("\(Money.string(cents: booking.priceCents)) · you receive \(Money.string(cents: booking.charge.proPayoutCents))")
                                             .foregroundStyle(.secondary)
-                                        Text(feeLine(booking.priceCents)).font(.footnote).foregroundStyle(.secondary)
+                                        Text(paymentLine(priceCents: booking.priceCents, percent: booking.feePercent)).font(.footnote).foregroundStyle(.secondary)
                                     }
                                 }
                             }
@@ -131,7 +134,7 @@ struct ProJobView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Your quote: \(Money.string(cents: mine.priceCents))").font(.headline)
                                 Text(mine.message)
-                                Text(feeLine(mine.priceCents)).font(.footnote).foregroundStyle(.secondary)
+                                Text(paymentLine(priceCents: mine.priceCents, percent: FeeSchedule.launch.standardPercent)).font(.footnote).foregroundStyle(.secondary)
                                 NavigationLink("Message \(customer)") {
                                     ChatView(jobID: job.id, proID: mine.proID, title: customer)
                                 }
@@ -170,11 +173,14 @@ struct AccountNote: View {
     var body: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
-                Text("How the fee works").font(.headline)
-                Text("Pros never pay to see a lead or to send a quote. When a customer books, the pro owes an 8% fee, at least $5. This build only shows that amount. Stripe is not connected, so nothing is charged.")
+                Text("How pay works").font(.headline)
+                Text("Pros never pay to see a lead or to send a quote. The customer pays the quote in the app. Contractor keeps \(FeeSchedule.launch.standardPercent)% (at least $5) before the pro is paid. Booking the same pro again is \(FeeSchedule.launch.repeatPercent)%. This demo records the Stripe Connect charge and does not take a real card.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Text("Live payments need a Stripe Connect platform account, an Express account for each pro, and a PaymentIntent or invoice for the booking fee after the customer taps Book.")
+                Text(Terms.body)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Text("A live charge needs a Stripe Connect platform, an Express account for each pro, and a PaymentIntent for the quote price with application_fee_amount set to the platform fee. The rest is transferred to the pro.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

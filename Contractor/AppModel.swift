@@ -34,9 +34,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String]) async {
+    func signUp(role: UserRole, name: String, email: String, password: String, zip: String, business: String, categories: [ServiceCategory], serviceZips: [String], acceptedTerms: Bool) async {
         await run {
-            self.session = try await self.api.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips)
+            self.session = try await self.api.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms)
             await self.reload()
         }
     }
@@ -121,6 +121,35 @@ final class AppModel: ObservableObject {
         return ok
     }
 
+    func bookAgain(bookingID: UUID, scheduledOn: String, recurrence: String) async -> Bool {
+        var ok = false
+        await run {
+            _ = try await self.api.bookAgain(bookingID: bookingID, scheduledOn: scheduledOn, recurrence: recurrence)
+            ok = true
+            await self.reload()
+        }
+        return ok
+    }
+
+    func report(userID: UUID, jobID: UUID?, reason: String) async -> Bool {
+        var ok = false
+        await run {
+            try await self.api.report(userID: userID, jobID: jobID, reason: reason)
+            ok = true
+        }
+        return ok
+    }
+
+    func hasGuarantee(_ proID: UUID) -> Bool {
+        bookings.contains { $0.proID == proID && $0.paidInApp }
+    }
+
+    func contactUnlocked(jobID: UUID) -> Bool {
+        guard let job = jobs.first(where: { $0.id == jobID }) else { return false }
+        guard job.status == .booked || job.status == .completed else { return false }
+        return booking(for: jobID)?.paidInApp == true
+    }
+
     func review(jobID: UUID, rating: Int, body: String) async -> Bool {
         var ok = false
         await run {
@@ -182,6 +211,10 @@ final class AppModel: ObservableObject {
             return "Check the email, a password of at least 6 characters, and the rest of the form."
         case .closed:
             return "That job is no longer open."
+        case .notPaid:
+            return "Reviews and the Contractor Guarantee are only for jobs booked and paid in the app."
+        case .termsRequired:
+            return "Accept the Terms to create an account."
         case .wrongAccount, .missing, .none:
             return "That could not be saved."
         }

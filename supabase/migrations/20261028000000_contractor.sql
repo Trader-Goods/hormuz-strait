@@ -59,6 +59,20 @@ create table if not exists public.bookings (
     customer_id uuid not null references public.profiles (id),
     price_cents integer not null,
     fee_cents integer not null,
+    fee_percent integer not null,
+    paid_in_app boolean not null default true,
+    charge jsonb not null default '{}'::jsonb,
+    repeat_of_booking_id uuid references public.bookings (id),
+    recurrence text not null default '',
+    created_at timestamptz not null default now()
+);
+
+create table if not exists public.reports (
+    id uuid primary key default gen_random_uuid(),
+    reporter_id uuid not null references public.profiles (id),
+    reported_user_id uuid not null references public.profiles (id),
+    job_id uuid references public.jobs (id),
+    reason text not null,
     created_at timestamptz not null default now()
 );
 
@@ -105,6 +119,7 @@ alter table public.quotes enable row level security;
 alter table public.bookings enable row level security;
 alter table public.messages enable row level security;
 alter table public.reviews enable row level security;
+alter table public.reports enable row level security;
 
 create policy "read own profile or pros" on public.profiles
     for select to authenticated
@@ -203,3 +218,11 @@ create policy "read reviews" on public.reviews
 create policy "customers insert reviews" on public.reviews
     for insert to authenticated
     with check (customer_id = auth.uid());
+
+create policy "insert own reports" on public.reports
+    for insert to authenticated
+    with check (reporter_id = auth.uid());
+
+create policy "read own reports" on public.reports
+    for select to authenticated
+    using (reporter_id = auth.uid());

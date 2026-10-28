@@ -64,7 +64,8 @@ struct DemoBanner: View {
     }
 }
 
-func feeLine(_ priceCents: Int) -> String {
-    let fee = BookingFee.feeCents(priceCents: priceCents)
-    return "Pro booking fee \(Money.string(cents: fee)). Not charged in this demo."
+func paymentLine(priceCents: Int, percent: Int) -> String {
+    let fee = BookingFee.feeCents(priceCents: priceCents, percent: percent)
+    let payout = BookingFee.payoutCents(priceCents: priceCents, percent: percent)
+    return "You pay \(Money.string(cents: priceCents)). The \(percent)% fee (\(Money.string(cents: fee))) comes out before the pro is paid \(Money.string(cents: payout))."
 }

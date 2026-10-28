@@ -22,14 +22,14 @@ enum LeadRules {
 }
 
 enum BookingFee {
-    /// Pros pay this share of the booked price. Customers are not charged.
-    static let ratePercent = 8
-    static let minimumCents = 500
-
-    static func feeCents(priceCents: Int) -> Int {
+    static func feeCents(priceCents: Int, percent: Int = FeeSchedule.launch.standardPercent, minimumCents: Int = FeeSchedule.launch.minimumCents) -> Int {
         guard priceCents > 0 else { return 0 }
-        let percent = (priceCents * ratePercent + 50) / 100
-        return max(minimumCents, percent)
+        let share = (priceCents * percent + 50) / 100
+        return max(minimumCents, share)
+    }
+
+    static func payoutCents(priceCents: Int, percent: Int) -> Int {
+        max(0, priceCents - feeCents(priceCents: priceCents, percent: percent))
     }
 }
 
@@ -43,6 +43,8 @@ enum MarketplaceError: Error, Equatable {
     case quoteLimit
     case wrongAccount
     case chatLocked
+    case notPaid
+    case termsRequired
 }
 
 struct StoredUser: Codable, Equatable {
@@ -57,6 +59,8 @@ struct MarketplaceBook: Codable, Equatable {
     var bookings: [BookingRecord]
     var messages: [MessageRecord]
     var reviews: [ReviewRecord]
+    var reports: [ReportRecord]
+    var fees: FeeSchedule
 
     func user(_ id: UUID) -> UserRecord? {
         users.first { $0.user.id == id }?.user
@@ -87,8 +91,10 @@ struct MarketplaceBook: Codable, Equatable {
         zip: String,
         business: String,
         categories: [ServiceCategory],
-        serviceZips: [String]
+        serviceZips: [String],
+        acceptedTerms: Bool
     ) throws -> UserRecord {
+        guard acceptedTerms else { throw MarketplaceError.termsRequired }
         let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanZip = RichlandCounty.normalize(zip)
@@ -187,18 +193,97 @@ struct MarketplaceBook: Codable, Equatable {
             quotes[index].status = .declined
         }
         jobs[jobIndex].status = .booked
-        let booking = BookingRecord(
-            id: UUID(),
+        let booking = makeBooking(
             jobID: quote.jobID,
             quoteID: quote.id,
             proID: quote.proID,
             customerID: customerID,
             priceCents: quote.priceCents,
-            feeCents: BookingFee.feeCents(priceCents: quote.priceCents),
-            createdAt: Date()
+            percent: fees.standardPercent,
+            repeatOf: nil,
+            recurrence: ""
         )
         bookings.append(booking)
         return booking
+    }
+
+    mutating func bookAgain(customerID: UUID, bookingID: UUID, scheduledOn: String, recurrence: String) throws -> BookingRecord {
+        guard let previous = bookings.first(where: { $0.id == bookingID }) else { throw MarketplaceError.missing }
+        guard previous.customerID == customerID, previous.paidInApp else { throw MarketplaceError.notPaid }
+        guard let source = jobs.first(where: { $0.id == previous.jobID }) else { throw MarketplaceError.missing }
+        guard RichlandCounty.contains(source.zip) else { throw MarketplaceError.outsideArea }
+        let job = JobRecord(
+            id: UUID(),
+            customerID: customerID,
+            category: source.category,
+            street: source.street,
+            zip: source.zip,
+            scheduledOn: scheduledOn,
+            details: source.details,
+            status: .booked,
+            photoNames: [],
+            createdAt: Date()
+        )
+        jobs.append(job)
+        let quote = QuoteRecord(
+            id: UUID(),
+            jobID: job.id,
+            proID: previous.proID,
+            priceCents: previous.priceCents,
+            message: "Repeat booking",
+            status: .accepted,
+            createdAt: Date()
+        )
+        quotes.append(quote)
+        let cadence = recurrence == "weekly" || recurrence == "biweekly" ? recurrence : ""
+        let booking = makeBooking(
+            jobID: job.id,
+            quoteID: quote.id,
+            proID: previous.proID,
+            customerID: customerID,
+            priceCents: previous.priceCents,
+            percent: fees.repeatPercent,
+            repeatOf: previous.id,
+            recurrence: cadence
+        )
+        bookings.append(booking)
+        return booking
+    }
+
+    private mutating func makeBooking(
+        jobID: UUID,
+        quoteID: UUID,
+        proID: UUID,
+        customerID: UUID,
+        priceCents: Int,
+        percent: Int,
+        repeatOf: UUID?,
+        recurrence: String
+    ) -> BookingRecord {
+        let fee = BookingFee.feeCents(priceCents: priceCents, percent: percent, minimumCents: fees.minimumCents)
+        let charge = PlatformCharge(
+            amountCents: priceCents,
+            applicationFeeCents: fee,
+            proPayoutCents: max(0, priceCents - fee),
+            currency: "usd",
+            status: "stubbed",
+            connectedAccountID: ""
+        )
+        return BookingRecord(
+            id: UUID(),
+            jobID: jobID,
+            quoteID: quoteID,
+            proID: proID,
+            customerID: customerID,
+            priceCents: priceCents,
+            feeCents: fee,
+            feePercent: percent,
+            paidInApp: true,
+            charge: charge,
+            repeatOfBookingID: repeatOf,
+            recurrence: recurrence,
+            createdAt: Date()
+        )
     }
 
     mutating func sendMessage(jobID: UUID, proID: UUID, senderID: UUID, body: String) throws -> MessageRecord {
@@ -225,7 +310,9 @@ struct MarketplaceBook: Codable, Equatable {
         guard job.customerID == customerID else { throw MarketplaceError.wrongAccount }
         guard job.status == .booked || job.status == .completed else { throw MarketplaceError.closed }
         guard !reviews.contains(where: { $0.jobID == jobID }) else { throw MarketplaceError.invalid }
-        guard let booking = bookings.first(where: { $0.jobID == jobID }) else { throw MarketplaceError.missing }
+        guard let booking = bookings.first(where: { $0.jobID == jobID }), booking.paidInApp else {
+            throw MarketplaceError.notPaid
+        }
         let review = ReviewRecord(
             id: UUID(),
             jobID: jobID,
@@ -248,6 +335,28 @@ struct MarketplaceBook: Codable, Equatable {
         return review
     }
 
+    func hasGuarantee(_ proID: UUID) -> Bool {
+        bookings.contains { booking in
+            guard booking.proID == proID, booking.paidInApp else { return false }
+            return jobs.contains { $0.id == booking.jobID && ($0.status == .booked || $0.status == .completed) }
+        }
+    }
+
+    mutating func report(reporterID: UUID, reportedUserID: UUID, jobID: UUID?, reason: String) throws -> ReportRecord {
+        let text = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, user(reporterID) != nil, user(reportedUserID) != nil else { throw MarketplaceError.invalid }
+        let report = ReportRecord(
+            id: UUID(),
+            reporterID: reporterID,
+            reportedUserID: reportedUserID,
+            jobID: jobID,
+            reason: text,
+            createdAt: Date()
+        )
+        reports.append(report)
+        return report
+    }
+
     static func demo() -> MarketplaceBook {
         let maya = UUID(uuidString: "10000000-0000-0000-0000-000000000001")!
         let sam = UUID(uuidString: "10000000-0000-0000-0000-000000000002")!
@@ -264,9 +373,9 @@ struct MarketplaceBook: Codable, Equatable {
             users: [
                 StoredUser(user: UserRecord(id: maya, role: .customer, email: "maya@contractor.demo", displayName: "Maya Chen", zip: "44903", phoneVerified: true, businessName: "", categories: [], serviceZips: ["44903"], rating: 0, reviewCount: 0), password: "demo1234"),
                 StoredUser(user: UserRecord(id: sam, role: .customer, email: "sam@contractor.demo", displayName: "Sam Ortiz", zip: "44906", phoneVerified: true, businessName: "", categories: [], serviceZips: ["44906"], rating: 0, reviewCount: 0), password: "demo1234"),
-                StoredUser(user: UserRecord(id: greenline, role: .pro, email: "greenline@contractor.demo", displayName: "Avery Cole", zip: "44903", phoneVerified: true, businessName: "Greenline Lawn", categories: [.lawn], serviceZips: mansfield, rating: 4.9, reviewCount: 28), password: "demo1234"),
-                StoredUser(user: UserRecord(id: shelby, role: .pro, email: "shelby@contractor.demo", displayName: "Jordan Peck", zip: "44875", phoneVerified: true, businessName: "Shelby Yard Co", categories: [.lawn], serviceZips: ["44875", "44903", "44906", "44902"], rating: 4.7, reviewCount: 11), password: "demo1234"),
-                StoredUser(user: UserRecord(id: movers, role: .pro, email: "northend@contractor.demo", displayName: "Riley Brooks", zip: "44902", phoneVerified: true, businessName: "North End Movers", categories: [.moving], serviceZips: county, rating: 4.8, reviewCount: 19), password: "demo1234"),
+                StoredUser(user: UserRecord(id: greenline, role: .pro, email: "greenline@contractor.demo", displayName: "Avery Cole", zip: "44903", phoneVerified: true, businessName: "Greenline Lawn", categories: [.lawn], serviceZips: mansfield, rating: 0, reviewCount: 0), password: "demo1234"),
+                StoredUser(user: UserRecord(id: shelby, role: .pro, email: "shelby@contractor.demo", displayName: "Jordan Peck", zip: "44875", phoneVerified: true, businessName: "Shelby Yard Co", categories: [.lawn], serviceZips: ["44875", "44903", "44906", "44902"], rating: 0, reviewCount: 0), password: "demo1234"),
+                StoredUser(user: UserRecord(id: movers, role: .pro, email: "northend@contractor.demo", displayName: "Riley Brooks", zip: "44902", phoneVerified: true, businessName: "North End Movers", categories: [.moving], serviceZips: county, rating: 0, reviewCount: 0), password: "demo1234"),
             ],
             jobs: [
                 JobRecord(id: lawnJob, customerID: maya, category: .lawn, street: "418 Park Avenue West", zip: "44903", scheduledOn: "2026-11-06", details: JobDetails(lawnSize: "Medium", rooms: 0, stairs: false, notes: "Corner lot. Please edge the sidewalk and blow clippings off the drive."), status: .open, photoNames: [], createdAt: Date(timeIntervalSince1970: 1_761_600_000)),
@@ -281,7 +390,9 @@ struct MarketplaceBook: Codable, Equatable {
             messages: [
                 MessageRecord(id: UUID(uuidString: "50000000-0000-0000-0000-000000000001")!, jobID: lawnJob, proID: greenline, senderID: greenline, body: "We can start around 9 if the grass is dry.", createdAt: Date(timeIntervalSince1970: 1_761_620_000)),
             ],
-            reviews: []
+            reviews: [],
+            reports: [],
+            fees: .launch
         )
     }
 }
