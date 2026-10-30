@@ -276,6 +276,14 @@ final class RulesTests: XCTestCase {
         XCTAssertTrue(book.canSeePhone(of: greenline.id, viewer: maya))
     }
 
+    func testMissingJobDetailsStillDecode() throws {
+        let details = try JSONDecoder().decode(JobDetails.self, from: Data("{}".utf8))
+        XCTAssertEqual(details.lawnSize, "")
+        XCTAssertEqual(details.notes, "")
+        XCTAssertEqual(details.rooms, 0)
+        XCTAssertFalse(details.stairs)
+    }
+
     func testAProCannotPostAJob() throws {
         var book = MarketplaceBook.demo()
         let pro = try XCTUnwrap(book.users.first { $0.user.email == "greenline@contractor.demo" }?.user)

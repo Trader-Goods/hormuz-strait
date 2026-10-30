@@ -179,6 +179,39 @@ struct JobDetails: Codable, Equatable {
 
     static let empty = JobDetails(lawnSize: "Medium", lotSize: "", rooms: 2, stairs: false, obstacles: "", notes: "")
 
+    init(lawnSize: String, lotSize: String = "", rooms: Int, stairs: Bool, obstacles: String = "", notes: String) {
+        self.lawnSize = lawnSize
+        self.lotSize = lotSize
+        self.rooms = rooms
+        self.stairs = stairs
+        self.obstacles = obstacles
+        self.notes = notes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        lawnSize = try container.decodeIfPresent(String.self, forKey: .lawnSize) ?? ""
+        lotSize = try container.decodeIfPresent(String.self, forKey: .lotSize) ?? ""
+        rooms = try container.decodeIfPresent(Int.self, forKey: .rooms) ?? 0
+        stairs = try container.decodeIfPresent(Bool.self, forKey: .stairs) ?? false
+        obstacles = try container.decodeIfPresent(String.self, forKey: .obstacles) ?? ""
+        notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(lawnSize, forKey: .lawnSize)
+        try container.encode(lotSize, forKey: .lotSize)
+        try container.encode(rooms, forKey: .rooms)
+        try container.encode(stairs, forKey: .stairs)
+        try container.encode(obstacles, forKey: .obstacles)
+        try container.encode(notes, forKey: .notes)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case lawnSize, lotSize, rooms, stairs, obstacles, notes
+    }
+
     func summary(for category: ServiceCategory) -> String {
         switch category {
         case .lawn:

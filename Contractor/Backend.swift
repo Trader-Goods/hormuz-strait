@@ -587,9 +587,9 @@ final class SupabaseBackend: ContractorAPI {
 
     func openJobs() async throws -> [JobRecord] {
         let me = try await currentUser()
-        let jobs: [JobRecord] = try await get("/rest/v1/job_board?status=in.(open,posted,awaitingAcceptance)&select=*")
+        let jobs = try await listedJobs()
         return jobs.filter { job in
-            me.reaches(job)
+            job.status.isListed && me.reaches(job)
         }
     }
 
@@ -658,13 +658,7 @@ final class SupabaseBackend: ContractorAPI {
         if publish && offeredPriceCents <= 0 { throw MarketplaceError.invalid }
         var names: [String] = []
         for photo in photos {
-            do {
-                if let name = try await upload(photo) { names.append(name) }
-            } catch MarketplaceError.needsSignIn {
-                throw MarketplaceError.needsSignIn
-            } catch {
-                print("Contractor photo upload failed: \(error)")
-            }
+            names.append(try await upload(photo))
         }
         let body: [String: Any] = [
             "customer_id": userID.uuidString,
@@ -839,10 +833,91 @@ final class SupabaseBackend: ContractorAPI {
     }
 
     func job(id: UUID) async throws -> JobRecord? {
-        let rows: [JobRecord] = try await get("/rest/v1/jobs?id=eq.\(id.uuidString)&select=*")
-        if let row = rows.first { return row }
-        let board: [JobRecord] = try await get("/rest/v1/job_board?id=eq.\(id.uuidString)&select=*")
-        return board.first
+        let me = try? await currentUser()
+        if me?.role == .pro {
+            if let listed = try? await firstJob("/rest/v1/pro_open_jobs?id=eq.\(id.uuidString)&select=*") {
+                return listed
+            }
+            if let board = try? await firstJob("/rest/v1/job_board?id=eq.\(id.uuidString)&select=*") {
+                return board
+            }
+            if let listing = try? await listingRecord(id) {
+                return listing
+            }
+        }
+        if let owned = try? await firstJob("/rest/v1/jobs?id=eq.\(id.uuidString)&select=*") {
+            return owned
+        }
+        return try? await firstJob("/rest/v1/job_board?id=eq.\(id.uuidString)&select=*")
+    }
+
+    /// Open jobs a pro is allowed to read. `jobs` itself is hidden until a booking.
+    private func listedJobs() async throws -> [JobRecord] {
+        if let rows: [JobRecord] = try? await get("/rest/v1/pro_open_jobs?select=*&order=created_at.desc") {
+            return rows
+        }
+        if let rows: [JobRecord] = try? await get("/rest/v1/job_board?status=in.(open,posted,awaitingAcceptance)&select=*") {
+            return rows
+        }
+        let rows: [ListingDTO] = try await get("/rest/v1/job_listings?status=in.(open,posted,awaitingAcceptance)&select=*")
+        return rows.map { $0.record() }
+    }
+
+    private func firstJob(_ path: String) async throws -> JobRecord? {
+        let rows: [JobRecord] = try await get(path)
+        return rows.first
+    }
+
+    private func listingRecord(_ id: UUID) async throws -> JobRecord? {
+        let rows: [ListingDTO] = try await get("/rest/v1/job_listings?id=eq.\(id.uuidString)&select=*")
+        return rows.first?.record()
+    }
+
+    private struct ListingDTO: Decodable {
+        var id: UUID
+        var customerID: UUID
+        var category: ServiceCategory
+        var city: String
+        var state: String
+        var zip: String
+        var latitude: Double?
+        var longitude: Double?
+        var scheduledOn: String
+        var details: JobDetails
+        var status: JobStatus
+        var photoNames: [String]
+        var createdAt: Date
+        var serviceType: String
+        var offeredPriceCents: Int
+        var allowsMultiple: Bool?
+        var estimate: PriceEstimate?
+        var estimatedMinutes: Int?
+        var listedUntil: Date?
+
+        func record() -> JobRecord {
+            JobRecord(
+                id: id,
+                customerID: customerID,
+                category: category,
+                street: "",
+                city: city,
+                state: state,
+                zip: zip,
+                latitude: latitude,
+                longitude: longitude,
+                scheduledOn: scheduledOn,
+                details: details,
+                status: status,
+                photoNames: photoNames,
+                createdAt: createdAt,
+                serviceType: serviceType,
+                offeredPriceCents: offeredPriceCents,
+                allowsMultiple: allowsMultiple ?? false,
+                estimate: estimate,
+                estimatedMinutes: estimatedMinutes ?? 0,
+                listedUntil: listedUntil
+            )
+        }
     }
 
     private struct PricePinDTO: Decodable {
@@ -1036,10 +1111,12 @@ final class SupabaseBackend: ContractorAPI {
         }
     }
 
-    private func upload(_ data: Data) async throws -> String? {
+    private func upload(_ data: Data) async throws -> String {
         guard let userID, let accessToken else { throw MarketplaceError.needsSignIn }
-        guard let jpeg = await PhotoStore.compressedJPEG(data) else { return nil }
-        let name = "\(userID.uuidString)/\(UUID().uuidString).jpg"
+        guard let jpeg = await PhotoStore.compressedJPEG(data) else {
+            throw MarketplaceError.server("That photo could not be saved.")
+        }
+        let name = "\(userID.uuidString.lowercased())/\(UUID().uuidString.lowercased()).jpg"
         guard let uploadURL = URL(string: "storage/v1/object/job-photos/\(name)", relativeTo: base)?.absoluteURL else {
             throw MarketplaceError.invalid
         }

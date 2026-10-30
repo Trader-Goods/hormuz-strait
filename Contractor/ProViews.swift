@@ -237,6 +237,8 @@ struct ProJobView: View {
     @State private var message = ""
     @State private var customer = "Customer"
     @State private var offering = false
+    @State private var loadError: String?
+    @State private var checked = false
 
     private var job: JobRecord? { model.jobs.first { $0.id == jobID } }
     private var mine: QuoteRecord? {
@@ -259,24 +261,33 @@ struct ProJobView: View {
                         PriceChip(cents: job.offeredPriceCents)
                     }
                     JobMiniMap(job: job, exact: model.showsExactAddress(job))
-                    Text("\(whenText(job)) · \(job.details.summary(for: job.category))")
-                        .foregroundStyle(.secondary)
-                    if job.estimatedMinutes > 0 {
-                        Text("About \(job.estimatedMinutes) minutes")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                    detailLine("Service", job.serviceTitle)
+                    detailLine("Area", job.place(exact: model.showsExactAddress(job)))
+                    detailLine("When", whenText(job))
+                    detailLine("Price", Money.string(cents: job.offeredPriceCents))
+                    if job.category == .moving {
+                        detailLine("Rooms", "\(job.details.rooms)")
+                        detailLine("Stairs", job.details.stairs ? "Yes" : "No")
+                    } else if !job.details.lawnSize.isEmpty {
+                        detailLine("Yard size", job.details.lawnSize)
                     }
-                    if let estimate = job.estimate {
-                        Text(estimate.explanation)
-                        Text(estimate.disclaimer).font(.footnote).foregroundStyle(.secondary)
-                    }
-                    if !jobNotes(job).isEmpty {
-                        Text(jobNotes(job))
+                    if !job.details.lotSize.isEmpty {
+                        detailLine("Lot size", job.details.lotSize)
                     }
                     if !job.details.obstacles.isEmpty {
-                        Text("Obstacles: \(job.details.obstacles)").font(.footnote)
+                        detailLine("Obstacles", job.details.obstacles)
                     }
-                    JobPhotos(names: job.photoNames)
+                    if !jobNotes(job).isEmpty {
+                        detailLine("Notes", jobNotes(job))
+                    }
+                    if job.estimatedMinutes > 0 {
+                        detailLine("Time on site", "About \(job.estimatedMinutes) minutes")
+                    }
+                    if job.photoNames.isEmpty {
+                        Text("No photos").foregroundStyle(.secondary)
+                    } else {
+                        JobPhotos(names: job.photoNames)
+                    }
                     if let me = model.session, let origin = me.coordinate, let point = job.mapCoordinate(exact: model.showsExactAddress(job)) {
                         Text(DistanceLabel.text(miles: origin.miles(to: point)))
                             .font(.footnote)
@@ -307,23 +318,44 @@ struct ProJobView: View {
                             }
                         }
                     } else if job.status.isListed && !SampleJobs.contains(job.id) {
-                        if model.session?.canTakeJobs == true {
-                            Button("Accept \(Money.string(cents: job.offeredPriceCents))") {
-                                Haptic.tap()
-                                Task { _ = await model.acceptListing(jobID: job.id) }
+                        Button("Accept \(Money.string(cents: job.offeredPriceCents))") {
+                            Haptic.tap()
+                            guard model.session?.canTakeJobs == true else {
+                                model.errorMessage = AppModel.describe(.notReady)
+                                return
                             }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(model.busy || job.offeredPriceCents <= 0)
-                            Button("Make offer") {
-                                Haptic.tap()
-                                offering = true
+                            Task { _ = await model.acceptListing(jobID: job.id) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.busy || job.offeredPriceCents <= 0)
+                        Button("Make offer") {
+                            Haptic.tap()
+                            guard model.session?.canTakeJobs == true else {
+                                model.errorMessage = AppModel.describe(.notReady)
+                                return
                             }
-                            .buttonStyle(.bordered)
-                        } else {
+                            offering = true
+                        }
+                        .buttonStyle(.bordered)
+                        if model.session?.canTakeJobs != true {
                             NavigationLink("Finish profile") { ProProfileView() }
-                                .buttonStyle(.borderedProminent)
+                                .buttonStyle(.bordered)
                         }
                     }
+                } else if !checked {
+                    ProgressView()
+                        .accessibilityLabel("Loading")
+                } else {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(loadError ?? "This job is unavailable.").font(.headline)
+                        Button("Try again") {
+                            Task { await loadJob() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+                if let loadError, job != nil {
+                    Text(loadError).foregroundStyle(.red)
                 }
                 if let error = model.errorMessage {
                     Text(error).foregroundStyle(.red)
@@ -365,13 +397,25 @@ struct ProJobView: View {
             }
             .presentationDetents([.medium])
         }
-        .task {
-            await model.rememberOpenedJob(jobID)
-            if let job, job.customerID != UUID(uuidString: "00000000-0000-0000-0000-000000000000"),
-               let person = await model.person(job.customerID) {
-                customer = person.displayName
-            }
+        .task { await loadJob() }
+    }
+
+    private func loadJob() async {
+        checked = false
+        loadError = await model.rememberOpenedJob(jobID)
+        checked = true
+        if let job, job.customerID != UUID(uuidString: "00000000-0000-0000-0000-000000000000"),
+           let person = await model.person(job.customerID) {
+            customer = person.displayName
         }
+    }
+
+    private func detailLine(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Text(value)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func whenText(_ job: JobRecord) -> String {

@@ -265,18 +265,36 @@ final class AppModel: ObservableObject {
         return ok
     }
 
-    func rememberOpenedJob(_ id: UUID) async {
-        guard let fetched = try? await api.job(id: id) else { return }
-        var record = fetched
-        if !showsExactAddress(record) {
-            record = record.listingCopy()
+    func rememberOpenedJob(_ id: UUID) async -> String? {
+        do {
+            guard let fetched = try await api.job(id: id) else {
+                return jobs.contains { $0.id == id } ? nil : "This job is unavailable."
+            }
+            var record = fetched
+            if !showsExactAddress(record) {
+                record = record.listingCopy()
+            }
+            if let index = jobs.firstIndex(where: { $0.id == id }) {
+                let previous = jobs[index]
+                if record.details.notes.isEmpty && record.details.lawnSize.isEmpty && record.details.lotSize.isEmpty && record.details.obstacles.isEmpty && record.details.rooms == 0 {
+                    record.details = previous.details
+                }
+                if record.photoNames.isEmpty {
+                    record.photoNames = previous.photoNames
+                }
+                if record.offeredPriceCents == 0 {
+                    record.offeredPriceCents = previous.offeredPriceCents
+                }
+                jobs[index] = record
+            } else {
+                jobs.append(record)
+            }
+            await api.cachePhotos(record.photoNames)
+            return nil
+        } catch {
+            print("Contractor job load failed: \(error)")
+            return Self.describe(error)
         }
-        if let index = jobs.firstIndex(where: { $0.id == id }) {
-            jobs[index] = record
-        } else {
-            jobs.append(record)
-        }
-        await api.cachePhotos(record.photoNames)
     }
 
     func acceptListing(jobID: UUID) async -> Bool {

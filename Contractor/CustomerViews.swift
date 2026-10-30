@@ -318,9 +318,12 @@ struct PostJobView: View {
                 Task {
                     var loaded: [Data] = []
                     for item in items {
-                        if let data = try? await item.loadTransferable(type: Data.self),
-                           let jpeg = await PhotoStore.compressedJPEG(data) {
-                            loaded.append(jpeg)
+                        if let data = try? await item.loadTransferable(type: Data.self) {
+                            if let jpeg = await PhotoStore.compressedJPEG(data) {
+                                loaded.append(jpeg)
+                            } else {
+                                loaded.append(data)
+                            }
                         }
                     }
                     photos = loaded
