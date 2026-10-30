@@ -393,7 +393,7 @@ struct ProJobView: View {
     private func acceptTapped(_ job: JobRecord) {
         Haptic.tap()
         guard model.session?.canTakeJobs == true else {
-            model.errorMessage = AppModel.describe(.notReady)
+            model.errorMessage = AppModel.describe(MarketplaceError.notReady)
             return
         }
         Task { _ = await model.acceptListing(jobID: job.id) }
@@ -402,7 +402,7 @@ struct ProJobView: View {
     private func offerTapped() {
         Haptic.tap()
         guard model.session?.canTakeJobs == true else {
-            model.errorMessage = AppModel.describe(.notReady)
+            model.errorMessage = AppModel.describe(MarketplaceError.notReady)
             return
         }
         offering = true
