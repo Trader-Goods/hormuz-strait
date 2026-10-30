@@ -108,6 +108,7 @@ struct ProJobMap: View {
     var jobs: [JobRecord]
     var readOnly = false
     var expands = false
+    var onOpen: (UUID) -> Void = { _ in }
     @State private var position: MapCameraPosition = .automatic
     @State private var selectedID: UUID?
     @State private var origin: GeoPoint?
@@ -131,8 +132,9 @@ struct ProJobMap: View {
                 ForEach(bubbles) { bubble in
                     Annotation(bubble.title, coordinate: bubble.coordinate) {
                         Button {
-                            if bubble.jobs.count == 1 {
-                                selectedID = bubble.jobs[0].id
+                            if bubble.jobs.count == 1, let id = bubble.jobs.first?.id {
+                                selectedID = id
+                                onOpen(id)
                             } else if let first = bubble.jobs.first?.mapCoordinate(exact: false) {
                                 let next = max(latitudeDelta / 4, 0.02)
                                 position = .region(MKCoordinateRegion(
@@ -167,7 +169,13 @@ struct ProJobMap: View {
                     .foregroundStyle(.secondary)
             }
             if let job = selectedJob {
-                JobPinCard(job: job, distance: distanceText(for: job), readOnly: readOnly)
+                Button {
+                    onOpen(job.id)
+                } label: {
+                    JobPinCard(job: job, distance: distanceText(for: job), readOnly: readOnly)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open \(job.serviceTitle)")
             }
         }
         .task(id: jobs.map(\.id)) {
@@ -277,19 +285,6 @@ private struct JobPinCard: View {
                 if !readOnly, let estimate = job.estimate {
                     Text(estimate.explanation).font(.footnote)
                 }
-                if !readOnly && model.session?.canTakeJobs == true && job.status.isListed && !SampleJobs.contains(job.id) {
-                    Button("Accept \(Money.compact(cents: job.offeredPriceCents))") {
-                        Task { _ = await model.acceptListing(jobID: job.id) }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    NavigationLink {
-                        ProJobView(jobID: job.id)
-                    } label: {
-                        Text("View and quote")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                }
             }
         }
     }
@@ -300,6 +295,7 @@ struct NearbyPricesPage: View {
     var readOnly: Bool
     var showsBrandHeader = true
     @State private var typeFilter = "All"
+    @State private var openedID: UUID?
 
     private var jobs: [JobRecord] {
         let source: [JobRecord]
@@ -318,39 +314,136 @@ struct NearbyPricesPage: View {
     }
 
     var body: some View {
+        Group {
+            if showsBrandHeader {
+                NavigationStack { page }
+            } else {
+                page
+            }
+        }
+    }
+
+    private var page: some View {
         VStack(spacing: 0) {
             if showsBrandHeader {
                 BrandHeader()
             }
-            VStack(alignment: .leading, spacing: 10) {
-                Menu(typeFilter == "All" ? "All services" : (ServiceCatalog.find(typeFilter)?.title ?? "Service")) {
-                    Button("All services") { typeFilter = "All" }
-                    ForEach(ServiceCatalog.active) { service in
-                        Button(service.title) { typeFilter = service.id }
-                    }
-                }
-                if model.busy && jobs.isEmpty {
-                    ProgressView()
-                        .accessibilityLabel("Loading")
-                } else if jobs.isEmpty {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if let error = model.errorMessage {
-                            Text(error).foregroundStyle(.red)
-                            Button("Try again") { Task { await model.reload() } }
-                                .buttonStyle(.borderedProminent)
-                        } else {
-                            Text("No open jobs.").font(.headline)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    Menu(typeFilter == "All" ? "All services" : (ServiceCatalog.find(typeFilter)?.title ?? "Service")) {
+                        Button("All services") { typeFilter = "All" }
+                        ForEach(ServiceCatalog.active) { service in
+                            Button(service.title) { typeFilter = service.id }
                         }
                     }
+                    if model.busy && jobs.isEmpty {
+                        ProgressView()
+                            .accessibilityLabel("Loading")
+                    } else if jobs.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            if let error = model.errorMessage {
+                                Text(error).foregroundStyle(.red)
+                                Button("Try again") { Task { await model.reload() } }
+                                    .buttonStyle(.borderedProminent)
+                            } else {
+                                Text("No open jobs.").font(.headline)
+                            }
+                        }
+                    }
+                    ProJobMap(jobs: jobs, readOnly: readOnly, expands: true) { openedID = $0 }
+                    ForEach(jobs) { job in
+                        Button {
+                            openedID = job.id
+                        } label: {
+                            if readOnly {
+                                MapPriceRow(job: job)
+                            } else {
+                                JobCard(job: job, quoteCount: model.quotes(for: job.id).count, exact: model.showsExactAddress(job), unread: model.unreadCount(jobID: job.id))
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Open \(job.serviceTitle)")
+                    }
                 }
-                ProJobMap(jobs: jobs, readOnly: readOnly, expands: true)
+                .padding(showsBrandHeader ? 16 : 0)
             }
-            .padding(showsBrandHeader ? 16 : 0)
+            .refreshable { await model.reload() }
         }
         .background(paper)
         .navigationTitle(showsBrandHeader ? "" : "Nearby prices")
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await model.reload() }
+        .navigationDestination(item: $openedID) { id in
+            if readOnly {
+                MapPriceDetail(jobID: id)
+            } else {
+                ProJobView(jobID: id)
+            }
+        }
         .task { await model.reload() }
+    }
+}
+
+private struct MapPriceRow: View {
+    var job: JobRecord
+
+    var body: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(job.serviceTitle, systemImage: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(job.category == .moving ? clay : pine)
+                Text(job.place(exact: false)).font(.headline).foregroundStyle(ink)
+                HStack {
+                    if job.offeredPriceCents > 0 {
+                        PriceChip(cents: job.offeredPriceCents)
+                    }
+                    Text(DayStamp.display(job.scheduledOn))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct MapPriceDetail: View {
+    @EnvironmentObject private var model: AppModel
+    var jobID: UUID
+
+    private var job: JobRecord? {
+        model.priceJobs.first { $0.id == jobID } ?? model.jobs.first { $0.id == jobID }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                if let job {
+                    Label(job.serviceTitle, systemImage: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(job.category == .moving ? clay : pine)
+                    if SampleJobs.contains(job.id) {
+                        Text("Sample").font(.caption.weight(.semibold)).foregroundStyle(clay)
+                    }
+                    Text(job.place(exact: false)).font(.title2.weight(.semibold))
+                    if job.offeredPriceCents > 0 {
+                        PriceChip(cents: job.offeredPriceCents)
+                    }
+                    Text(DayStamp.display(job.scheduledOn))
+                        .foregroundStyle(.secondary)
+                    if job.estimatedMinutes > 0 {
+                        Text("About \(job.estimatedMinutes) minutes")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text("This job is unavailable.").font(.headline)
+                }
+            }
+            .padding(20)
+        }
+        .background(paper)
+        .navigationTitle("Job")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

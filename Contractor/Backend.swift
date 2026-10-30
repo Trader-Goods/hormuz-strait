@@ -653,6 +653,8 @@ final class SupabaseBackend: ContractorAPI {
 
     func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool) async throws -> JobRecord {
         guard let userID, accessToken != nil else { throw MarketplaceError.needsSignIn }
+        let me = try await currentUser()
+        guard me.role == .customer else { throw MarketplaceError.wrongAccount }
         if publish && offeredPriceCents <= 0 { throw MarketplaceError.invalid }
         var names: [String] = []
         for photo in photos {

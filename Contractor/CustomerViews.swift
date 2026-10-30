@@ -14,7 +14,9 @@ struct CustomerHome: View {
                 HStack(spacing: 16) {
                     Button("Sign out") { Task { await model.signOut() } }
                         .buttonStyle(.plain)
-                    NavigationLink("Post") { PostJobView() }
+                    if model.session?.role == .customer {
+                        NavigationLink("Post") { PostJobView() }
+                    }
                 }
             }
             ScrollView {
@@ -36,8 +38,10 @@ struct CustomerHome: View {
                         } else {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text("No jobs yet.").font(.headline)
-                                NavigationLink("Post a job") { PostJobView() }
-                                    .buttonStyle(.borderedProminent)
+                                if model.session?.role == .customer {
+                                    NavigationLink("Post a job") { PostJobView() }
+                                        .buttonStyle(.borderedProminent)
+                                }
                             }
                         }
                     }
@@ -144,7 +148,9 @@ struct PostJobView: View {
 
     var body: some View {
         Group {
-            if finished {
+            if model.session?.role != .customer {
+                Color.clear
+            } else if finished {
                 VStack(spacing: 16) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.largeTitle)

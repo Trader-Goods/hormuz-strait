@@ -238,10 +238,11 @@ final class AppModel: ObservableObject {
     }
 
     func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool) async -> Bool {
-        guard session != nil else {
+        guard let current = session else {
             postSignIn = true
             return false
         }
+        guard current.role == .customer else { return false }
         var ok = false
         var point = await SiteGeocoder.locate(street: street, city: city, state: state, zip: zip)
         if point == nil {
@@ -262,6 +263,20 @@ final class AppModel: ObservableObject {
             }
         }
         return ok
+    }
+
+    func rememberOpenedJob(_ id: UUID) async {
+        guard let fetched = try? await api.job(id: id) else { return }
+        var record = fetched
+        if !showsExactAddress(record) {
+            record = record.listingCopy()
+        }
+        if let index = jobs.firstIndex(where: { $0.id == id }) {
+            jobs[index] = record
+        } else {
+            jobs.append(record)
+        }
+        await api.cachePhotos(record.photoNames)
     }
 
     func acceptListing(jobID: UUID) async -> Bool {

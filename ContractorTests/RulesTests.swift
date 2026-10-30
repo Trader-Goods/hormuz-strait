@@ -276,6 +276,17 @@ final class RulesTests: XCTestCase {
         XCTAssertTrue(book.canSeePhone(of: greenline.id, viewer: maya))
     }
 
+    func testAProCannotPostAJob() throws {
+        var book = MarketplaceBook.demo()
+        let pro = try XCTUnwrap(book.users.first { $0.user.email == "greenline@contractor.demo" }?.user)
+        XCTAssertThrowsError(try book.postJob(
+            customerID: pro.id, category: .lawn, street: "1 High Street", city: "Mansfield", state: "OH", zip: "44903",
+            scheduledOn: "2026-12-01", details: .empty, photoNames: [], offeredPriceCents: 6_400, publish: true
+        )) { error in
+            XCTAssertEqual(error as? MarketplaceError, .wrongAccount)
+        }
+    }
+
     func testPostedPriceIsTheAmountTheCustomerEntered() throws {
         var book = MarketplaceBook.demo()
         let maya = try XCTUnwrap(book.users.first { $0.user.email == "maya@contractor.demo" }?.user)

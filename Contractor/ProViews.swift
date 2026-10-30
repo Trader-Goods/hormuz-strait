@@ -259,7 +259,7 @@ struct ProJobView: View {
                         PriceChip(cents: job.offeredPriceCents)
                     }
                     JobMiniMap(job: job, exact: model.showsExactAddress(job))
-                    Text("\(DayStamp.display(job.scheduledOn)) · \(job.details.summary(for: job.category))")
+                    Text("\(whenText(job)) · \(job.details.summary(for: job.category))")
                         .foregroundStyle(.secondary)
                     if job.estimatedMinutes > 0 {
                         Text("About \(job.estimatedMinutes) minutes")
@@ -270,8 +270,8 @@ struct ProJobView: View {
                         Text(estimate.explanation)
                         Text(estimate.disclaimer).font(.footnote).foregroundStyle(.secondary)
                     }
-                    if !job.details.notes.isEmpty {
-                        Text(job.details.notes)
+                    if !jobNotes(job).isEmpty {
+                        Text(jobNotes(job))
                     }
                     if !job.details.obstacles.isEmpty {
                         Text("Obstacles: \(job.details.obstacles)").font(.footnote)
@@ -366,10 +366,35 @@ struct ProJobView: View {
             .presentationDetents([.medium])
         }
         .task {
-            if let job, let person = await model.person(job.customerID) {
+            await model.rememberOpenedJob(jobID)
+            if let job, job.customerID != UUID(uuidString: "00000000-0000-0000-0000-000000000000"),
+               let person = await model.person(job.customerID) {
                 customer = person.displayName
             }
         }
+    }
+
+    private func whenText(_ job: JobRecord) -> String {
+        let date = DayStamp.display(job.scheduledOn)
+        guard let time = scheduledTime(job) else { return date }
+        return "\(date) · \(time)"
+    }
+
+    private func scheduledTime(_ job: JobRecord) -> String? {
+        job.details.notes
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { $0.hasPrefix("Time:") }
+            .map { $0.replacingOccurrences(of: "Time:", with: "").trimmingCharacters(in: .whitespaces) }
+            .flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    private func jobNotes(_ job: JobRecord) -> String {
+        job.details.notes
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.hasPrefix("Time:") && !$0.isEmpty }
+            .joined(separator: "\n")
     }
 }
 
