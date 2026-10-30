@@ -133,14 +133,11 @@ struct PostJobView: View {
 
     private var service: ServiceType? { ServiceCatalog.find(serviceType) }
     private var addressReady: Bool { USAddress.isComplete(street: street, city: city, state: state, zip: zip) }
-    private var offeredCents: Int {
-        let dollars = Decimal(string: offered.filter { $0.isNumber || $0 == "." }) ?? 0
-        return NSDecimalNumber(decimal: dollars * 100).intValue
-    }
+    private var offeredCents: Int { PriceInput.cents(from: offered) }
     private var canAdvance: Bool {
         switch step {
         case 2: return addressReady
-        case 3: return offeredCents > 0 && result?.suggestedCents != nil
+        case 3: return offeredCents > 0
         default: return true
         }
     }
@@ -221,6 +218,15 @@ struct PostJobView: View {
         }
         .onChange(of: query) { _, value in
             completer.update(value)
+        }
+        .onAppear(perform: loadDraft)
+        .onDisappear {
+            if !finished { rememberDraft() }
+        }
+        .sheet(isPresented: $model.postSignIn) {
+            PostSignInSheet {
+                Task { await save(publish: true) }
+            }
         }
     }
 
@@ -363,11 +369,28 @@ struct PostJobView: View {
 
     private var priceStep: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let result {
-                EstimateCard(result: result, offered: $offered)
-            } else if model.busy {
+            if result == nil && model.busy {
                 ProgressView()
+                    .accessibilityLabel("Estimating")
             }
+            if let result {
+                if let cents = result.suggestedCents {
+                    Text("Suggested \(Money.string(cents: cents))")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                if !result.explanation.isEmpty {
+                    Text(result.explanation)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(result.questions, id: \.self) { question in
+                    Text(question)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            PriceEditor(offered: $offered)
             NavigationLink("See nearby prices") {
                 NearbyPricesPage(readOnly: true, showsBrandHeader: false)
             }
@@ -384,9 +407,7 @@ struct PostJobView: View {
                 Text("\(street), \(city), \(state) \(zip)")
                 Text(when.formatted(date: .abbreviated, time: .shortened))
                     .foregroundStyle(.secondary)
-                if offeredCents > 0 {
-                    PriceChip(cents: offeredCents)
-                }
+                PriceEditor(offered: $offered)
                 Toggle("Allow more than one contractor", isOn: $allowsMultiple)
             }
         }
@@ -414,7 +435,7 @@ struct PostJobView: View {
         let engine = PricingEngine()
         let pricing = await engine.estimate(request)
         result = pricing
-        if offered.isEmpty, let cents = pricing.suggestedCents {
+        if offered.isEmpty, let cents = pricing.suggestedCents, cents > 0 {
             offered = String(cents / 100)
         }
     }
@@ -441,6 +462,7 @@ struct PostJobView: View {
     }
 
     private func save(publish: Bool) async {
+        rememberDraft()
         let details = JobDetails(lawnSize: lawnSize, lotSize: lotSize, rooms: rooms, stairs: stairs, obstacles: request.obstacles, notes: notesWithTime)
         let savedEstimate = result.flatMap { $0.suggestedCents == nil ? nil : PriceEstimate($0) }
         let ok = await model.postJob(
@@ -459,9 +481,203 @@ struct PostJobView: View {
             publish: publish
         )
         if ok {
+            if publish { PostDraft.clear() }
             savedAsDraft = !publish
             finished = true
         }
+    }
+
+    private func rememberDraft() {
+        PostDraft(
+            serviceType: serviceType,
+            street: street,
+            city: city,
+            state: state,
+            zip: zip,
+            notes: notes,
+            obstacles: obstacles,
+            lawnSize: lawnSize,
+            lotSize: lotSize,
+            offered: offered,
+            rooms: rooms,
+            stairs: stairs,
+            allowsMultiple: allowsMultiple,
+            when: when,
+            step: step
+        ).save()
+    }
+
+    private func loadDraft() {
+        guard street.isEmpty, notes.isEmpty, offered.isEmpty, let draft = PostDraft.load() else { return }
+        serviceType = draft.serviceType
+        street = draft.street
+        city = draft.city
+        state = draft.state
+        zip = draft.zip
+        notes = draft.notes
+        obstacles = draft.obstacles
+        lawnSize = draft.lawnSize
+        lotSize = draft.lotSize
+        offered = draft.offered
+        rooms = draft.rooms
+        stairs = draft.stairs
+        allowsMultiple = draft.allowsMultiple
+        when = draft.when
+        step = min(max(draft.step, 0), 4)
+    }
+}
+
+private struct PostDraft: Codable {
+    var serviceType: String
+    var street: String
+    var city: String
+    var state: String
+    var zip: String
+    var notes: String
+    var obstacles: String
+    var lawnSize: String
+    var lotSize: String
+    var offered: String
+    var rooms: Int
+    var stairs: Bool
+    var allowsMultiple: Bool
+    var when: Date
+    var step: Int
+
+    func save() {
+        guard let data = try? JSONEncoder().encode(self) else { return }
+        UserDefaults.standard.set(data, forKey: Self.key)
+    }
+
+    static func load() -> PostDraft? {
+        guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(PostDraft.self, from: data)
+    }
+
+    static func clear() {
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
+    private static let key = "contractor.postDraft"
+}
+
+struct PriceEditor: View {
+    @Binding var offered: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Your price").font(.headline)
+            HStack(spacing: 12) {
+                Button {
+                    PriceInput.step(&offered, by: -500)
+                    Haptic.tap()
+                } label: {
+                    Image(systemName: "minus.circle.fill").font(.title)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Decrease price")
+                TextField("Price", text: $offered)
+                    .keyboardType(.numberPad)
+                    .font(.title.weight(.bold))
+                    .multilineTextAlignment(.center)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("Your price")
+                Button {
+                    PriceInput.step(&offered, by: 500)
+                    Haptic.tap()
+                } label: {
+                    Image(systemName: "plus.circle.fill").font(.title)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Increase price")
+            }
+            Slider(
+                value: Binding(
+                    get: { min(2_000, Double(PriceInput.cents(from: offered)) / 100) },
+                    set: { offered = String(Int($0.rounded())) }
+                ),
+                in: 0...2_000,
+                step: 5
+            )
+            .accessibilityLabel("Price")
+            if !offered.isEmpty && PriceInput.cents(from: offered) <= 0 {
+                Text("Enter a price greater than zero.")
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+}
+
+enum PriceInput {
+    static func cents(from text: String) -> Int {
+        let digits = text.filter { $0.isNumber || $0 == "." }
+        let dollars = Decimal(string: digits) ?? 0
+        return max(0, NSDecimalNumber(decimal: dollars * 100).intValue)
+    }
+
+    static func step(_ text: inout String, by delta: Int) {
+        let next = max(0, cents(from: text) + delta)
+        text = next == 0 ? "" : String(next / 100)
+    }
+}
+
+private struct PostSignInSheet: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    var onSignedIn: () -> Void
+    @State private var email = ""
+    @State private var password = ""
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Sign in to post this job.")
+                    .font(.headline)
+                TextField("Email", text: $email)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.emailAddress)
+                    .textContentType(.username)
+                    .autocorrectionDisabled()
+                SecureField("Password", text: $password)
+                    .textContentType(.password)
+                if model.pendingConfirmation != nil {
+                    Text("Check your email")
+                        .font(.headline)
+                    ConfirmSignInButton()
+                }
+                if let error = model.errorMessage, error != "Check your email" {
+                    Text(error).foregroundStyle(.red)
+                }
+                Button(model.busy ? "Signing in…" : "Sign in") {
+                    Task {
+                        if await model.signIn(email: email, password: password) {
+                            onSignedIn()
+                        }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.busy || email.isEmpty || password.isEmpty)
+                Spacer()
+            }
+            .padding(20)
+            .navigationTitle("Sign in")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Close") {
+                        model.postSignIn = false
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                if email.isEmpty {
+                    email = UserDefaults.standard.string(forKey: "contractor.lastEmail") ?? ""
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
 

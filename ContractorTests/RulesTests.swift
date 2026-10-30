@@ -234,6 +234,11 @@ final class RulesTests: XCTestCase {
         XCTAssertFalse(JobStatus.disputed.isListed)
         XCTAssertFalse(JobStatus.approved.isListed)
         XCTAssertEqual(AppModel.describe(MarketplaceError.confirmEmail), "Check your email")
+        XCTAssertTrue(AuthCallback.needsEmailConfirmation("Email not confirmed"))
+        XCTAssertTrue(AuthCallback.needsEmailConfirmation("email_not_confirmed"))
+        XCTAssertFalse(AuthCallback.needsEmailConfirmation("Invalid login credentials"))
+        XCTAssertFalse(AuthCallback.needsEmailConfirmation("new row violates row-level security policy"))
+        XCTAssertEqual(AppModel.describe(MarketplaceError.server("new row violates row-level security policy")), "new row violates row-level security policy")
         XCTAssertEqual(AuthCallback.redirect, "contractorpros://auth-callback")
         let url = URL(string: "contractorpros://auth-callback#access_token=abc&refresh_token=def&type=signup")!
         let params = AuthCallback.params(from: url)
@@ -269,6 +274,25 @@ final class RulesTests: XCTestCase {
         let quote = try XCTUnwrap(book.quotes.first { $0.proID == greenline.id })
         _ = try book.book(customerID: maya.id, quoteID: quote.id)
         XCTAssertTrue(book.canSeePhone(of: greenline.id, viewer: maya))
+    }
+
+    func testPostedPriceIsTheAmountTheCustomerEntered() throws {
+        var book = MarketplaceBook.demo()
+        let maya = try XCTUnwrap(book.users.first { $0.user.email == "maya@contractor.demo" }?.user)
+        let estimate = PriceEstimate(PricingResult(
+            questions: [], lowCents: 6_800, highCents: 10_200, suggestedCents: 8_500,
+            estimatedMinutes: 60, difficulty: "Typical", explanation: "Suggested",
+            assumptions: [], rateName: "US default", disclaimer: "Not a quote", isGuaranteedQuote: false
+        ))
+        let job = try book.postJob(
+            customerID: maya.id, category: .lawn, street: "1 High Street", city: "Mansfield", state: "OH", zip: "44903",
+            scheduledOn: "2026-12-01", details: .empty, photoNames: [],
+            offeredPriceCents: 6_400, serviceType: "mowing", estimate: estimate, publish: true
+        )
+        XCTAssertEqual(job.offeredPriceCents, 6_400)
+        XCTAssertNotEqual(job.offeredPriceCents, estimate.suggestedCents)
+        XCTAssertEqual(PriceInput.cents(from: "64"), 6_400)
+        XCTAssertEqual(PriceInput.cents(from: "0"), 0)
     }
 
     func testCustomerCanDeclineAnOfferAndAProCanSaveABio() throws {

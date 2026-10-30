@@ -46,6 +46,11 @@ enum AuthCallback {
         }
         return values
     }
+
+    static func needsEmailConfirmation(_ message: String) -> Bool {
+        let lower = message.lowercased()
+        return lower.contains("email not confirmed") || lower.contains("email_not_confirmed")
+    }
 }
 
 @MainActor
@@ -412,12 +417,12 @@ final class SupabaseBackend: ContractorAPI {
     }
 
     func restore() async throws -> UserRecord? {
-        guard accessToken != nil, userID != nil else { return nil }
-        if let record = try? await currentUser() { return record }
-        guard await refreshed() else {
-            clearSession()
-            return nil
+        guard accessToken != nil || refreshToken != nil else { return nil }
+        if accessToken == nil || Self.tokenExpired(accessToken) {
+            guard await refreshed() else { return nil }
         }
+        if let record = try? await currentUser() { return record }
+        guard await refreshed() else { return nil }
         return try? await currentUser()
     }
 
@@ -448,14 +453,32 @@ final class SupabaseBackend: ContractorAPI {
             "password": password,
             "data": metadata,
         ]
-        let response = try await send(path: AuthCallback.signupPath(), method: "POST", body: payload, auth: false)
+        let response: [String: Any]
+        do {
+            response = try await send(path: AuthCallback.signupPath(), method: "POST", body: payload, auth: false)
+        } catch let MarketplaceError.server(message) {
+            if message.lowercased().contains("already") {
+                return try await signInAfterSignup(email: cleanEmail, password: password)
+            }
+            throw MarketplaceError.server(message)
+        }
         do {
             try storeSession(response)
         } catch MarketplaceError.confirmEmail {
-            throw MarketplaceError.confirmEmail
+            return try await signInAfterSignup(email: cleanEmail, password: password)
         }
         try await ensureProfile(metadata: metadata, email: cleanEmail)
         return try await currentUser()
+    }
+
+    private func signInAfterSignup(email: String, password: String) async throws -> UserRecord {
+        do {
+            return try await signIn(email: email, password: password)
+        } catch let MarketplaceError.server(message) where AuthCallback.needsEmailConfirmation(message) {
+            throw MarketplaceError.confirmEmail
+        } catch {
+            throw error
+        }
     }
 
     func signIn(email: String, password: String) async throws -> UserRecord {
@@ -629,11 +652,17 @@ final class SupabaseBackend: ContractorAPI {
     }
 
     func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool) async throws -> JobRecord {
-        guard let userID else { throw MarketplaceError.wrongAccount }
+        guard let userID, accessToken != nil else { throw MarketplaceError.needsSignIn }
         if publish && offeredPriceCents <= 0 { throw MarketplaceError.invalid }
         var names: [String] = []
         for photo in photos {
-            if let name = try await upload(photo) { names.append(name) }
+            do {
+                if let name = try await upload(photo) { names.append(name) }
+            } catch MarketplaceError.needsSignIn {
+                throw MarketplaceError.needsSignIn
+            } catch {
+                print("Contractor photo upload failed: \(error)")
+            }
         }
         let body: [String: Any] = [
             "customer_id": userID.uuidString,
@@ -900,8 +929,9 @@ final class SupabaseBackend: ContractorAPI {
     }
 
     private func storeSession(_ json: [String: Any]) throws {
-        let token = json["access_token"] as? String
-        let user = json["user"] as? [String: Any]
+        let nested = json["session"] as? [String: Any]
+        let token = (json["access_token"] as? String) ?? (nested?["access_token"] as? String)
+        let user = (json["user"] as? [String: Any]) ?? (nested?["user"] as? [String: Any])
         let idString = (user?["id"] as? String) ?? (json["id"] as? String)
         guard let token, !token.isEmpty, let idString, let uuid = UUID(uuidString: idString) else {
             let pendingEmail = (user?["email"] as? String) ?? (json["email"] as? String)
@@ -912,7 +942,7 @@ final class SupabaseBackend: ContractorAPI {
             throw MarketplaceError.invalid
         }
         accessToken = token
-        refreshToken = json["refresh_token"] as? String
+        refreshToken = (json["refresh_token"] as? String) ?? (nested?["refresh_token"] as? String)
         userID = uuid
         UserDefaults.standard.set(token, forKey: "contractor.access")
         UserDefaults.standard.set(refreshToken, forKey: "contractor.refresh")
@@ -930,10 +960,39 @@ final class SupabaseBackend: ContractorAPI {
 
     private func refreshed() async -> Bool {
         guard let refreshToken, !refreshToken.isEmpty else { return false }
-        guard let json = try? await send(path: "/auth/v1/token?grant_type=refresh_token", method: "POST", body: ["refresh_token": refreshToken], auth: false) else {
+        do {
+            let json = try await send(path: "/auth/v1/token?grant_type=refresh_token", method: "POST", body: ["refresh_token": refreshToken], auth: false, retryUnauthorized: false)
+            try storeSession(json)
+            return true
+        } catch let MarketplaceError.server(message) {
+            let lower = message.lowercased()
+            if lower.contains("invalid") || lower.contains("expired") || lower.contains("not found") || lower.contains("revoked") {
+                clearSession()
+            }
+            print("Contractor session refresh failed: \(message)")
+            return false
+        } catch {
+            print("Contractor session refresh failed: \(error)")
             return false
         }
-        return (try? storeSession(json)) != nil
+    }
+
+    private static func tokenExpired(_ token: String?) -> Bool {
+        guard let token, let exp = userExpiry(fromJWT: token) else { return false }
+        return Date().timeIntervalSince1970 > exp - 60
+    }
+
+    private static func userExpiry(fromJWT token: String) -> TimeInterval? {
+        let parts = token.split(separator: ".")
+        guard parts.count >= 2 else { return nil }
+        var payload = String(parts[1]).replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        let remainder = payload.count % 4
+        if remainder > 0 { payload += String(repeating: "=", count: 4 - remainder) }
+        guard let data = Data(base64Encoded: payload),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        if let exp = json["exp"] as? TimeInterval { return exp }
+        if let exp = json["exp"] as? Int { return TimeInterval(exp) }
+        return nil
     }
 
     private func ensureProfile(metadata: [String: Any], email: String) async throws {
@@ -976,7 +1035,7 @@ final class SupabaseBackend: ContractorAPI {
     }
 
     private func upload(_ data: Data) async throws -> String? {
-        guard let userID else { throw MarketplaceError.wrongAccount }
+        guard let userID, let accessToken else { throw MarketplaceError.needsSignIn }
         guard let jpeg = await PhotoStore.compressedJPEG(data) else { return nil }
         let name = "\(userID.uuidString)/\(UUID().uuidString).jpg"
         guard let uploadURL = URL(string: "storage/v1/object/job-photos/\(name)", relativeTo: base)?.absoluteURL else {
@@ -985,12 +1044,16 @@ final class SupabaseBackend: ContractorAPI {
         var request = URLRequest(url: uploadURL)
         request.httpMethod = "POST"
         request.setValue(key, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer \(accessToken ?? key)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
         request.httpBody = jpeg
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw MarketplaceError.invalid
+        let (body, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw MarketplaceError.server("Photo upload failed.") }
+        guard (200..<300).contains(http.statusCode) else {
+            let message = Self.serverMessage(from: body, status: http.statusCode)
+            print("Contractor photo upload failed: \(http.statusCode) \(message)")
+            if http.statusCode == 401 { throw MarketplaceError.needsSignIn }
+            throw MarketplaceError.server(message)
         }
         return name
     }
@@ -1007,14 +1070,15 @@ final class SupabaseBackend: ContractorAPI {
         return try decoder().decode(T.self, from: data)
     }
 
-    private func send(path: String, method: String, body: [String: Any]?, auth: Bool, represent: Bool = false) async throws -> [String: Any] {
+    private func send(path: String, method: String, body: [String: Any]?, auth: Bool, represent: Bool = false, retryUnauthorized: Bool = true) async throws -> [String: Any] {
         guard let url = URL(string: path, relativeTo: base)?.absoluteURL else { throw MarketplaceError.invalid }
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue(key, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if represent { request.setValue("return=representation", forHTTPHeaderField: "Prefer") }
-        if auth, let accessToken {
+        if auth {
+            guard let accessToken else { throw MarketplaceError.needsSignIn }
             request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         } else {
             request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
@@ -1023,13 +1087,37 @@ final class SupabaseBackend: ContractorAPI {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw MarketplaceError.invalid }
-        guard (200..<300).contains(http.statusCode) else { throw MarketplaceError.invalid }
+        guard let http = response as? HTTPURLResponse else { throw MarketplaceError.server("The request failed.") }
+        if http.statusCode == 401, auth, retryUnauthorized {
+            if await refreshed() {
+                return try await send(path: path, method: method, body: body, auth: auth, represent: represent, retryUnauthorized: false)
+            }
+            throw MarketplaceError.needsSignIn
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let message = Self.serverMessage(from: data, status: http.statusCode)
+            print("Contractor API \(method) \(path) failed: \(http.statusCode) \(message)")
+            throw MarketplaceError.server(message)
+        }
         if data.isEmpty { return [:] }
         let object = try JSONSerialization.jsonObject(with: data)
         if let dictionary = object as? [String: Any] { return dictionary }
         if let array = object as? [Any] { return ["rows": array] }
         return [:]
+    }
+
+    private static func serverMessage(from data: Data, status: Int) -> String {
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let parts = ["message", "error_description", "msg", "hint", "details", "error"].compactMap { key -> String? in
+                guard let value = json[key] as? String, !value.isEmpty else { return nil }
+                return value
+            }
+            if let first = parts.first { return first }
+        }
+        if let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+            return text
+        }
+        return "The request failed (\(status))."
     }
 
     private func decoder() -> JSONDecoder {

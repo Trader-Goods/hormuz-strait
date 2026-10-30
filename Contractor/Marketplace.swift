@@ -119,6 +119,8 @@ enum MarketplaceError: Error, Equatable {
     case termsRequired
     case confirmEmail
     case sampleJob
+    case needsSignIn
+    case server(String)
 }
 
 struct StoredUser: Codable, Equatable {

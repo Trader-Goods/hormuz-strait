@@ -18,6 +18,7 @@ final class AppModel: ObservableObject {
     @Published var notices: [NoticeRecord] = []
     @Published var showSampleJobs: Bool
     @Published var pendingConfirmation: PendingSignIn?
+    @Published var postSignIn = false
     @Published private(set) var readNoticeIDs: Set<String>
 
     var showsSampleJobs: Bool { live && showSampleJobs }
@@ -48,14 +49,23 @@ final class AppModel: ObservableObject {
         if session != nil { await reload() }
     }
 
-    func signIn(email: String, password: String) async {
+    func signIn(email: String, password: String) async -> Bool {
+        var ok = false
         await run {
-            self.session = try await self.api.signIn(email: email, password: password)
-            self.pendingConfirmation = nil
-            self.rememberEmail(email)
-            Haptic.success()
-            await self.reload()
+            do {
+                self.session = try await self.api.signIn(email: email, password: password)
+                self.pendingConfirmation = nil
+                self.postSignIn = false
+                self.rememberEmail(email)
+                ok = true
+                Haptic.success()
+                await self.reload()
+            } catch let MarketplaceError.server(message) where AuthCallback.needsEmailConfirmation(message) {
+                self.pendingConfirmation = PendingSignIn(email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), password: password)
+                throw MarketplaceError.confirmEmail
+            }
         }
+        return ok
     }
 
     func signInAfterConfirm() async {
@@ -83,6 +93,7 @@ final class AppModel: ObservableObject {
                 Haptic.success()
                 await self.reload()
             } catch MarketplaceError.confirmEmail {
+                self.session = nil
                 self.pendingConfirmation = PendingSignIn(email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), password: password)
                 throw MarketplaceError.confirmEmail
             }
@@ -227,16 +238,28 @@ final class AppModel: ObservableObject {
     }
 
     func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool) async -> Bool {
+        guard session != nil else {
+            postSignIn = true
+            return false
+        }
         var ok = false
         var point = await SiteGeocoder.locate(street: street, city: city, state: state, zip: zip)
         if point == nil {
             point = await SiteGeocoder.locate(zip: zip)
         }
         await run {
-            _ = try await self.api.postJob(category: category, street: street, city: city, state: state, zip: zip, latitude: point?.latitude, longitude: point?.longitude, scheduledOn: scheduledOn, details: details, photos: photos, offeredPriceCents: offeredPriceCents, serviceType: serviceType, estimate: estimate, allowsMultiple: allowsMultiple, publish: publish)
-            ok = true
-            Haptic.success()
-            await self.reload()
+            do {
+                _ = try await self.api.postJob(category: category, street: street, city: city, state: state, zip: zip, latitude: point?.latitude, longitude: point?.longitude, scheduledOn: scheduledOn, details: details, photos: photos, offeredPriceCents: offeredPriceCents, serviceType: serviceType, estimate: estimate, allowsMultiple: allowsMultiple, publish: publish)
+                ok = true
+                Haptic.success()
+                await self.reload()
+            } catch MarketplaceError.needsSignIn {
+                self.postSignIn = true
+                throw MarketplaceError.needsSignIn
+            } catch {
+                print("Contractor post failed: \(error)")
+                throw error
+            }
         }
         return ok
     }
@@ -410,6 +433,10 @@ final class AppModel: ObservableObject {
             return "Check your email"
         case .sampleJob:
             return "Sample jobs are examples on this phone. They are not real customers."
+        case .needsSignIn:
+            return "Sign in to post this job."
+        case .server(let message):
+            return message
         case .wrongAccount, .missing, .none:
             return "That could not be saved."
         }
