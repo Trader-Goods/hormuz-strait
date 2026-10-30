@@ -636,7 +636,6 @@ struct JobDetailView: View {
                             bookAgain(booking)
                         }
                     }
-                }
                 } else if model.busy {
                     SkeletonList()
                 } else {
