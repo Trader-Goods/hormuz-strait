@@ -244,11 +244,6 @@ private struct JobPinCard: View {
                 }
                 Text("\(DayStamp.display(job.scheduledOn)) · \(distance)")
                     .foregroundStyle(.secondary)
-                if !job.status.isListed {
-                    Text(job.status == .completed || job.status == .approved ? "Completed price" : "Accepted price")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
                 if job.estimatedMinutes > 0 {
                     Text("About \(job.estimatedMinutes) minutes").font(.footnote).foregroundStyle(.secondary)
                 }
@@ -278,7 +273,6 @@ struct NearbyPricesPage: View {
     var readOnly: Bool
     var showsBrandHeader = true
     @State private var typeFilter = "All"
-    @State private var includeAccepted = true
 
     private var jobs: [JobRecord] {
         let source: [JobRecord]
@@ -290,8 +284,8 @@ struct NearbyPricesPage: View {
             source = []
         }
         return source.filter { job in
+            guard job.status.isListed else { return false }
             if typeFilter != "All" && job.serviceType != typeFilter { return false }
-            if readOnly && !includeAccepted && !job.status.isListed { return false }
             return true
         }
     }
@@ -308,12 +302,8 @@ struct NearbyPricesPage: View {
                         Button(service.title) { typeFilter = service.id }
                     }
                 }
-                if readOnly {
-                    Toggle("Accepted prices", isOn: $includeAccepted)
-                        .font(.subheadline)
-                }
                 if jobs.isEmpty {
-                    Text("No prices on the map yet.")
+                    Text("No open jobs.")
                         .foregroundStyle(.secondary)
                 }
                 ProJobMap(jobs: jobs, readOnly: readOnly, expands: true)

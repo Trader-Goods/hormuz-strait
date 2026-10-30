@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Make the uploaded build available to the internal TestFlight group Me.
+"""Add the uploaded build to TestFlight groups Me and Family & Friends.
 
-Does not submit the app for beta review or App Store review.
+Submits the build for TestFlight beta review when the external group needs it.
+Does not submit the app for App Store review.
 """
 
 import os
@@ -13,6 +14,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 from prepare_appstore_signing import api, token
 
 GROUP_NAME = "Me"
+EXTERNAL_GROUP_ID = "ec01899f-2e43-4eca-80c0-41031d7b61fc"
+EXTERNAL_GROUP_NAME = "Family & Friends"
 WAIT_SECONDS = 20 * 60
 API_HOST = "https://api.appstoreconnect.apple.com"
 
@@ -223,6 +226,71 @@ def assigned(auth, group, build, automatic):
     return False
 
 
+def submit_beta_review(auth, build_id):
+    query = urllib.parse.urlencode({"filter[build]": build_id, "limit": 5})
+    try:
+        found = api("GET", "/v1/betaAppReviewSubmissions?" + query, auth).get("data", [])
+    except SystemExit:
+        found = []
+    for item in found:
+        state = (item.get("attributes") or {}).get("betaReviewState") or ""
+        print(f"beta review state {state}")
+        if state in ("WAITING_FOR_REVIEW", "IN_REVIEW", "APPROVED"):
+            print("TestFlight beta review already submitted")
+            return True
+    try:
+        api("POST", "/v1/betaAppReviewSubmissions", auth, {
+            "data": {
+                "type": "betaAppReviewSubmissions",
+                "relationships": {
+                    "build": {"data": {"type": "builds", "id": build_id}},
+                },
+            }
+        })
+    except SystemExit as error:
+        if getattr(error, "code", None) == 409:
+            print("TestFlight beta review already submitted")
+            return True
+        print("TestFlight beta review was not submitted")
+        return False
+    print("submitted for TestFlight beta review")
+    return True
+
+
+def link_external_group(auth, build_id):
+    print("adding build to external group " + EXTERNAL_GROUP_NAME)
+    try:
+        api("POST", f"/v1/builds/{build_id}/relationships/betaGroups", auth, {
+            "data": [{"type": "betaGroups", "id": EXTERNAL_GROUP_ID}],
+        })
+    except SystemExit as error:
+        code = getattr(error, "code", None)
+        if code == 409:
+            print("build already in external group " + EXTERNAL_GROUP_NAME)
+            return True
+        if code == 422:
+            print(f"external group link returned {code}")
+            if group_has_build(auth, EXTERNAL_GROUP_ID, build_id) or build_has_group(auth, build_id, EXTERNAL_GROUP_ID):
+                print("build added to external group " + EXTERNAL_GROUP_NAME)
+                return True
+            return False
+        raise
+    print("build added to external group " + EXTERNAL_GROUP_NAME)
+    return True
+
+
+def distribute_external(auth, build_id):
+    if link_external_group(auth, build_id):
+        return
+    submitted = submit_beta_review(auth, build_id)
+    if link_external_group(auth, build_id):
+        return
+    if submitted:
+        print("Family & Friends will receive this build after TestFlight beta review")
+        return
+    raise SystemExit("build was not added to Family & Friends and beta review was not submitted")
+
+
 def main():
     for name in ("KEY_PATH", "KID", "ISS", "BUNDLE_ID", "BUILD_NUMBER"):
         require(name)
@@ -254,6 +322,7 @@ def main():
         answer_export(auth, build_id)
 
     if assigned(auth, group, build_id, False):
+        distribute_external(auth, build_id)
         return
 
     automatic = group_access(auth, group)
@@ -263,6 +332,7 @@ def main():
 
     link_group(auth, build_id, group)
     if assigned(auth, group, build_id, automatic):
+        distribute_external(auth, build_id)
         return
     raise SystemExit("build was not added to internal group Me")
 

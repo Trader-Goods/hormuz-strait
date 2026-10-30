@@ -219,7 +219,7 @@ final class MockBackend: ContractorAPI {
 
     func priceJobs() async throws -> [JobRecord] {
         book.jobs.filter { job in
-            job.offeredPriceCents > 0 && (job.status.isListed || job.status == .booked || job.status == .completed || job.status == .approved)
+            job.offeredPriceCents > 0 && job.status.isListed
         }
         .map { $0.publicPriceCopy() }
     }
