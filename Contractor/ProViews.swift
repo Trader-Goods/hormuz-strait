@@ -319,22 +319,12 @@ struct ProJobView: View {
                         }
                     } else if job.status.isListed && !SampleJobs.contains(job.id) {
                         Button("Accept \(Money.string(cents: job.offeredPriceCents))") {
-                            Haptic.tap()
-                            guard model.session?.canTakeJobs == true else {
-                                model.errorMessage = AppModel.describe(.notReady)
-                                return
-                            }
-                            Task { _ = await model.acceptListing(jobID: job.id) }
+                            acceptTapped(job)
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(model.busy || job.offeredPriceCents <= 0)
                         Button("Make offer") {
-                            Haptic.tap()
-                            guard model.session?.canTakeJobs == true else {
-                                model.errorMessage = AppModel.describe(.notReady)
-                                return
-                            }
-                            offering = true
+                            offerTapped()
                         }
                         .buttonStyle(.bordered)
                         if model.session?.canTakeJobs != true {
@@ -398,6 +388,24 @@ struct ProJobView: View {
             .presentationDetents([.medium])
         }
         .task { await loadJob() }
+    }
+
+    private func acceptTapped(_ job: JobRecord) {
+        Haptic.tap()
+        guard model.session?.canTakeJobs == true else {
+            model.errorMessage = AppModel.describe(.notReady)
+            return
+        }
+        Task { _ = await model.acceptListing(jobID: job.id) }
+    }
+
+    private func offerTapped() {
+        Haptic.tap()
+        guard model.session?.canTakeJobs == true else {
+            model.errorMessage = AppModel.describe(.notReady)
+            return
+        }
+        offering = true
     }
 
     private func loadJob() async {
