@@ -18,6 +18,7 @@ final class AppModel: ObservableObject {
     @Published var notices: [NoticeRecord] = []
     @Published var showSampleJobs: Bool
     @Published var pendingConfirmation: PendingSignIn?
+    @Published private(set) var readNoticeIDs: Set<String>
 
     var showsSampleJobs: Bool { live && showSampleJobs }
 
@@ -27,6 +28,7 @@ final class AppModel: ObservableObject {
     init() {
         let stored = UserDefaults.standard.object(forKey: "contractor.showSampleJobs") as? Bool
         showSampleJobs = stored ?? true
+        readNoticeIDs = Set(UserDefaults.standard.stringArray(forKey: "contractor.readNotices") ?? [])
         if BackendConfig.isLive {
             api = SupabaseBackend()
         } else {
@@ -50,6 +52,8 @@ final class AppModel: ObservableObject {
         await run {
             self.session = try await self.api.signIn(email: email, password: password)
             self.pendingConfirmation = nil
+            self.rememberEmail(email)
+            Haptic.success()
             await self.reload()
         }
     }
@@ -75,6 +79,8 @@ final class AppModel: ObservableObject {
             do {
                 self.session = try await self.api.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: serviceZips, acceptedTerms: acceptedTerms, radiusMiles: radiusMiles, serviceTypes: serviceTypes, phone: phone)
                 self.pendingConfirmation = nil
+                self.rememberEmail(email)
+                Haptic.success()
                 await self.reload()
             } catch MarketplaceError.confirmEmail {
                 self.pendingConfirmation = PendingSignIn(email: email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), password: password)
@@ -101,10 +107,46 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func updateServiceArea(serviceTypes: [String], radiusMiles: Int) async {
+    func updateServiceArea(serviceTypes: [String], radiusMiles: Int, bio: String, avatarJPEG: Data?) async {
         await run {
-            self.session = try await self.api.updateServiceArea(serviceTypes: serviceTypes, radiusMiles: radiusMiles)
+            self.session = try await self.api.updateServiceArea(serviceTypes: serviceTypes, radiusMiles: radiusMiles, bio: bio, avatarJPEG: avatarJPEG)
+            Haptic.success()
         }
+    }
+
+    func declineQuote(quoteID: UUID) async -> Bool {
+        var ok = false
+        await run {
+            try await self.api.declineQuote(quoteID: quoteID)
+            ok = true
+            await self.reload()
+        }
+        return ok
+    }
+
+    func unreadCount(jobID: UUID) -> Int {
+        notices.filter { $0.jobID == jobID && isUnread($0) }.count
+    }
+
+    var unreadTotal: Int {
+        notices.filter { isUnread($0) }.count
+    }
+
+    func markJobNoticesRead(_ jobID: UUID) {
+        for notice in notices where notice.jobID == jobID {
+            readNoticeIDs.insert(notice.id.uuidString)
+        }
+        UserDefaults.standard.set(Array(readNoticeIDs), forKey: "contractor.readNotices")
+    }
+
+    private func isUnread(_ notice: NoticeRecord) -> Bool {
+        notice.title == "New message" && !readNoticeIDs.contains(notice.id.uuidString)
+    }
+
+    private func rememberEmail(_ email: String) {
+        let clean = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !clean.isEmpty else { return }
+        UserDefaults.standard.set(clean, forKey: "contractor.lastEmail")
     }
 
     func signOut() async {
@@ -179,6 +221,9 @@ final class AppModel: ObservableObject {
             if let session = self.session {
                 self.session = try await self.api.refresh(session)
             }
+            if let path = self.session?.avatarPath, !path.isEmpty {
+                await self.api.cachePhotos([path])
+            }
     }
 
     func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool) async -> Bool {
@@ -190,6 +235,7 @@ final class AppModel: ObservableObject {
         await run {
             _ = try await self.api.postJob(category: category, street: street, city: city, state: state, zip: zip, latitude: point?.latitude, longitude: point?.longitude, scheduledOn: scheduledOn, details: details, photos: photos, offeredPriceCents: offeredPriceCents, serviceType: serviceType, estimate: estimate, allowsMultiple: allowsMultiple, publish: publish)
             ok = true
+            Haptic.success()
             await self.reload()
         }
         return ok
@@ -204,6 +250,7 @@ final class AppModel: ObservableObject {
         await run {
             _ = try await self.api.acceptListing(jobID: jobID)
             ok = true
+            Haptic.success()
             await self.reload()
         }
         return ok
@@ -221,6 +268,7 @@ final class AppModel: ObservableObject {
         await run {
             _ = try await self.api.sendQuote(jobID: jobID, priceCents: cents, message: message)
             ok = true
+            Haptic.success()
             await self.reload()
         }
         return ok
@@ -231,6 +279,7 @@ final class AppModel: ObservableObject {
         await run {
             _ = try await self.api.book(quoteID: quoteID)
             ok = true
+            Haptic.success()
             await self.reload()
         }
         return ok

@@ -12,10 +12,52 @@ struct WelcomeView: View {
             BrandHeader()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    if let error = model.errorMessage {
+                    if let error = model.errorMessage, error != "Check your email" {
                         Text(error).foregroundStyle(.red)
                     }
-                    ConfirmSignInButton()
+                    if model.pendingConfirmation != nil {
+                        Card {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Check your email")
+                                    .font(.headline)
+                                ConfirmSignInButton()
+                            }
+                        }
+                    }
+                    Button {
+                        Haptic.tap()
+                        role = .customer
+                    } label: {
+                        roleRow("I need work done", symbol: "house.fill", tint: pine)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("I need work done")
+                    Button {
+                        Haptic.tap()
+                        role = .pro
+                    } label: {
+                        roleRow("I'm a pro", symbol: "wrench.and.screwdriver.fill", tint: clay)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("I'm a pro")
+                    Card {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Sign in").font(.headline)
+                            TextField("Email", text: $email)
+                                .textInputAutocapitalization(.never)
+                                .keyboardType(.emailAddress)
+                                .textContentType(.username)
+                                .autocorrectionDisabled()
+                            SecureField("Password", text: $password)
+                                .textContentType(.password)
+                            Button(model.busy ? "Signing in…" : "Sign in") {
+                                Haptic.tap()
+                                Task { await model.signIn(email: email, password: password) }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(model.busy || email.isEmpty || password.isEmpty)
+                        }
+                    }
                     if !model.live {
                         Card {
                             VStack(alignment: .leading, spacing: 10) {
@@ -34,25 +76,6 @@ struct WelcomeView: View {
                             }
                         }
                     }
-                    Card {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(model.live ? "Sign in or create an account" : "Create an account").font(.headline)
-                            TextField("Email", text: $email)
-                                .textInputAutocapitalization(.never)
-                                .keyboardType(.emailAddress)
-                                .autocorrectionDisabled()
-                            SecureField("Password", text: $password)
-                            Button(model.busy ? "Signing in…" : "Sign in") {
-                                Task { await model.signIn(email: email, password: password) }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(model.busy || email.isEmpty || password.isEmpty)
-                            Button("I'm a customer") { role = .customer }
-                                .buttonStyle(.bordered)
-                            Button("I'm a pro") { role = .pro }
-                                .buttonStyle(.bordered)
-                        }
-                    }
                     HelpLinks()
                 }
                 .padding(20)
@@ -60,9 +83,33 @@ struct WelcomeView: View {
             }
             .background(paper)
             .toolbar(.hidden, for: .navigationBar)
+            .onAppear {
+                if email.isEmpty {
+                    email = UserDefaults.standard.string(forKey: "contractor.lastEmail") ?? ""
+                }
+            }
             .navigationDestination(item: $role) { selected in
                 SignUpView(role: selected, email: email, password: password)
             }
+        }
+    }
+}
+
+private func roleRow(_ title: String, symbol: String, tint: Color) -> some View {
+    Card {
+        HStack(spacing: 14) {
+            Image(systemName: symbol)
+                .font(.title2)
+                .foregroundStyle(tint)
+                .frame(width: 44, height: 44)
+                .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(ink)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.tertiary)
         }
     }
 }
@@ -116,12 +163,14 @@ struct SignUpView: View {
                     Stepper("Service radius: \(radius) miles", value: $radius, in: 5...200, step: 5)
                     Text("Services").font(.headline)
                     ForEach(ServiceCatalog.active) { service in
-                        Toggle(service.title, isOn: Binding(
+                        Toggle(isOn: Binding(
                             get: { selectedServices.contains(service.id) },
                             set: { on in
                                 if on { selectedServices.insert(service.id) } else { selectedServices.remove(service.id) }
                             }
-                        ))
+                        )) {
+                            Label(service.title, systemImage: service.symbol)
+                        }
                     }
                 }
                 Toggle("I agree to the Terms", isOn: $acceptedTerms)

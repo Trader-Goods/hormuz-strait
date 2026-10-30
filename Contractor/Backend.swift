@@ -57,7 +57,8 @@ protocol ContractorAPI: AnyObject {
     func verifyPhone() async throws -> UserRecord
     func verifyIdentity() async throws -> UserRecord
     func connectPayouts() async throws -> UserRecord
-    func updateServiceArea(serviceTypes: [String], radiusMiles: Int) async throws -> UserRecord
+    func updateServiceArea(serviceTypes: [String], radiusMiles: Int, bio: String, avatarJPEG: Data?) async throws -> UserRecord
+    func declineQuote(quoteID: UUID) async throws
     func signOut() async
     func refresh(_ user: UserRecord) async throws -> UserRecord
     func customerJobs() async throws -> [JobRecord]
@@ -91,12 +92,41 @@ enum PhotoStore {
         return folder
     }
 
-    static func save(_ data: Data) -> String? {
+    private static let cache = NSCache<NSString, UIImage>()
+
+    static func compressedJPEG(_ data: Data) async -> Data? {
+        await Task.detached(priority: .userInitiated) {
+            autoreleasepool { render(data) }
+        }.value
+    }
+
+    private nonisolated static func render(_ data: Data) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+        let maxSide: CGFloat = 1600
+        let longest = max(image.size.width, image.size.height)
+        let scaled: UIImage
+        if longest > maxSide, longest > 0 {
+            let ratio = maxSide / longest
+            let target = CGSize(width: image.size.width * ratio, height: image.size.height * ratio)
+            let format = UIGraphicsImageRendererFormat.default()
+            format.scale = 1
+            scaled = UIGraphicsImageRenderer(size: target, format: format).image { _ in
+                image.draw(in: CGRect(origin: .zero, size: target))
+            }
+        } else {
+            scaled = image
+        }
+        return scaled.jpegData(compressionQuality: 0.7)
+    }
+
+    static func save(_ data: Data) async -> String? {
+        guard let jpeg = await compressedJPEG(data) else { return nil }
         let name = UUID().uuidString + ".jpg"
-        let url = folder.appendingPathComponent(name)
-        guard let image = UIImage(data: data), let jpeg = image.jpegData(compressionQuality: 0.7) else { return nil }
         do {
-            try jpeg.write(to: url, options: .atomic)
+            try jpeg.write(to: folder.appendingPathComponent(name), options: .atomic)
+            if let image = UIImage(data: jpeg) {
+                cache.setObject(image, forKey: name as NSString)
+            }
             return name
         } catch {
             return nil
@@ -104,14 +134,21 @@ enum PhotoStore {
     }
 
     static func image(_ name: String) -> UIImage? {
+        let key = safe(name) as NSString
+        if let cached = cache.object(forKey: key) { return cached }
         let url = folder.appendingPathComponent(safe(name))
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        return UIImage(data: data)
+        guard let data = try? Data(contentsOf: url), let image = UIImage(data: data) else { return nil }
+        cache.setObject(image, forKey: key)
+        return image
     }
 
-    static func write(_ name: String, data: Data) {
-        guard let image = UIImage(data: data), let jpeg = image.jpegData(compressionQuality: 0.7) else { return }
-        try? jpeg.write(to: folder.appendingPathComponent(safe(name)), options: .atomic)
+    static func write(_ name: String, data: Data) async {
+        guard let jpeg = await compressedJPEG(data) else { return }
+        let key = safe(name)
+        if let image = UIImage(data: jpeg) {
+            cache.setObject(image, forKey: key as NSString)
+        }
+        try? jpeg.write(to: folder.appendingPathComponent(key), options: .atomic)
     }
 
     static func has(_ name: String) -> Bool {
@@ -191,9 +228,15 @@ final class MockBackend: ContractorAPI {
         return user
     }
 
-    func updateServiceArea(serviceTypes: [String], radiusMiles: Int) async throws -> UserRecord {
+    func updateServiceArea(serviceTypes: [String], radiusMiles: Int, bio: String, avatarJPEG: Data?) async throws -> UserRecord {
         guard let sessionID else { throw MarketplaceError.wrongAccount }
-        let user = try book.updateServiceArea(proID: sessionID, serviceTypes: serviceTypes, radiusMiles: radiusMiles)
+        var avatarPath = ""
+        if let avatarJPEG {
+            let name = "\(sessionID.uuidString)/profile.jpg"
+            await PhotoStore.write(name, data: avatarJPEG)
+            avatarPath = name
+        }
+        let user = try book.updateServiceArea(proID: sessionID, serviceTypes: serviceTypes, radiusMiles: radiusMiles, bio: bio, avatarPath: avatarPath)
         persist()
         return user
     }
@@ -240,7 +283,10 @@ final class MockBackend: ContractorAPI {
 
     func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool) async throws -> JobRecord {
         guard let sessionID else { throw MarketplaceError.wrongAccount }
-        let names = photos.compactMap { PhotoStore.save($0) }
+        var names: [String] = []
+        for photo in photos {
+            if let name = await PhotoStore.save(photo) { names.append(name) }
+        }
         let job = try book.postJob(customerID: sessionID, category: category, street: street, city: city, state: state, zip: zip, latitude: latitude, longitude: longitude, scheduledOn: scheduledOn, details: details, photoNames: names, offeredPriceCents: offeredPriceCents, serviceType: serviceType, estimate: estimate, allowsMultiple: allowsMultiple, publish: publish)
         persist()
         return job
@@ -284,6 +330,12 @@ final class MockBackend: ContractorAPI {
         let booking = try book.book(customerID: sessionID, quoteID: quoteID)
         persist()
         return booking
+    }
+
+    func declineQuote(quoteID: UUID) async throws {
+        guard let sessionID else { throw MarketplaceError.wrongAccount }
+        try book.declineQuote(customerID: sessionID, quoteID: quoteID)
+        persist()
     }
 
     func bookAgain(bookingID: UUID, scheduledOn: String, recurrence: String) async throws -> BookingRecord {
@@ -468,15 +520,33 @@ final class SupabaseBackend: ContractorAPI {
         return try await currentUser()
     }
 
-    func updateServiceArea(serviceTypes: [String], radiusMiles: Int) async throws -> UserRecord {
+    func updateServiceArea(serviceTypes: [String], radiusMiles: Int, bio: String, avatarJPEG: Data?) async throws -> UserRecord {
         guard let userID else { throw MarketplaceError.wrongAccount }
         let categories = ServiceCatalog.categories(in: serviceTypes).map(\.rawValue)
-        _ = try await send(path: "/rest/v1/pro_profiles?id=eq.\(userID.uuidString)", method: "PATCH", body: [
+        var avatarPath = ""
+        if let avatarJPEG, let uploaded = try? await upload(avatarJPEG) {
+            avatarPath = uploaded
+            await PhotoStore.write(uploaded, data: avatarJPEG)
+        }
+        var body: [String: Any] = [
             "service_types": serviceTypes,
             "categories": categories,
             "radius_miles": radiusMiles,
-        ], auth: true)
+            "bio": bio.trimmingCharacters(in: .whitespacesAndNewlines),
+        ]
+        if !avatarPath.isEmpty { body["avatar_path"] = avatarPath }
+        do {
+            _ = try await send(path: "/rest/v1/pro_profiles?id=eq.\(userID.uuidString)", method: "PATCH", body: body, auth: true)
+        } catch {
+            body.removeValue(forKey: "bio")
+            body.removeValue(forKey: "avatar_path")
+            _ = try await send(path: "/rest/v1/pro_profiles?id=eq.\(userID.uuidString)", method: "PATCH", body: body, auth: true)
+        }
         return try await currentUser()
+    }
+
+    func declineQuote(quoteID: UUID) async throws {
+        _ = try await send(path: "/rest/v1/quotes?id=eq.\(quoteID.uuidString)", method: "PATCH", body: ["status": "declined"], auth: true)
     }
 
     func signOut() async {
@@ -731,7 +801,9 @@ final class SupabaseBackend: ContractorAPI {
             identityVerified: pro?.identityVerified ?? false,
             payoutsReady: pro?.payoutsReady ?? false,
             stripeAccountID: pro?.stripeAccountID ?? "",
-            phone: json["phone"] as? String ?? ""
+            phone: json["phone"] as? String ?? "",
+            bio: pro?.bio,
+            avatarPath: pro?.avatarPath
         )
     }
 
@@ -780,6 +852,8 @@ final class SupabaseBackend: ContractorAPI {
         var identityVerified: Bool?
         var payoutsReady: Bool?
         var stripeAccountID: String?
+        var bio: String?
+        var avatarPath: String?
     }
 
     private struct AnyKey: CodingKey {
@@ -821,7 +895,7 @@ final class SupabaseBackend: ContractorAPI {
             request.setValue("Bearer \(accessToken ?? key)", forHTTPHeaderField: "Authorization")
             guard let (data, response) = try? await URLSession.shared.data(for: request),
                   let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { continue }
-            PhotoStore.write(name, data: data)
+            await PhotoStore.write(name, data: data)
         }
     }
 
@@ -903,7 +977,7 @@ final class SupabaseBackend: ContractorAPI {
 
     private func upload(_ data: Data) async throws -> String? {
         guard let userID else { throw MarketplaceError.wrongAccount }
-        guard let image = UIImage(data: data), let jpeg = image.jpegData(compressionQuality: 0.7) else { return nil }
+        guard let jpeg = await PhotoStore.compressedJPEG(data) else { return nil }
         let name = "\(userID.uuidString)/\(UUID().uuidString).jpg"
         guard let uploadURL = URL(string: "storage/v1/object/job-photos/\(name)", relativeTo: base)?.absoluteURL else {
             throw MarketplaceError.invalid

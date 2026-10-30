@@ -1,4 +1,18 @@
+import PhotosUI
 import SwiftUI
+import UIKit
+
+private enum JobSort: String, CaseIterable {
+    case nearest, price, newest
+
+    var title: String {
+        switch self {
+        case .nearest: return "Nearest"
+        case .price: return "Price"
+        case .newest: return "Newest"
+        }
+    }
+}
 
 struct ProHome: View {
     @EnvironmentObject private var model: AppModel
@@ -8,10 +22,12 @@ struct ProHome: View {
     @State private var maxMiles = 40.0
     @State private var maxMinutes = 300
     @State private var dateFilter = "Any"
+    @State private var sort = JobSort.nearest
+    @State private var showFilters = false
 
     private var openJobs: [JobRecord] {
         guard let me = model.session else { return [] }
-        return model.jobs.filter { job in
+        let rows = model.jobs.filter { job in
             guard job.status.isListed, me.reaches(job) else { return false }
             if typeFilter != "All" && job.serviceType != typeFilter { return false }
             if job.offeredPriceCents > maxDollars * 100 { return false }
@@ -22,6 +38,23 @@ struct ProHome: View {
             }
             return true
         }
+        return rows.sorted { left, right in
+            switch sort {
+            case .nearest:
+                return miles(left) < miles(right)
+            case .price:
+                return left.offeredPriceCents > right.offeredPriceCents
+            case .newest:
+                return left.createdAt > right.createdAt
+            }
+        }
+    }
+
+    private func miles(_ job: JobRecord) -> Double {
+        guard let origin = model.session?.coordinate, let point = job.mapCoordinate(exact: false) else {
+            return .greatestFiniteMagnitude
+        }
+        return origin.miles(to: point)
     }
 
     private var mine: [QuoteRecord] {
@@ -33,8 +66,11 @@ struct ProHome: View {
         NavigationStack {
             VStack(spacing: 0) {
             BrandHeader {
-                Button("Sign out") { Task { await model.signOut() } }
-                    .buttonStyle(.plain)
+                HStack(spacing: 16) {
+                    NavigationLink("Profile") { ProProfileView() }
+                    Button("Sign out") { Task { await model.signOut() } }
+                        .buttonStyle(.plain)
+                }
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -56,10 +92,11 @@ struct ProHome: View {
                     }
                     Picker("Section", selection: $section) {
                         Text("Nearby").tag(0)
-                        Text("Quotes").tag(1)
-                        Text("Booked").tag(2)
+                        Text("Offers").tag(1)
+                        Text("My Jobs").tag(2)
                     }
                     .pickerStyle(.segmented)
+                    .accessibilityLabel("Job pipeline")
                     if section == 0 {
                         if model.live {
                             Toggle("Show sample jobs", isOn: Binding(
@@ -67,45 +104,54 @@ struct ProHome: View {
                                 set: { on in Task { await model.setShowSampleJobs(on) } }
                             ))
                         }
-                        ProSetupCard()
-                        Menu(typeFilter == "All" ? "All services" : (ServiceCatalog.find(typeFilter)?.title ?? "Service")) {
-                            Button("All services") { typeFilter = "All" }
-                            ForEach(ServiceCatalog.active) { service in
-                                Button(service.title) { typeFilter = service.id }
+                        HStack {
+                            Menu(sort.title) {
+                                ForEach(JobSort.allCases, id: \.self) { item in
+                                    Button(item.title) { sort = item }
+                                }
                             }
+                            .accessibilityLabel("Sort by \(sort.title)")
+                            Button("Filter") { showFilters = true }
+                                .buttonStyle(.bordered)
                         }
-                        Stepper("Max price: $\(maxDollars)", value: $maxDollars, in: 25...2000, step: 25)
-                        Stepper("Max distance: \(Int(maxMiles)) mi", value: $maxMiles, in: 5...200, step: 5)
-                        Stepper("Max time: \(maxMinutes) min", value: $maxMinutes, in: 30...480, step: 30)
-                        Menu(dateFilter == "Any" ? "Any date" : DayStamp.display(dateFilter)) {
-                            Button("Any date") { dateFilter = "Any" }
-                            ForEach(Array(Set(model.jobs.map(\.scheduledOn))).sorted(), id: \.self) { day in
-                                Button(DayStamp.display(day)) { dateFilter = day }
+                        if model.busy && openJobs.isEmpty {
+                            SkeletonList()
+                        } else if openJobs.isEmpty {
+                            if let error = model.errorMessage {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text(error).foregroundStyle(.red)
+                                    Button("Try again") { Task { await model.reload() } }
+                                        .buttonStyle(.borderedProminent)
+                                }
+                            } else {
+                                Text("No open jobs.").font(.headline)
                             }
-                        }
-                        if openJobs.isEmpty {
-                            Text("No open jobs.")
-                                .foregroundStyle(.secondary)
                         }
                         ForEach(openJobs) { job in
                             NavigationLink {
                                 ProJobView(jobID: job.id)
                             } label: {
-                                JobCard(job: job, quoteCount: model.quotes(for: job.id).count, exact: model.showsExactAddress(job))
+                                JobCard(job: job, quoteCount: model.quotes(for: job.id).count, exact: model.showsExactAddress(job), unread: model.unreadCount(jobID: job.id))
                             }
                             .buttonStyle(.plain)
                         }
                     } else if section == 1 {
+                        if mine.isEmpty {
+                            Text("No offers yet.").font(.headline)
+                        }
                         ForEach(mine) { quote in
                             if let job = model.jobs.first(where: { $0.id == quote.jobID }) {
                                 NavigationLink {
                                     ProJobView(jobID: job.id)
                                 } label: {
                                     Card {
-                                        VStack(alignment: .leading, spacing: 4) {
+                                        VStack(alignment: .leading, spacing: 8) {
                                             Text(job.place(exact: model.showsExactAddress(job))).font(.headline).foregroundStyle(ink)
-                                            Text("\(Money.string(cents: quote.priceCents)) · \(quote.status.rawValue)")
-                                                .foregroundStyle(.secondary)
+                                            HStack {
+                                                PriceChip(cents: quote.priceCents)
+                                                StatusBadge(title: quote.status.rawValue.capitalized)
+                                                UnreadBadge(count: model.unreadCount(jobID: job.id))
+                                            }
                                         }
                                     }
                                 }
@@ -113,21 +159,34 @@ struct ProHome: View {
                             }
                         }
                     } else {
-                        ForEach(model.bookings.filter { $0.proID == model.session?.id }) { booking in
+                        let booked = model.bookings.filter { $0.proID == model.session?.id }
+                        if booked.isEmpty {
+                            Text("No booked jobs.").font(.headline)
+                        }
+                        ForEach(booked) { booking in
                             if let job = model.jobs.first(where: { $0.id == booking.jobID }) {
-                                Card {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(job.place(exact: true)).font(.headline)
-                                        Text("\(Money.string(cents: booking.priceCents)) · you receive \(Money.string(cents: booking.charge.proPayoutCents))")
-                                            .foregroundStyle(.secondary)
-                                        Text(paymentLine(priceCents: booking.priceCents, percent: booking.feePercent)).font(.footnote).foregroundStyle(.secondary)
+                                NavigationLink {
+                                    ProJobView(jobID: job.id)
+                                } label: {
+                                    Card {
+                                        VStack(alignment: .leading, spacing: 8) {
+                                            Text(job.place(exact: true)).font(.headline).foregroundStyle(ink)
+                                            HStack {
+                                                PriceChip(cents: booking.priceCents)
+                                                StatusBadge(title: job.status.title)
+                                            }
+                                            Text("You receive \(Money.string(cents: booking.charge.proPayoutCents))")
+                                                .font(.subheadline)
+                                                .foregroundStyle(.secondary)
+                                        }
                                     }
                                 }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
                     HelpLinks()
-                    if let error = model.errorMessage {
+                    if let error = model.errorMessage, !(section == 0 && openJobs.isEmpty) {
                         Text(error).foregroundStyle(.red)
                     }
                 }
@@ -137,7 +196,36 @@ struct ProHome: View {
             }
             .background(paper)
             .toolbar(.hidden, for: .navigationBar)
+            .animation(.smooth, value: section)
             .task { await model.reload() }
+            .sheet(isPresented: $showFilters) {
+                NavigationStack {
+                    Form {
+                        Picker("Service", selection: $typeFilter) {
+                            Text("All services").tag("All")
+                            ForEach(ServiceCatalog.active) { service in
+                                Text(service.title).tag(service.id)
+                            }
+                        }
+                        Stepper("Max price: $\(maxDollars)", value: $maxDollars, in: 25...2000, step: 25)
+                        Stepper("Max distance: \(Int(maxMiles)) mi", value: $maxMiles, in: 5...200, step: 5)
+                        Stepper("Max time: \(maxMinutes) min", value: $maxMinutes, in: 30...480, step: 30)
+                        Picker("Date", selection: $dateFilter) {
+                            Text("Any date").tag("Any")
+                            ForEach(Array(Set(model.jobs.map(\.scheduledOn))).sorted(), id: \.self) { day in
+                                Text(DayStamp.display(day)).tag(day)
+                            }
+                        }
+                    }
+                    .navigationTitle("Filter")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Done") { showFilters = false }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -148,6 +236,7 @@ struct ProJobView: View {
     @State private var price = ""
     @State private var message = ""
     @State private var customer = "Customer"
+    @State private var offering = false
 
     private var job: JobRecord? { model.jobs.first { $0.id == jobID } }
     private var mine: QuoteRecord? {
@@ -159,16 +248,17 @@ struct ProJobView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 if let job {
-                    Text(job.serviceTitle).foregroundStyle(job.category == .moving ? clay : pine).font(.subheadline.weight(.semibold))
+                    Label(job.serviceTitle, systemImage: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
+                        .foregroundStyle(job.category == .moving ? clay : pine)
+                        .font(.subheadline.weight(.semibold))
                     if SampleJobs.contains(job.id) {
-                        Text("Sample — not a real customer. You cannot accept this job.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                        Text("Sample").font(.caption.weight(.semibold)).foregroundStyle(clay)
                     }
                     Text(job.place(exact: model.showsExactAddress(job))).font(.title2.weight(.semibold))
                     if job.offeredPriceCents > 0 {
-                        Text("Offered \(Money.string(cents: job.offeredPriceCents))").font(.title3.weight(.semibold))
+                        PriceChip(cents: job.offeredPriceCents)
                     }
+                    JobMiniMap(job: job, exact: model.showsExactAddress(job))
                     Text("\(DayStamp.display(job.scheduledOn)) · \(job.details.summary(for: job.category))")
                         .foregroundStyle(.secondary)
                     if job.estimatedMinutes > 0 {
@@ -180,7 +270,9 @@ struct ProJobView: View {
                         Text(estimate.explanation)
                         Text(estimate.disclaimer).font(.footnote).foregroundStyle(.secondary)
                     }
-                    Text(job.details.notes)
+                    if !job.details.notes.isEmpty {
+                        Text(job.details.notes)
+                    }
                     if !job.details.obstacles.isEmpty {
                         Text("Obstacles: \(job.details.obstacles)").font(.footnote)
                     }
@@ -193,11 +285,23 @@ struct ProJobView: View {
                     if let mine {
                         Card {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Your quote: \(Money.string(cents: mine.priceCents))").font(.headline)
-                                Text(mine.message)
+                                HStack {
+                                    Text("Your offer").font(.headline)
+                                    Spacer()
+                                    PriceChip(cents: mine.priceCents)
+                                }
+                                StatusBadge(title: mine.status.rawValue.capitalized)
+                                if !mine.message.isEmpty {
+                                    Text(mine.message)
+                                }
                                 Text(paymentLine(priceCents: mine.priceCents, percent: FeeSchedule.launch.percent)).font(.footnote).foregroundStyle(.secondary)
-                                NavigationLink("Message \(customer)") {
+                                NavigationLink {
                                     ChatView(jobID: job.id, proID: mine.proID, title: customer)
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Text("Message \(customer)")
+                                        UnreadBadge(count: model.unreadCount(jobID: job.id))
+                                    }
                                 }
                                 .buttonStyle(.bordered)
                             }
@@ -205,21 +309,19 @@ struct ProJobView: View {
                     } else if job.status.isListed && !SampleJobs.contains(job.id) {
                         if model.session?.canTakeJobs == true {
                             Button("Accept \(Money.string(cents: job.offeredPriceCents))") {
+                                Haptic.tap()
                                 Task { _ = await model.acceptListing(jobID: job.id) }
                             }
                             .buttonStyle(.borderedProminent)
                             .disabled(model.busy || job.offeredPriceCents <= 0)
-                            TextField("Counter-offer", text: $price)
-                                .keyboardType(.decimalPad)
-                            TextField("Message", text: $message, axis: .vertical)
                             Button("Make offer") {
-                                Task { _ = await model.sendQuote(jobID: job.id, price: price, message: message) }
+                                Haptic.tap()
+                                offering = true
                             }
                             .buttonStyle(.bordered)
-                            .disabled(model.busy)
                         } else {
-                            Text("Confirm your identity and mark payouts ready before you can accept a job.")
-                                .foregroundStyle(.secondary)
+                            NavigationLink("Finish profile") { ProProfileView() }
+                                .buttonStyle(.borderedProminent)
                         }
                     }
                 }
@@ -230,8 +332,39 @@ struct ProJobView: View {
             .padding(20)
         }
         .background(paper)
-        .navigationTitle("Quote")
+        .navigationTitle("Job")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $offering) {
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 12) {
+                    TextField("Your price", text: $price)
+                        .keyboardType(.decimalPad)
+                    TextField("Message", text: $message, axis: .vertical)
+                        .lineLimit(3...6)
+                    if let error = model.errorMessage {
+                        Text(error).foregroundStyle(.red)
+                    }
+                    Button(model.busy ? "Sending…" : "Send offer") {
+                        Task {
+                            let ok = await model.sendQuote(jobID: jobID, price: price, message: message)
+                            if ok { offering = false }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.busy || price.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Spacer()
+                }
+                .padding(20)
+                .navigationTitle("Make offer")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Close") { offering = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
         .task {
             if let job, let person = await model.person(job.customerID) {
                 customer = person.displayName
@@ -240,43 +373,93 @@ struct ProJobView: View {
     }
 }
 
-struct ProSetupCard: View {
+struct ProProfileView: View {
     @EnvironmentObject private var model: AppModel
     @State private var radius = 25
     @State private var selected: Set<String> = []
+    @State private var bio = ""
+    @State private var photoItem: PhotosPickerItem?
+    @State private var avatarJPEG: Data?
+    @State private var preview: UIImage?
 
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Service area").font(.headline)
-                if model.session != nil {
-                    Stepper("Radius: \(radius) miles", value: $radius, in: 5...200, step: 5)
-                    ForEach(ServiceCatalog.active) { service in
-                        Toggle(service.title, isOn: Binding(
-                            get: { selected.contains(service.id) },
-                            set: { on in
-                                if on { selected.insert(service.id) } else { selected.remove(service.id) }
-                            }
-                        ))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                PhotosPicker(selection: $photoItem, matching: .images) {
+                    Group {
+                        if let preview {
+                            Image(uiImage: preview)
+                                .resizable()
+                                .scaledToFill()
+                        } else {
+                            Image(systemName: "person.crop.circle.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .padding(12)
+                                .foregroundStyle(pine)
+                        }
                     }
-                    Button("Save service area") {
-                        Task { await model.updateServiceArea(serviceTypes: Array(selected), radiusMiles: radius) }
+                    .frame(width: 88, height: 88)
+                    .background(pine.opacity(0.12), in: Circle())
+                    .clipShape(Circle())
+                }
+                .accessibilityLabel("Profile photo")
+                TextField("Bio", text: $bio, axis: .vertical)
+                    .lineLimit(3...6)
+                Stepper("Radius: \(radius) miles", value: $radius, in: 5...200, step: 5)
+                ForEach(ServiceCatalog.active) { service in
+                    Toggle(isOn: Binding(
+                        get: { selected.contains(service.id) },
+                        set: { on in
+                            if on { selected.insert(service.id) } else { selected.remove(service.id) }
+                        }
+                    )) {
+                        Label(service.title, systemImage: service.symbol)
                     }
-                    .buttonStyle(.bordered)
-                    if model.session?.identityVerified == false {
-                        Button("Confirm identity") { Task { await model.verifyIdentity() } }
-                            .buttonStyle(.bordered)
+                }
+                Button(model.busy ? "Saving…" : "Save") {
+                    Task {
+                        await model.updateServiceArea(serviceTypes: Array(selected), radiusMiles: radius, bio: bio, avatarJPEG: avatarJPEG)
                     }
-                    if model.session?.payoutsReady == false {
-                        Button("Mark payouts ready") { Task { await model.connectPayouts() } }
-                            .buttonStyle(.bordered)
-                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.busy)
+                if model.session?.identityVerified == false {
+                    Button("Confirm identity") { Task { await model.verifyIdentity() } }
+                        .buttonStyle(.bordered)
+                }
+                if model.session?.payoutsReady == false {
+                    Button("Mark payouts ready") { Task { await model.connectPayouts() } }
+                        .buttonStyle(.bordered)
+                }
+                if let error = model.errorMessage {
+                    Text(error).foregroundStyle(.red)
+                }
+            }
+            .padding(20)
+        }
+        .background(paper)
+        .navigationTitle("Profile")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear(perform: load)
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let jpeg = await PhotoStore.compressedJPEG(data) {
+                    avatarJPEG = jpeg
+                    preview = UIImage(data: jpeg)
                 }
             }
         }
-        .onAppear {
-            radius = model.session?.radiusMiles ?? 25
-            selected = Set(model.session?.serviceTypes ?? [])
+    }
+
+    private func load() {
+        radius = model.session?.radiusMiles ?? 25
+        selected = Set(model.session?.serviceTypes ?? [])
+        bio = model.session?.bio ?? ""
+        if preview == nil, let path = model.session?.avatarPath {
+            preview = PhotoStore.image(path)
         }
     }
 }

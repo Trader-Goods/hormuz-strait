@@ -33,7 +33,7 @@ struct ChatView: View {
                             if mine { Spacer(minLength: 40) }
                             Text(shown.text)
                                 .padding(12)
-                                .background(mine ? pine : Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .background(mine ? pine : Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 .foregroundStyle(mine ? Color.white : ink)
                             if !mine { Spacer(minLength: 40) }
                         }
@@ -98,6 +98,9 @@ struct ChatView: View {
                 }
             }
         }
-        .task { lines = await model.messages(jobID: jobID, proID: proID) }
+        .task {
+            lines = await model.messages(jobID: jobID, proID: proID)
+            model.markJobNoticesRead(jobID)
+        }
     }
 }

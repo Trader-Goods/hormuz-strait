@@ -76,6 +76,33 @@ final class AreaLocator: NSObject, CLLocationManagerDelegate {
     }
 }
 
+struct JobMiniMap: View {
+    var job: JobRecord
+    var exact: Bool
+
+    var body: some View {
+        if let point = job.mapCoordinate(exact: exact) {
+            Map(initialPosition: .region(MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude),
+                span: MKCoordinateSpan(latitudeDelta: 0.03, longitudeDelta: 0.03)
+            ))) {
+                Annotation(job.serviceTitle, coordinate: CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)) {
+                    Image(systemName: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(8)
+                        .background(job.category == .moving ? clay : pine, in: Circle())
+                }
+            }
+            .mapStyle(.standard)
+            .frame(height: 180)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .allowsHitTesting(false)
+            .accessibilityLabel("Map of the job area")
+        }
+    }
+}
+
 struct ProJobMap: View {
     @EnvironmentObject private var model: AppModel
     var jobs: [JobRecord]
@@ -302,9 +329,19 @@ struct NearbyPricesPage: View {
                         Button(service.title) { typeFilter = service.id }
                     }
                 }
-                if jobs.isEmpty {
-                    Text("No open jobs.")
-                        .foregroundStyle(.secondary)
+                if model.busy && jobs.isEmpty {
+                    ProgressView()
+                        .accessibilityLabel("Loading")
+                } else if jobs.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if let error = model.errorMessage {
+                            Text(error).foregroundStyle(.red)
+                            Button("Try again") { Task { await model.reload() } }
+                                .buttonStyle(.borderedProminent)
+                        } else {
+                            Text("No open jobs.").font(.headline)
+                        }
+                    }
                 }
                 ProJobMap(jobs: jobs, readOnly: readOnly, expands: true)
             }
@@ -313,6 +350,7 @@ struct NearbyPricesPage: View {
         .background(paper)
         .navigationTitle(showsBrandHeader ? "" : "Nearby prices")
         .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await model.reload() }
         .task { await model.reload() }
     }
 }

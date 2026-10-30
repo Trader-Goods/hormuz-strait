@@ -259,14 +259,27 @@ struct MarketplaceBook: Codable, Equatable {
         return users[index].user
     }
 
-    mutating func updateServiceArea(proID: UUID, serviceTypes: [String], radiusMiles: Int) throws -> UserRecord {
+    mutating func updateServiceArea(proID: UUID, serviceTypes: [String], radiusMiles: Int, bio: String, avatarPath: String = "") throws -> UserRecord {
         guard let index = users.firstIndex(where: { $0.user.id == proID }) else { throw MarketplaceError.missing }
         guard users[index].user.role == .pro else { throw MarketplaceError.wrongAccount }
         let types = serviceTypes.isEmpty ? users[index].user.serviceTypes : serviceTypes
         users[index].user.serviceTypes = types
         users[index].user.categories = ServiceCatalog.categories(in: types)
         users[index].user.radiusMiles = min(200, max(5, radiusMiles))
+        users[index].user.bio = bio.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !avatarPath.isEmpty {
+            users[index].user.avatarPath = avatarPath
+        }
         return users[index].user
+    }
+
+    mutating func declineQuote(customerID: UUID, quoteID: UUID) throws {
+        guard let index = quotes.firstIndex(where: { $0.id == quoteID }) else { throw MarketplaceError.missing }
+        guard let job = jobs.first(where: { $0.id == quotes[index].jobID }), job.customerID == customerID else {
+            throw MarketplaceError.wrongAccount
+        }
+        guard quotes[index].status == .sent else { throw MarketplaceError.closed }
+        quotes[index].status = .declined
     }
 
     mutating func postJob(

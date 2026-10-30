@@ -271,6 +271,20 @@ final class RulesTests: XCTestCase {
         XCTAssertTrue(book.canSeePhone(of: greenline.id, viewer: maya))
     }
 
+    func testCustomerCanDeclineAnOfferAndAProCanSaveABio() throws {
+        var book = MarketplaceBook.demo()
+        let maya = try XCTUnwrap(book.users.first { $0.user.email == "maya@contractor.demo" }?.user)
+        let greenline = try XCTUnwrap(book.users.first { $0.user.email == "greenline@contractor.demo" }?.user)
+        let quote = try XCTUnwrap(book.quotes.first { $0.proID == greenline.id && $0.status == .sent })
+        try book.declineQuote(customerID: maya.id, quoteID: quote.id)
+        XCTAssertEqual(book.quotes.first { $0.id == quote.id }?.status, .declined)
+        XCTAssertThrowsError(try book.declineQuote(customerID: maya.id, quoteID: quote.id))
+        let saved = try book.updateServiceArea(proID: greenline.id, serviceTypes: ["mowing"], radiusMiles: 12, bio: "  Weekly mowing. ")
+        XCTAssertEqual(saved.bio, "Weekly mowing.")
+        XCTAssertEqual(saved.radiusMiles, 12)
+        XCTAssertEqual(saved.serviceTypes, ["mowing"])
+    }
+
     private func readyPro(_ book: inout MarketplaceBook, email: String, categories: [ServiceCategory]) throws -> UserRecord {
         let user = try book.signUp(
             role: .pro, name: "Pat", email: email, password: "secret1", zip: "44903",
