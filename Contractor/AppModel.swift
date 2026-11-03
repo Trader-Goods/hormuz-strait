@@ -25,17 +25,76 @@ final class AppModel: ObservableObject {
 
     let live = BackendConfig.isLive
     private let api: any ContractorAPI
+    private let screenshotMode: Bool
 
     init() {
+        let shot = ProcessInfo.processInfo.environment["SCREENSHOT"]
+        screenshotMode = shot != nil
         let stored = UserDefaults.standard.object(forKey: "contractor.showSampleJobs") as? Bool
-        showSampleJobs = stored ?? true
+        showSampleJobs = shot == nil && (stored ?? true)
         readNoticeIDs = Set(UserDefaults.standard.stringArray(forKey: "contractor.readNotices") ?? [])
-        if BackendConfig.isLive {
+        if let shot {
+            api = MockBackend()
+            applyScreenshot(shot)
+        } else if BackendConfig.isLive {
             api = SupabaseBackend()
+            Task { await restore() }
         } else {
             api = MockBackend()
+            Task { await restore() }
         }
-        Task { await restore() }
+    }
+
+    private func applyScreenshot(_ name: String) {
+        let customerID = UUID(uuidString: "10000000-0000-0000-0000-0000000000aa")!
+        var customer = UserRecord(
+            id: customerID, role: .customer, email: "maya@contractor.demo", displayName: "Maya Chen",
+            zip: "43537", phoneVerified: true, businessName: "", categories: [], serviceZips: ["43537"],
+            rating: 0, reviewCount: 0
+        )
+        customer.latitude = 41.562
+        customer.longitude = -83.654
+        customer.radiusMiles = 4
+        if name != "welcome" { session = customer }
+        let home = JobRecord(
+            id: UUID(uuidString: "30000000-0000-0000-0000-0000000000a1")!,
+            customerID: customerID, category: .lawn, street: "418 River Road", city: "Maumee", state: "OH", zip: "43537",
+            latitude: 41.568, longitude: -83.648, scheduledOn: DayStamp.string(from: Date()),
+            details: JobDetails(lawnSize: "Medium", rooms: 0, stairs: false, notes: "Please mow the front and back."),
+            status: .awaitingAcceptance, photoNames: [], createdAt: Date(), serviceType: "mowing",
+            offeredPriceCents: 6500, timing: "asap"
+        )
+        let done = JobRecord(
+            id: UUID(uuidString: "30000000-0000-0000-0000-0000000000a2")!,
+            customerID: customerID, category: .lawn, street: "418 River Road", city: "Maumee", state: "OH", zip: "43537",
+            latitude: 41.562, longitude: -83.654, scheduledOn: DayStamp.string(from: Date()),
+            details: JobDetails(lawnSize: "Medium", rooms: 0, stairs: false, notes: "Leaves are thick along the fence."),
+            status: .awaitingReview, photoNames: [], createdAt: Date(), serviceType: "leafCleanup",
+            offeredPriceCents: 5000, timing: "thisWeek", completionNote: "Bags are by the garage."
+        )
+        let hedge = JobRecord(
+            id: UUID(uuidString: "30000000-0000-0000-0000-0000000000a3")!,
+            customerID: customerID, category: .lawn, street: "220 Conant Street", city: "Maumee", state: "OH", zip: "43537",
+            latitude: 41.555, longitude: -83.662, scheduledOn: DayStamp.string(from: Date()),
+            details: JobDetails(lawnSize: "Medium", rooms: 0, stairs: false, notes: "Trim the hedge along the driveway."),
+            status: .posted, photoNames: [], createdAt: Date().addingTimeInterval(-3600), serviceType: "hedgeTrim",
+            offeredPriceCents: 5500, timing: "thisWeek"
+        )
+        jobs = name == "pay" ? [done] : [home, hedge]
+        priceJobs = [
+            ("mowing", 6500, 41.570, -83.640),
+            ("edging", 4100, 41.555, -83.660),
+            ("leafCleanup", 5000, 41.575, -83.670),
+            ("hedgeTrim", 5500, 41.548, -83.640),
+        ].map { service, price, lat, lon in
+            JobRecord(
+                id: UUID(), customerID: UUID(uuidString: "00000000-0000-0000-0000-000000000000")!,
+                category: .lawn, street: "", city: "Maumee", state: "OH", zip: "43537",
+                latitude: lat, longitude: lon, scheduledOn: DayStamp.string(from: Date()),
+                details: .empty, status: .posted, photoNames: [], createdAt: Date(),
+                serviceType: service, offeredPriceCents: price, timing: "flexible"
+            )
+        }
     }
 
     func setShowSampleJobs(_ on: Bool) async {
@@ -170,6 +229,7 @@ final class AppModel: ObservableObject {
     }
 
     func reload() async {
+        if screenshotMode { return }
         guard session != nil else { return }
         await run { try await self.load() }
     }

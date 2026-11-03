@@ -9,9 +9,9 @@ struct WelcomeView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-            BrandHeader()
+            BrandHeader(prominent: true)
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 16) {
                     if let error = model.errorMessage, error != "Check your email" {
                         Text(error).foregroundStyle(.red)
                     }
@@ -28,10 +28,10 @@ struct WelcomeView: View {
                         Haptic.tap()
                         role = .customer
                     } label: {
-                        roleRow("I need work done", symbol: "house.fill", tint: pine)
+                        roleRow("I need help", symbol: "house.fill", tint: pine)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("I need work done")
+                    .accessibilityLabel("I need help")
                     Button {
                         Haptic.tap()
                         role = .pro
@@ -41,20 +41,22 @@ struct WelcomeView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("I'm a pro")
                     Card {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Sign in").font(.headline)
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Sign in").font(.rounded(.headline))
                             TextField("Email", text: $email)
                                 .textInputAutocapitalization(.never)
                                 .keyboardType(.emailAddress)
                                 .textContentType(.username)
                                 .autocorrectionDisabled()
+                                .softField()
                             SecureField("Password", text: $password)
                                 .textContentType(.password)
+                                .softField()
                             Button(model.busy ? "Signing in…" : "Sign in") {
                                 Haptic.tap()
                                 Task { await model.signIn(email: email, password: password) }
                             }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(PrimaryButtonStyle())
                             .disabled(model.busy || email.isEmpty || password.isEmpty)
                         }
                     }
@@ -68,11 +70,11 @@ struct WelcomeView: View {
                                 Button("Open as Maya, a customer") {
                                     Task { await model.signIn(email: "maya@contractor.demo", password: "demo1234") }
                                 }
-                                .buttonStyle(.borderedProminent)
+                                .buttonStyle(PrimaryButtonStyle())
                                 Button("Open as Greenline Lawn, a pro") {
                                     Task { await model.signIn(email: "greenline@contractor.demo", password: "demo1234") }
                                 }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(SecondaryButtonStyle())
                             }
                         }
                     }
@@ -99,18 +101,24 @@ private func roleRow(_ title: String, symbol: String, tint: Color) -> some View 
     Card {
         HStack(spacing: 14) {
             Image(systemName: symbol)
-                .font(.title2)
-                .foregroundStyle(tint)
-                .frame(width: 44, height: 44)
-                .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .background(
+                    LinearGradient(colors: [tint.opacity(0.85), tint], startPoint: .top, endPoint: .bottom),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                )
             Text(title)
-                .font(.headline)
+                .font(.rounded(.title3))
                 .foregroundStyle(ink)
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(tint)
+                .frame(width: 28, height: 28)
+                .background(tint.opacity(0.12), in: Circle())
         }
+        .padding(.vertical, 4)
     }
 }
 
@@ -136,15 +144,22 @@ struct SignUpView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text(role == .customer ? "Customer sign up" : "Pro sign up")
-                    .font(.title2.weight(.semibold))
+                    .font(.rounded(.title2))
                 TextField("Your name", text: $name)
+                    .textContentType(.name)
+                    .softField()
                 TextField("Email", text: $email)
                     .textInputAutocapitalization(.never)
                     .keyboardType(.emailAddress)
                     .autocorrectionDisabled()
+                    .textContentType(.emailAddress)
+                    .softField()
                 SecureField("Password", text: $password)
+                    .textContentType(.newPassword)
+                    .softField()
                 TextField("ZIP code", text: $zip)
                     .keyboardType(.numberPad)
+                    .softField()
                 if !zip.isEmpty && !USAddress.isValidZip(zip) {
                     Text("Enter a 5-digit US ZIP.")
                         .font(.footnote)
@@ -154,14 +169,16 @@ struct SignUpView: View {
                     TextField("Mobile phone", text: $phone)
                         .keyboardType(.phonePad)
                         .textContentType(.telephoneNumber)
+                        .softField()
                     if !phone.isEmpty && USPhone.e164(phone) == nil {
                         Text("Enter a US phone number.")
                             .font(.footnote)
                             .foregroundStyle(.red)
                     }
                     TextField("Business name", text: $business)
+                        .softField()
                     Stepper("Service radius: \(radius) miles", value: $radius, in: 5...200, step: 5)
-                    Text("Services").font(.headline)
+                    Text("Services").font(.rounded(.headline))
                     ForEach(ServiceCatalog.featured + ServiceCatalog.more) { service in
                         Toggle(isOn: Binding(
                             get: { selectedServices.contains(service.id) },
@@ -175,7 +192,7 @@ struct SignUpView: View {
                 }
                 Toggle("I agree to the Terms", isOn: $acceptedTerms)
                 Button("Read Terms") { showTerms = true }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(SecondaryButtonStyle())
                 if let error = model.errorMessage {
                     Text(error).foregroundStyle(.red)
                 }
@@ -187,7 +204,7 @@ struct SignUpView: View {
                         await model.signUp(role: role, name: name, email: email, password: password, zip: zip, business: business, categories: categories, serviceZips: [zip], acceptedTerms: acceptedTerms, radiusMiles: radius, serviceTypes: types, phone: phone)
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PrimaryButtonStyle())
                 .disabled(model.busy || !acceptedTerms || (role == .pro && USPhone.e164(phone) == nil))
                 .sheet(isPresented: $showTerms) {
                     NavigationStack {
@@ -219,7 +236,7 @@ struct ConfirmSignInButton: View {
             Button(model.busy ? "Signing in…" : "I confirmed, sign in") {
                 Task { await model.signInAfterConfirm() }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(model.busy)
         }
     }
@@ -231,18 +248,18 @@ struct VerifyPhoneView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Confirm your phone")
-                .font(.largeTitle.weight(.bold))
+                .font(.rounded(.largeTitle))
             if let error = model.errorMessage {
                 Text(error).foregroundStyle(.red)
             }
             Button("Verify phone") {
                 Task { await model.verifyPhone() }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PrimaryButtonStyle())
             Button("Sign out") {
                 Task { await model.signOut() }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(SecondaryButtonStyle())
             Spacer()
         }
         .padding(20)

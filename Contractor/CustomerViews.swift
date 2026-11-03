@@ -16,14 +16,21 @@ struct CustomerHome: View {
                     Button("Sign out") { Task { await model.signOut() } }
                         .buttonStyle(.plain)
                     if model.session?.role == .customer {
-                        NavigationLink("Post") { PostJobView() }
+                        NavigationLink {
+                            PostJobView()
+                        } label: {
+                            Text("Post")
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(.white.opacity(0.2), in: Capsule())
+                        }
                     }
                 }
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Your jobs")
-                        .font(.title2.weight(.semibold))
+                        .font(.rounded(.title2))
                     if !model.notices.isEmpty {
                         NoticeList()
                     }
@@ -51,15 +58,13 @@ struct CustomerHome: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text(error).foregroundStyle(.red)
                                 Button("Try again") { Task { await model.reload() } }
-                                    .buttonStyle(.borderedProminent)
+                                    .buttonStyle(PrimaryButtonStyle())
                             }
                         } else {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text("No jobs yet.").font(.headline)
-                                if model.session?.role == .customer {
-                                    NavigationLink("Post a job") { PostJobView() }
-                                        .buttonStyle(.borderedProminent)
-                                }
+                            FriendlyEmpty(symbol: "leaf.fill", title: "No jobs yet.")
+                            if model.session?.role == .customer {
+                                NavigationLink("Post a job") { PostJobView() }
+                                    .buttonStyle(PrimaryButtonStyle())
                             }
                         }
                     }
@@ -69,9 +74,11 @@ struct CustomerHome: View {
                         } label: {
                             JobCard(job: job, quoteCount: model.quotes(for: job.id).count, unread: model.unreadCount(jobID: job.id))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(PressableCardStyle())
                     }
-                    HelpLinks()
+                    Card {
+                        HelpLinks()
+                    }
                     if let error = model.errorMessage, !model.jobs.isEmpty {
                         Text(error).foregroundStyle(.red)
                     }
@@ -109,36 +116,67 @@ struct CustomerHome: View {
 }
 
 struct JobCard: View {
+    @EnvironmentObject private var model: AppModel
     var job: JobRecord
     var quoteCount: Int
     var exact = true
     var unread = 0
 
+    private var milesText: String? {
+        guard let origin = model.session?.coordinate,
+              let point = job.mapCoordinate(exact: false) else { return nil }
+        let miles = origin.miles(to: point)
+        if miles < 0.2 { return nil }
+        return DistanceLabel.text(miles: miles)
+    }
+
     var body: some View {
         Card {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Label(job.serviceTitle, systemImage: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(job.category == .moving ? clay : pine)
-                    Spacer()
-                    StatusBadge(title: job.status.title)
-                }
-                if SampleJobs.contains(job.id) {
-                    Text("Sample").font(.caption.weight(.semibold)).foregroundStyle(clay)
-                }
-                Text(job.place(exact: exact)).font(.headline).foregroundStyle(ink)
-                Text("\(job.whenLabel) · \(job.details.summary(for: job.category))")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                HStack {
-                    if job.offeredPriceCents > 0 {
-                        PriceChip(cents: job.offeredPriceCents)
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 10) {
+                        Image(systemName: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
+                            .font(.body.weight(.bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 48, height: 48)
+                            .background(serviceTint(job), in: Circle())
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(job.serviceTitle)
+                                .font(.rounded(.headline))
+                                .foregroundStyle(ink)
+                            Text(job.place(exact: exact))
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 4)
+                        if job.offeredPriceCents > 0 {
+                            PriceChip(cents: job.offeredPriceCents)
+                        }
                     }
-                    Text(quoteCount == 0 ? "No offers yet" : "\(quoteCount) offer\(quoteCount == 1 ? "" : "s")")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    UnreadBadge(count: unread)
+                    HStack(spacing: 6) {
+                        InfoChip(text: job.whenLabel, symbol: "clock.fill")
+                        if let milesText {
+                            InfoChip(text: milesText, symbol: "location.fill")
+                        }
+                        if SampleJobs.contains(job.id) {
+                            Text("Sample").font(.caption.weight(.bold)).foregroundStyle(amber)
+                        }
+                        UnreadBadge(count: unread)
+                    }
+                    StatusBadge(title: job.status.title, tint: statusTint(job.status))
+                    if quoteCount > 0 {
+                        Text("\(quoteCount) offer\(quoteCount == 1 ? "" : "s")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if let name = job.photoNames.first, let image = PhotoStore.image(name) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 72, height: 72)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
             }
         }
@@ -153,6 +191,7 @@ struct PostJobView: View {
     @State private var step = 0
     @State private var finished = false
     @State private var savedAsDraft = false
+    @State private var popped = false
     @State private var serviceType = "mowing"
     @State private var street = ""
     @State private var city = ""
@@ -192,15 +231,20 @@ struct PostJobView: View {
             } else if finished {
                 VStack(spacing: 16) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.largeTitle)
+                        .font(.system(size: 64))
                         .foregroundStyle(pine)
+                        .scaleEffect(popped ? 1 : 0.4)
                         .accessibilityHidden(true)
                     Text(savedAsDraft ? "Draft saved" : "Job posted")
-                        .font(.title2.weight(.bold))
+                        .font(.rounded(.title2))
                     Button("Done") { dismiss() }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(PrimaryButtonStyle())
                 }
+                .padding(24)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onAppear {
+                    withAnimation(.spring(duration: 0.45)) { popped = true }
+                }
             } else {
                 wizard
             }
@@ -216,36 +260,41 @@ struct PostJobView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(stepTitle).font(.headline)
-                    ProgressView(value: Double(step + 1), total: 5)
-                        .tint(pine)
-                        .accessibilityLabel("Step \(step + 1) of 5")
+                    Text(stepTitle).font(.rounded(.title3))
+                    HStack(spacing: 6) {
+                        ForEach(0..<5, id: \.self) { index in
+                            Capsule()
+                                .fill(index <= step ? pine : Color.primary.opacity(0.12))
+                                .frame(height: 6)
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Step \(step + 1) of 5")
                 }
                 stepBody
                 if let error = model.errorMessage {
                     Text(error).foregroundStyle(.red)
                 }
-                HStack {
+                HStack(spacing: 12) {
                     if step > 0 {
                         Button("Back") {
                             Haptic.tap()
                             step -= 1
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(SecondaryButtonStyle())
                     }
-                    Spacer()
                     if step < 4 {
                         Button("Next") { advance() }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(PrimaryButtonStyle())
                             .disabled(!canAdvance)
                     }
                 }
                 if step == 4 {
                     Button(model.busy ? "Posting…" : "Post job") { Task { await save(publish: true) } }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(PrimaryButtonStyle())
                         .disabled(model.busy || offeredCents <= 0 || !addressReady)
                     Button(model.busy ? "Saving…" : "Save draft") { Task { await save(publish: false) } }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(SecondaryButtonStyle())
                         .disabled(model.busy || !addressReady)
                 }
             }
@@ -264,7 +313,14 @@ struct PostJobView: View {
         .onChange(of: query) { _, value in
             completer.update(value)
         }
-        .onAppear(perform: loadDraft)
+        .onAppear {
+            if ProcessInfo.processInfo.environment["SCREENSHOT"] == "post" {
+                prepareScreenshot()
+            } else {
+                loadDraft()
+            }
+        }
+        .toolbar(.visible, for: .navigationBar)
         .onDisappear {
             if !finished { rememberDraft() }
         }
@@ -283,6 +339,20 @@ struct PostJobView: View {
         case 3: return "Price"
         default: return "Review"
         }
+    }
+
+    private func prepareScreenshot() {
+        serviceType = "mowing"
+        street = "418 River Road"
+        city = "Maumee"
+        state = "OH"
+        zip = "43537"
+        lawnSize = "Medium"
+        notes = "Please mow the front and back."
+        timing = .asap
+        offered = "65"
+        step = 3
+        Task { await estimate() }
     }
 
     @ViewBuilder
@@ -314,22 +384,24 @@ struct PostJobView: View {
                     Haptic.tap()
                 } label: {
                     VStack(spacing: 8) {
-                        Image(systemName: item.symbol).font(.title2)
+                        Image(systemName: item.symbol)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(item.category == .moving ? clay : pine, in: Circle())
                         Text(item.title)
-                            .font(.subheadline.weight(.semibold))
+                            .font(.rounded(.caption, weight: .semibold))
                             .multilineTextAlignment(.center)
+                            .foregroundStyle(ink)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 88)
+                    .frame(maxWidth: .infinity, minHeight: 96)
                     .padding(8)
-                    .background(
-                        serviceType == item.id ? pine.opacity(0.16) : Color(uiColor: .secondarySystemGroupedBackground),
-                        in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    )
+                    .background(cardFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(serviceType == item.id ? pine : .clear, lineWidth: 2)
+                            .stroke(serviceType == item.id ? pine : Color.primary.opacity(0.06), lineWidth: serviceType == item.id ? 2 : 1)
                     )
-                    .foregroundStyle(item.category == .moving ? clay : pine)
+                    .shadow(color: .black.opacity(serviceType == item.id ? 0.08 : 0.04), radius: 8, y: 3)
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(serviceType == item.id ? .isSelected : [])
@@ -351,10 +423,13 @@ struct PostJobView: View {
                 }
                 .pickerStyle(.segmented)
                 TextField("Lot size, if you know it", text: $lotSize)
+                .softField()
             }
             TextField("Obstacles", text: $obstacles)
+                .softField()
             TextField("Instructions", text: $notes, axis: .vertical)
                 .lineLimit(3...6)
+                .softField()
             HStack {
                 PhotosPicker(selection: $picker, maxSelectionCount: 4, matching: .images) {
                     Label(photos.isEmpty ? "Photo library" : "\(photos.count) photos", systemImage: "photo")
@@ -400,6 +475,7 @@ struct PostJobView: View {
         VStack(alignment: .leading, spacing: 12) {
             TextField("Search address", text: $query)
                 .textContentType(.fullStreetAddress)
+                .softField()
             ForEach(Array(completer.results.enumerated()), id: \.offset) { _, row in
                 Button {
                     Task { await choose(row) }
@@ -413,31 +489,42 @@ struct PostJobView: View {
                 .buttonStyle(.plain)
             }
             TextField("Street address", text: $street)
+                .softField()
             TextField("City", text: $city)
+                .softField()
             TextField("State", text: $state)
                 .textInputAutocapitalization(.characters)
+                .softField()
             TextField("ZIP code", text: $zip)
                 .keyboardType(.numberPad)
+                .softField()
             if !addressReady, !street.isEmpty || !city.isEmpty || !state.isEmpty || !zip.isEmpty {
                 Text(USAddress.incompleteMessage).font(.footnote).foregroundStyle(.red)
             }
-            Text("When do you need it?").font(.headline)
+            Text("When do you need it?").font(.rounded(.headline))
             ForEach(JobTiming.allCases) { choice in
                 Button {
                     timing = choice
                     Haptic.tap()
                 } label: {
-                    HStack {
-                        Text(choice.title).foregroundStyle(ink)
+                    HStack(spacing: 10) {
+                        Image(systemName: choice.symbol)
+                            .foregroundStyle(timing == choice ? .white : pine)
+                            .frame(width: 32, height: 32)
+                            .background(timing == choice ? pine : pine.opacity(0.12), in: Circle())
+                        Text(choice.title)
+                            .font(.rounded(.body))
+                            .foregroundStyle(ink)
                         Spacer()
                         if timing == choice {
                             Image(systemName: "checkmark.circle.fill").foregroundStyle(pine)
                         }
                     }
                     .padding(12)
-                    .background(
-                        timing == choice ? pine.opacity(0.14) : Color(uiColor: .secondarySystemGroupedBackground),
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .background(cardFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(timing == choice ? pine : Color.primary.opacity(0.06), lineWidth: timing == choice ? 2 : 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -454,9 +541,14 @@ struct PostJobView: View {
             }
             if let result {
                 if let cents = result.suggestedCents {
-                    Text("Suggested \(Money.string(cents: cents))")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Suggested")
+                            .font(.rounded(.subheadline, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Text(Money.string(cents: cents))
+                            .font(.rounded(.largeTitle))
+                            .foregroundStyle(pine)
+                    }
                 }
                 if !result.explanation.isEmpty {
                     Text(result.explanation)
@@ -473,7 +565,7 @@ struct PostJobView: View {
             NavigationLink("See nearby prices") {
                 NearbyPricesPage(readOnly: true, showsBrandHeader: false)
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(SecondaryButtonStyle())
         }
     }
 
@@ -638,27 +730,44 @@ struct PriceEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Your price").font(.headline)
+            Text("Your price").font(.rounded(.headline))
             HStack(spacing: 12) {
                 Button {
                     PriceInput.step(&offered, by: -500)
                     Haptic.tap()
                 } label: {
-                    Image(systemName: "minus.circle.fill").font(.title)
+                    Image(systemName: "minus")
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(pine)
+                        .frame(width: 48, height: 48)
+                        .background(pine.opacity(0.12), in: Circle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Decrease price")
-                TextField("Price", text: $offered)
-                    .keyboardType(.numberPad)
-                    .font(.title.weight(.bold))
-                    .multilineTextAlignment(.center)
-                    .textFieldStyle(.roundedBorder)
-                    .accessibilityLabel("Your price")
+                HStack(spacing: 2) {
+                    Text("$")
+                        .font(.rounded(.largeTitle))
+                        .foregroundStyle(amber)
+                    TextField("Price", text: $offered)
+                        .keyboardType(.numberPad)
+                        .font(.rounded(.largeTitle))
+                        .multilineTextAlignment(.center)
+                        .textFieldStyle(.plain)
+                        .foregroundStyle(ink)
+                        .accessibilityLabel("Your price")
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(cardFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 Button {
                     PriceInput.step(&offered, by: 500)
                     Haptic.tap()
                 } label: {
-                    Image(systemName: "plus.circle.fill").font(.title)
+                    Image(systemName: "plus")
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 48, height: 48)
+                        .background(pine, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Increase price")
@@ -728,7 +837,7 @@ private struct PostSignInSheet: View {
                         }
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PrimaryButtonStyle())
                 .disabled(model.busy || email.isEmpty || password.isEmpty)
                 Spacer()
             }
@@ -879,13 +988,27 @@ struct JobDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 if let job {
-                    Label(job.serviceTitle, systemImage: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(job.category == .moving ? clay : pine)
-                    Text(job.place(exact: true)).font(.title2.weight(.semibold))
-                    StatusBadge(title: job.status.title)
-                    if job.offeredPriceCents > 0 {
-                        PriceChip(cents: job.offeredPriceCents)
+                    Card {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
+                                .font(.title3.weight(.bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 52, height: 52)
+                                .background(serviceTint(job), in: Circle())
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(job.serviceTitle)
+                                    .font(.rounded(.title2))
+                                    .foregroundStyle(ink)
+                                Text(job.place(exact: true))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                StatusBadge(title: job.status.title, tint: statusTint(job.status))
+                            }
+                            Spacer(minLength: 4)
+                            if job.offeredPriceCents > 0 {
+                                PriceChip(cents: job.offeredPriceCents)
+                            }
+                        }
                     }
                     if job.status == .awaitingPayment {
                         NavigationLink {
@@ -894,22 +1017,25 @@ struct JobDetailView: View {
                             Text("Confirm & pay")
                                 .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(PrimaryButtonStyle())
                     }
                     if job.showsWorkProgress {
-                        JobProgress(status: job.status)
+                        Card {
+                            JobProgress(status: job.status)
+                        }
                     }
                     Text("\(job.whenLabel) · \(job.details.summary(for: job.category))")
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                     if job.status == .awaitingReview {
                         Button("Approve & pay") {
                             Haptic.tap()
                             Task { _ = await model.approveJob(jobID: job.id) }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(PrimaryButtonStyle())
                         .disabled(model.busy)
                         Button("Report a problem") { reporting = true }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(SecondaryButtonStyle())
                     }
                     if let note = job.completionNote, !note.isEmpty, job.status == .awaitingReview || job.status == .disputed || job.status == .completed {
                         Text(note)
@@ -962,7 +1088,7 @@ struct JobDetailView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("This job is unavailable.").font(.headline)
                         Button("Try again") { Task { await model.reload() } }
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(PrimaryButtonStyle())
                     }
                 }
                 if let error = model.errorMessage, job != nil {
@@ -973,6 +1099,7 @@ struct JobDetailView: View {
         }
         .background(paper)
         .navigationTitle("Job")
+        .toolbar(.visible, for: .navigationBar)
         .onAppear {
             guard let job, job.status == .awaitingPayment else { return }
             let key = "contractor.pushedAccept.\(job.id.uuidString)"
@@ -992,7 +1119,7 @@ struct JobDetailView: View {
                             if ok { reporting = false }
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(model.busy || problem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     Spacer()
                 }
@@ -1023,16 +1150,16 @@ struct JobDetailView: View {
             Button("Book the same pro again") {
                 Task { _ = await model.bookAgain(bookingID: booking.id, scheduledOn: DayStamp.string(from: Date().addingTimeInterval(7 * 24 * 3600)), recurrence: "") }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PrimaryButtonStyle())
             if job?.category == .lawn {
                 Button("Weekly lawn service") {
                     Task { _ = await model.bookAgain(bookingID: booking.id, scheduledOn: DayStamp.string(from: Date().addingTimeInterval(7 * 24 * 3600)), recurrence: "weekly") }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(SecondaryButtonStyle())
                 Button("Every 2 weeks") {
                     Task { _ = await model.bookAgain(bookingID: booking.id, scheduledOn: DayStamp.string(from: Date().addingTimeInterval(14 * 24 * 3600)), recurrence: "biweekly") }
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(SecondaryButtonStyle())
             }
         }
     }
@@ -1051,7 +1178,7 @@ struct JobDetailView: View {
                         _ = await model.review(jobID: jobID, rating: rating, body: review)
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PrimaryButtonStyle())
             }
         }
     }
@@ -1069,11 +1196,18 @@ struct ConfirmPayView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                Image(systemName: "checkmark.shield.fill")
+                    .font(.system(size: 48))
+                    .foregroundStyle(pine)
+                    .frame(width: 72, height: 72)
+                    .background(pine.opacity(0.12), in: Circle())
                 Text("Payments coming soon")
-                    .font(.title2.weight(.bold))
+                    .font(.rounded(.title2))
                 if let job, job.offeredPriceCents > 0 || (model.booking(for: jobID)?.priceCents ?? 0) > 0 {
                     let cents = model.booking(for: jobID)?.priceCents ?? job.offeredPriceCents
-                    PriceChip(cents: cents)
+                    Text(Money.string(cents: cents))
+                        .font(.rounded(.largeTitle))
+                        .foregroundStyle(amber)
                     Text("Fee \(FeeSchedule.launch.percent)% (\(Money.string(cents: BookingFee.feeCents(priceCents: cents)))). No card is charged in this build.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -1088,7 +1222,7 @@ struct ConfirmPayView: View {
                             if ok { booked = true }
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(model.busy)
                 }
                 if let error = model.errorMessage {
@@ -1133,31 +1267,29 @@ struct QuoteCard: View {
                     .foregroundStyle(.secondary)
                 Text(quote.status == .sent ? "Waiting" : quote.status.rawValue.capitalized)
                     .font(.caption)
-                HStack {
-                    if job.status.isListed && quote.status == .sent {
-                        Button("Accept offer") {
-                            Haptic.tap()
-                            Task { _ = await model.book(quoteID: quote.id) }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(model.busy)
-                        Button("Decline") {
-                            Haptic.tap()
-                            Task { _ = await model.declineQuote(quoteID: quote.id) }
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(model.busy)
+                if job.status.isListed && quote.status == .sent {
+                    Button("Accept offer") {
+                        Haptic.tap()
+                        Task { _ = await model.book(quoteID: quote.id) }
                     }
-                    NavigationLink {
-                        ChatView(jobID: job.id, proID: quote.proID, title: name)
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text("Message")
-                            UnreadBadge(count: model.unreadCount(jobID: job.id))
-                        }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(model.busy)
+                    Button("Decline") {
+                        Haptic.tap()
+                        Task { _ = await model.declineQuote(quoteID: quote.id) }
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(model.busy)
                 }
+                NavigationLink {
+                    ChatView(jobID: job.id, proID: quote.proID, title: name)
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("Message")
+                        UnreadBadge(count: model.unreadCount(jobID: job.id))
+                    }
+                }
+                .buttonStyle(SecondaryButtonStyle())
             }
         }
         .task {

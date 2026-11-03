@@ -85,7 +85,7 @@ struct ChatView: View {
                             reported = await model.report(userID: other, jobID: jobID, reason: reason)
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(reported)
                     Spacer()
                 }

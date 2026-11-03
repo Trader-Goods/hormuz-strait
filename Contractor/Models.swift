@@ -132,6 +132,14 @@ enum JobTiming: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    var symbol: String {
+        switch self {
+        case .asap: return "bolt.fill"
+        case .thisWeek: return "calendar"
+        case .flexible: return "clock.fill"
+        }
+    }
+
     static func label(for stored: String?) -> String? {
         guard let stored, let value = JobTiming(rawValue: stored) else { return nil }
         return value.title

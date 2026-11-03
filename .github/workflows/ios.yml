@@ -151,6 +151,32 @@ jobs:
             security delete-keychain "$KEYCHAIN_PATH" || true
           fi
 
+  screenshots:
+    name: Capture simulator screenshots
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[assign-only]') }}
+    runs-on: macos-15-intel
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode_26.3.app
+          xcodebuild -version
+
+      - name: Install Pillow
+        run: python3 -m pip install --user pillow
+
+      - name: Build and capture
+        run: bash scripts/capture_screenshots.sh "$GITHUB_WORKSPACE/artifacts/screenshots"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: marketing-screenshots
+          path: artifacts/screenshots
+          if-no-files-found: error
+
   assign:
     name: Add existing build to internal group Me
     if: contains(github.event.head_commit.message, '[assign-only]')

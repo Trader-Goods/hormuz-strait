@@ -79,7 +79,7 @@ struct ProHome: View {
                         NoticeList()
                     }
                     if let me = model.session {
-                        Text(me.publicName).font(.title2.weight(.semibold))
+                        Text(me.publicName).font(.rounded(.title2))
                         if model.hasGuarantee(me.id) {
                             Text(Guarantee.title).font(.caption.weight(.semibold)).foregroundStyle(pine)
                         }
@@ -113,7 +113,11 @@ struct ProHome: View {
                             }
                             .accessibilityLabel("Sort by \(sort.title)")
                             Button("Filter") { showFilters = true }
-                                .buttonStyle(.bordered)
+                                .font(.rounded(.subheadline))
+                                .foregroundStyle(pine)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(pine.opacity(0.1), in: Capsule())
                         }
                         if model.busy && openJobs.isEmpty {
                             SkeletonList()
@@ -122,10 +126,10 @@ struct ProHome: View {
                                 VStack(alignment: .leading, spacing: 10) {
                                     Text(error).foregroundStyle(.red)
                                     Button("Try again") { Task { await model.reload() } }
-                                        .buttonStyle(.borderedProminent)
+                                        .buttonStyle(PrimaryButtonStyle())
                                 }
                             } else {
-                                Text("No open jobs.").font(.headline)
+                                FriendlyEmpty(symbol: "mappin.and.ellipse", title: "No open jobs.")
                             }
                         }
                         ForEach(openJobs) { job in
@@ -138,7 +142,7 @@ struct ProHome: View {
                         }
                     } else if section == 1 {
                         if mine.isEmpty {
-                            Text("No offers yet.").font(.headline)
+                            FriendlyEmpty(symbol: "text.bubble.fill", title: "No offers yet.")
                         }
                         ForEach(mine) { quote in
                             if let job = model.jobs.first(where: { $0.id == quote.jobID }) {
@@ -162,7 +166,7 @@ struct ProHome: View {
                     } else {
                         let booked = model.bookings.filter { $0.proID == model.session?.id }
                         if booked.isEmpty {
-                            Text("No booked jobs.").font(.headline)
+                            FriendlyEmpty(symbol: "calendar", title: "No booked jobs.")
                         }
                         ForEach(booked) { booking in
                             if let job = model.jobs.first(where: { $0.id == booking.jobID }) {
@@ -174,7 +178,7 @@ struct ProHome: View {
                                             Text(job.place(exact: true)).font(.headline).foregroundStyle(ink)
                                             HStack {
                                                 PriceChip(cents: booking.priceCents)
-                                                StatusBadge(title: job.status.title)
+                                                StatusBadge(title: job.status.title, tint: statusTint(job.status))
                                             }
                                             Text("You receive \(Money.string(cents: booking.charge.proPayoutCents))")
                                                 .font(.subheadline)
@@ -331,22 +335,22 @@ struct ProJobView: View {
                                         UnreadBadge(count: model.unreadCount(jobID: job.id))
                                     }
                                 }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(SecondaryButtonStyle())
                             }
                         }
                     } else if job.status.isListed && !SampleJobs.contains(job.id) {
                         Button("Accept \(Money.string(cents: job.offeredPriceCents))") {
                             acceptTapped(job)
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(PrimaryButtonStyle())
                         .disabled(model.busy || job.offeredPriceCents <= 0)
                         Button("Make offer") {
                             offerTapped()
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(SecondaryButtonStyle())
                         if model.session?.canTakeJobs != true {
                             NavigationLink("Finish profile") { ProProfileView() }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(SecondaryButtonStyle())
                         }
                     }
                 } else if !checked {
@@ -358,7 +362,7 @@ struct ProJobView: View {
                         Button("Try again") {
                             Task { await loadJob() }
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(PrimaryButtonStyle())
                     }
                 }
                 if let loadError, job != nil {
@@ -398,7 +402,7 @@ struct ProJobView: View {
                             if ok { showDone = false }
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(model.busy)
                     Spacer()
                 }
@@ -429,7 +433,7 @@ struct ProJobView: View {
                             if ok { offering = false }
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle())
                     .disabled(model.busy || price.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     Spacer()
                 }
@@ -454,14 +458,14 @@ struct ProJobView: View {
                 Haptic.tap()
                 Task { _ = await model.startJob(jobID: job.id) }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(model.busy)
         } else if job.status == .inProgress {
             Button("Mark job done") {
                 Haptic.tap()
                 showDone = true
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(PrimaryButtonStyle())
             .disabled(model.busy)
         } else if job.status == .awaitingReview {
             Text("Waiting for the customer to approve. You'll be paid once they approve, or automatically after 48 hours.")
@@ -580,15 +584,15 @@ struct ProProfileView: View {
                         await model.updateServiceArea(serviceTypes: Array(selected), radiusMiles: radius, bio: bio, avatarJPEG: avatarJPEG)
                     }
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PrimaryButtonStyle())
                 .disabled(model.busy)
                 if model.session?.identityVerified == false {
                     Button("Confirm identity") { Task { await model.verifyIdentity() } }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(SecondaryButtonStyle())
                 }
                 if model.session?.payoutsReady == false {
                     Button("Mark payouts ready") { Task { await model.connectPayouts() } }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(SecondaryButtonStyle())
                 }
                 if let error = model.errorMessage {
                     Text(error).foregroundStyle(.red)
@@ -743,7 +747,7 @@ struct EarningsView: View {
                 Text("Payouts coming soon. Set up payouts")
                     .font(.subheadline.weight(.semibold))
                 Button("Set up payouts") { showPayouts = true }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(SecondaryButtonStyle())
                 Picker("Earnings", selection: $section) {
                     Text("Pending").tag(0)
                     Text("Ready").tag(1)
@@ -777,7 +781,7 @@ struct EarningsView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Stripe Connect is not connected. No money is moved in this build.")
                     Button("Close") { showPayouts = false }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(PrimaryButtonStyle())
                     Spacer()
                 }
                 .padding(20)

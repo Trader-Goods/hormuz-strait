@@ -122,7 +122,7 @@ struct ProJobMap: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Map(position: $position) {
-                if let center = model.session?.coordinate, let radius = model.session?.radiusMiles, radius > 0 {
+                if !readOnly, let center = model.session?.coordinate, let radius = model.session?.radiusMiles, radius > 0 {
                     MapCircle(
                         center: CLLocationCoordinate2D(latitude: center.latitude, longitude: center.longitude),
                         radius: Double(radius) * 1609.344
@@ -143,11 +143,12 @@ struct ProJobMap: View {
                                 ))
                             }
                         } label: {
-                            Text(bubble.label)
-                                .font(.caption2.weight(.bold))
-                                .foregroundStyle(.white)
-                                .frame(width: bubble.jobs.count == 1 ? 46 : 36, height: bubble.jobs.count == 1 ? 46 : 36)
-                                .background(bubble.jobs.allSatisfy { $0.category == .moving } ? clay : pine, in: Circle())
+                            MapPriceMarker(
+                                label: bubble.label,
+                                symbol: bubble.jobs.first.flatMap { ServiceCatalog.find($0.serviceType)?.symbol } ?? bubble.jobs.first?.category.symbol ?? "leaf.fill",
+                                tint: bubble.jobs.first.map { serviceTint($0) } ?? pine,
+                                clustered: bubble.jobs.count > 1
+                            )
                         }
                         .buttonStyle(.plain)
                     }
@@ -160,7 +161,7 @@ struct ProJobMap: View {
                     latitudeDelta = next
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: expands ? 480 : 360, maxHeight: expands ? .infinity : 360)
+            .frame(maxWidth: .infinity, minHeight: expands ? 540 : 360, maxHeight: expands ? .infinity : 360)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             if locating {
@@ -231,7 +232,7 @@ struct ProJobMap: View {
         origin = center ?? model.session?.coordinate
         if let origin {
             let miles = Double(max(model.session?.radiusMiles ?? 25, 5))
-            let latitudeDelta = miles / 69 * 2.4
+            let latitudeDelta = ProcessInfo.processInfo.environment["SCREENSHOT"] == "map" ? 0.055 : miles / 69 * 2.4
             let longitudeDelta = latitudeDelta / max(0.2, cos(origin.latitude * .pi / 180))
             position = .region(MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: origin.latitude, longitude: origin.longitude),
@@ -244,6 +245,31 @@ struct ProJobMap: View {
             }
         }
         locating = false
+    }
+}
+
+private struct MapPriceMarker: View {
+    var label: String
+    var symbol: String
+    var tint: Color
+    var clustered: Bool
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(label)
+                .font(.rounded(.caption, weight: .bold))
+                .foregroundStyle(Color(red: 0.2, green: 0.1, blue: 0.02))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(amber, in: Capsule())
+            Image(systemName: clustered ? "square.3.layers.3d.down.right.fill" : symbol)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(tint, in: Circle())
+                .overlay(Circle().stroke(.white, lineWidth: 2))
+        }
+        .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
     }
 }
 
@@ -344,9 +370,9 @@ struct NearbyPricesPage: View {
                             if let error = model.errorMessage {
                                 Text(error).foregroundStyle(.red)
                                 Button("Try again") { Task { await model.reload() } }
-                                    .buttonStyle(.borderedProminent)
+                                    .buttonStyle(PrimaryButtonStyle())
                             } else {
-                                Text("No open jobs.").font(.headline)
+                                FriendlyEmpty(symbol: "map.fill", title: "No open jobs.")
                             }
                         }
                     }
@@ -388,18 +414,24 @@ private struct MapPriceRow: View {
 
     var body: some View {
         Card {
-            VStack(alignment: .leading, spacing: 8) {
-                Label(job.serviceTitle, systemImage: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(job.category == .moving ? clay : pine)
-                Text(job.place(exact: false)).font(.headline).foregroundStyle(ink)
-                HStack {
-                    if job.offeredPriceCents > 0 {
-                        PriceChip(cents: job.offeredPriceCents)
-                    }
-                    Text(job.whenLabel)
+            HStack(spacing: 12) {
+                Image(systemName: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
+                    .font(.body.weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(serviceTint(job), in: Circle())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(job.serviceTitle)
+                        .font(.rounded(.headline))
+                        .foregroundStyle(ink)
+                    Text(job.place(exact: false))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                    InfoChip(text: job.whenLabel, symbol: "clock.fill")
+                }
+                Spacer(minLength: 4)
+                if job.offeredPriceCents > 0 {
+                    PriceChip(cents: job.offeredPriceCents)
                 }
             }
         }
