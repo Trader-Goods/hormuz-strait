@@ -61,7 +61,7 @@ grab() {
   for try in 1 2 3 4; do
     SIMCTL_CHILD_SCREENSHOT="$shot" xcrun simctl launch --terminate-running-process "$udid" "$BUNDLE" >/dev/null
     xcrun simctl openurl "$udid" "contractorpros://screenshot" || true
-    if [ "$shot" = "map" ]; then sleep 10; else sleep 6; fi
+    if [ "$shot" = "map" ] || [ "$shot" = "preview" ]; then sleep 10; else sleep 6; fi
     xcrun simctl io "$udid" screenshot "$dest"
     if python3 - "$dest" <<'PY'
 import sys
@@ -110,7 +110,7 @@ boot_one() {
   xcrun simctl install "$udid" "$APP_PATH"
   local shot dest try
   xcrun simctl ui "$udid" content_size large || true
-  for shot in welcome home map post pay; do
+  for shot in welcome home preview map post pay; do
     grab "$udid" "$shot" "$OUT/raw/${label}-${shot}.png"
   done
   if [ "$label" = "6.7" ]; then
@@ -144,12 +144,14 @@ layout_text() {
   xcrun simctl ui "$udid" content_size large || true
   grab "$udid" welcome "$OUT/raw/${label}-welcome.png"
   grab "$udid" home "$OUT/raw/${label}-home.png"
+  grab "$udid" preview "$OUT/raw/${label}-preview.png"
   xcrun simctl ui "$udid" content_size accessibility-extra-extra-extra-large \
     || xcrun simctl ui "$udid" content_size AX5 \
     || true
   sleep 2
   grab "$udid" welcome "$OUT/raw/${label}-welcome-ax.png"
   grab "$udid" home "$OUT/raw/${label}-home-ax.png"
+  grab "$udid" preview "$OUT/raw/${label}-preview-ax.png"
   xcrun simctl shutdown "$udid" || true
   xcrun simctl delete "$udid" || true
 }

@@ -219,6 +219,11 @@ final class AppModel: ObservableObject {
         UserDefaults.standard.set(clean, forKey: "contractor.lastEmail")
     }
 
+    func previewOpenJobs(minLat: Double, minLng: Double, maxLat: Double, maxLng: Double) async -> [JobRecord] {
+        if screenshotMode { return priceJobs }
+        return (try? await api.publicOpenJobs(minLat: minLat, minLng: minLng, maxLat: maxLat, maxLng: maxLng)) ?? []
+    }
+
     func signOut() async {
         await api.signOut()
         session = nil

@@ -69,6 +69,7 @@ protocol ContractorAPI: AnyObject {
     func customerJobs() async throws -> [JobRecord]
     func openJobs() async throws -> [JobRecord]
     func priceJobs() async throws -> [JobRecord]
+    func publicOpenJobs(minLat: Double, minLng: Double, maxLat: Double, maxLng: Double) async throws -> [JobRecord]
     func quotes(for jobID: UUID) async throws -> [QuoteRecord]
     func myQuotes() async throws -> [QuoteRecord]
     func bookings() async throws -> [BookingRecord]
@@ -276,6 +277,13 @@ final class MockBackend: ContractorAPI {
             job.offeredPriceCents > 0 && job.status.isListed
         }
         .map { $0.publicPriceCopy() }
+    }
+
+    func publicOpenJobs(minLat: Double, minLng: Double, maxLat: Double, maxLng: Double) async throws -> [JobRecord] {
+        try await priceJobs().filter { job in
+            guard let point = job.coordinate else { return false }
+            return point.latitude >= minLat && point.latitude <= maxLat && point.longitude >= minLng && point.longitude <= maxLng
+        }
     }
 
     func quotes(for jobID: UUID) async throws -> [QuoteRecord] {
@@ -642,6 +650,41 @@ final class SupabaseBackend: ContractorAPI {
         }
     }
 
+    func publicOpenJobs(minLat: Double, minLng: Double, maxLat: Double, maxLng: Double) async throws -> [JobRecord] {
+        let rows: [PricePinDTO] = try await post(
+            "/rest/v1/rpc/public_open_jobs",
+            body: [
+                "min_lat": minLat,
+                "min_lng": minLng,
+                "max_lat": maxLat,
+                "max_lng": maxLng,
+                "row_limit": 80,
+            ],
+            auth: false
+        )
+        return rows.map { pin in
+            JobRecord(
+                id: pin.id,
+                customerID: UUID(uuidString: "00000000-0000-0000-0000-000000000000")!,
+                category: pin.category,
+                street: "",
+                city: pin.city,
+                state: pin.state,
+                zip: pin.zip,
+                latitude: pin.latitude,
+                longitude: pin.longitude,
+                scheduledOn: pin.scheduledOn,
+                details: .empty,
+                status: .posted,
+                photoNames: [],
+                createdAt: pin.createdAt,
+                serviceType: pin.serviceType,
+                offeredPriceCents: pin.offeredPriceCents,
+                timing: pin.timing
+            )
+        }
+    }
+
     func priceJobs() async throws -> [JobRecord] {
         let rows: [PricePinDTO] = try await get("/rest/v1/price_board?select=*&order=created_at.desc")
         return rows.map { pin in
@@ -657,12 +700,13 @@ final class SupabaseBackend: ContractorAPI {
                 longitude: pin.longitude,
                 scheduledOn: pin.scheduledOn,
                 details: .empty,
-                status: pin.status,
+                status: pin.status ?? .posted,
                 photoNames: [],
                 createdAt: pin.createdAt,
                 serviceType: pin.serviceType,
                 offeredPriceCents: pin.offeredPriceCents,
-                estimatedMinutes: pin.estimatedMinutes
+                estimatedMinutes: pin.estimatedMinutes ?? 0,
+                timing: pin.timing
             )
         }
     }
@@ -1021,8 +1065,9 @@ final class SupabaseBackend: ContractorAPI {
         var latitude: Double?
         var longitude: Double?
         var offeredPriceCents: Int
-        var estimatedMinutes: Int
-        var status: JobStatus
+        var estimatedMinutes: Int?
+        var status: JobStatus?
+        var timing: String?
         var scheduledOn: String
         var createdAt: Date
     }
@@ -1258,8 +1303,8 @@ final class SupabaseBackend: ContractorAPI {
         return try decoder().decode(T.self, from: data)
     }
 
-    private func post<T: Decodable>(_ path: String, body: [String: Any]) async throws -> T {
-        let json = try await send(path: path, method: "POST", body: body, auth: true, represent: true)
+    private func post<T: Decodable>(_ path: String, body: [String: Any], auth: Bool = true) async throws -> T {
+        let json = try await send(path: path, method: "POST", body: body, auth: auth, represent: auth)
         let data = try JSONSerialization.data(withJSONObject: json["rows"] ?? [])
         return try decoder().decode(T.self, from: data)
     }

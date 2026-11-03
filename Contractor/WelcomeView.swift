@@ -5,9 +5,12 @@ struct WelcomeView: View {
     @State private var role: UserRole?
     @State private var email = ""
     @State private var password = ""
+    @State private var page = ProcessInfo.processInfo.environment["SCREENSHOT"] == "preview" ? 1 : 0
 
     var body: some View {
         NavigationStack {
+            VStack(spacing: 0) {
+            TabView(selection: $page) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(spacing: 12) {
@@ -100,6 +103,20 @@ struct WelcomeView: View {
                             }
                         }
                     }
+                    Button {
+                        Haptic.tap()
+                        withAnimation(.spring(duration: 0.35)) { page = 1 }
+                    } label: {
+                        Text("Swipe to see jobs near you →")
+                            .appText(20, weight: .semibold, relativeTo: .headline)
+                            .foregroundStyle(ink)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity, minHeight: 56)
+                            .padding(.horizontal, 12)
+                            .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("See jobs near you")
                     Card {
                         HelpLinks()
                     }
@@ -133,6 +150,19 @@ struct WelcomeView: View {
                 .ignoresSafeArea()
             }
             .background(Color.black)
+            .tag(0)
+            GuestJobPreview(onCustomer: { role = .customer }, onPro: { role = .pro })
+                .tag(1)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            HStack(spacing: 12) {
+                pageChip("Welcome", index: 0)
+                pageChip("Jobs near you", index: 1)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
+            }
             .toolbar(.hidden, for: .navigationBar)
             .onAppear {
                 if email.isEmpty {
@@ -143,6 +173,31 @@ struct WelcomeView: View {
                 HowItWorksView(role: selected, email: email, password: password)
             }
         }
+    }
+}
+
+private extension WelcomeView {
+    func pageChip(_ title: String, index: Int) -> some View {
+        let on = page == index
+        return Button {
+            Haptic.tap()
+            withAnimation(.spring(duration: 0.35)) { page = index }
+        } label: {
+            VStack(spacing: 4) {
+                Text(title)
+                    .appText(18, weight: on ? .bold : .semibold)
+                    .foregroundStyle(on ? pineText : ink)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                Capsule()
+                    .fill(on ? pineText : Color.clear)
+                    .frame(height: 4)
+            }
+            .frame(maxWidth: .infinity, minHeight: 56)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
     }
 }
 

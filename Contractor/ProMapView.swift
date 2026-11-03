@@ -108,6 +108,9 @@ struct ProJobMap: View {
     var jobs: [JobRecord]
     var readOnly = false
     var expands = false
+    var locatesUser = true
+    var homeCenter: GeoPoint? = nil
+    var homeSpan: Double? = nil
     var onOpen: (UUID) -> Void = { _ in }
     @State private var position: MapCameraPosition = .automatic
     @State private var selectedID: UUID?
@@ -182,6 +185,14 @@ struct ProJobMap: View {
         .task(id: jobs.map(\.id)) {
             await prepare()
         }
+        .onChange(of: homeCenter?.latitude) { _, _ in
+            guard let homeCenter else { return }
+            let span = homeSpan ?? 0.22
+            position = .region(MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: homeCenter.latitude, longitude: homeCenter.longitude),
+                span: MKCoordinateSpan(latitudeDelta: span, longitudeDelta: span)
+            ))
+        }
     }
 
     private var bubbles: [JobBubble] {
@@ -216,8 +227,8 @@ struct ProJobMap: View {
 
     private func prepare() async {
         locating = jobs.contains { $0.coordinate == nil }
-        var center = model.session?.coordinate
-        if center == nil, let device = await AreaLocator.shared.point() {
+        var center = model.session?.coordinate ?? homeCenter
+        if locatesUser, center == nil, let device = await AreaLocator.shared.point() {
             center = device
             if !readOnly {
                 await model.rememberProLocation(latitude: device.latitude, longitude: device.longitude)
@@ -232,7 +243,8 @@ struct ProJobMap: View {
         origin = center ?? model.session?.coordinate
         if let origin {
             let miles = Double(max(model.session?.radiusMiles ?? 25, 5))
-            let latitudeDelta = ProcessInfo.processInfo.environment["SCREENSHOT"] == "map" ? 0.055 : miles / 69 * 2.4
+            let shot = ProcessInfo.processInfo.environment["SCREENSHOT"]
+            let latitudeDelta = homeSpan ?? ((shot == "map" || shot == "preview") ? 0.055 : miles / 69 * 2.4)
             let longitudeDelta = latitudeDelta / max(0.2, cos(origin.latitude * .pi / 180))
             position = .region(MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: origin.latitude, longitude: origin.longitude),
@@ -477,5 +489,189 @@ struct MapPriceDetail: View {
         .background(paper)
         .navigationTitle("Job")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct GuestJobPreview: View {
+    @EnvironmentObject private var model: AppModel
+    var onCustomer: () -> Void
+    var onPro: () -> Void
+    @State private var jobs: [JobRecord] = []
+    @State private var center = GeoPoint(latitude: 41.60, longitude: -83.60)
+    @State private var span = ProcessInfo.processInfo.environment["SCREENSHOT"] == "preview" ? 0.16 : 0.22
+    @State private var showList = false
+    @State private var selected: JobRecord?
+    @State private var locating = false
+
+    var body: some View {
+        ScrollView {
+        VStack(spacing: 8) {
+            Text("Jobs near you")
+                .appText(28, weight: .bold, relativeTo: .title)
+                .tracking(-0.3)
+                .foregroundStyle(ink)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Open jobs near Maumee and Toledo. The pin is not the exact house.")
+                .appText()
+                .foregroundStyle(inkSoft)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                modeButton("Map", on: !showList) { showList = false }
+                modeButton("List", on: showList) { showList = true }
+            }
+            Button(locating ? "Finding you…" : "Center on me") {
+                Haptic.tap()
+                locating = true
+                Task {
+                    if let point = await AreaLocator.shared.point() {
+                        center = point
+                        span = 0.08
+                        await load()
+                    }
+                    locating = false
+                }
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .disabled(locating)
+            Group {
+                if showList {
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            if jobs.isEmpty {
+                                FriendlyEmpty(symbol: "map.fill", title: "No open jobs in this area.", photo: "yard-beds")
+                            }
+                            ForEach(jobs) { job in
+                                Button {
+                                    selected = job
+                                } label: {
+                                    MapPriceRow(job: job)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("\(job.serviceTitle), \(Money.string(cents: job.offeredPriceCents))")
+                            }
+                        }
+                    }
+                } else {
+                    ProJobMap(
+                        jobs: jobs,
+                        readOnly: true,
+                        expands: false,
+                        locatesUser: false,
+                        homeCenter: center,
+                        homeSpan: span
+                    ) { id in
+                        selected = jobs.first { $0.id == id }
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 8) {
+                Button("Sign up free to post a job") {
+                    Haptic.tap()
+                    onCustomer()
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                Button("I'm a pro") {
+                    Haptic.tap()
+                    onPro()
+                }
+                .buttonStyle(SecondaryButtonStyle())
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(paper)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(paper)
+        .clipped()
+        .sheet(item: $selected) { job in
+            GuestPinSheet(job: job, onCustomer: onCustomer, onPro: onPro)
+                .presentationDetents([.medium, .large])
+        }
+        .task { await load() }
+        .onChange(of: center.latitude) { _, _ in
+            Task { await load() }
+        }
+    }
+
+    private func load() async {
+        let halfLat = span / 2
+        let halfLng = span / max(0.2, cos(center.latitude * .pi / 180))
+        jobs = await model.previewOpenJobs(
+            minLat: center.latitude - halfLat,
+            minLng: center.longitude - halfLng / 2,
+            maxLat: center.latitude + halfLat,
+            maxLng: center.longitude + halfLng / 2
+        )
+    }
+
+    private func modeButton(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: {
+            Haptic.tap()
+            action()
+        }) {
+            VStack(spacing: 4) {
+                Text(title)
+                    .appText(18, weight: on ? .bold : .semibold)
+                    .foregroundStyle(on ? pineText : ink)
+                Capsule().fill(on ? pineText : Color.clear).frame(height: 4)
+            }
+            .frame(maxWidth: .infinity, minHeight: 56)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
+    }
+}
+
+private struct GuestPinSheet: View {
+    var job: JobRecord
+    var onCustomer: () -> Void
+    var onPro: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(job.serviceTitle)
+                    .appText(28, weight: .bold, relativeTo: .title)
+                    .foregroundStyle(ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if job.offeredPriceCents > 0 {
+                    PriceChip(cents: job.offeredPriceCents)
+                }
+                Text(job.place(exact: false))
+                    .appText()
+                    .foregroundStyle(inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+                Label(job.whenLabel, systemImage: "clock.fill")
+                    .appText(18, weight: .semibold)
+                    .foregroundStyle(ink)
+                Button("Sign up free to post a job") {
+                    Haptic.tap()
+                    dismiss()
+                    onCustomer()
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                Button("I'm a pro") {
+                    Haptic.tap()
+                    dismiss()
+                    onPro()
+                }
+                .buttonStyle(SecondaryButtonStyle())
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(paper)
     }
 }
