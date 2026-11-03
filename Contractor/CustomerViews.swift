@@ -17,13 +17,7 @@ struct CustomerHome: View {
                 VStack(alignment: .leading, spacing: 16) {
                     if model.session?.role == .customer {
                         VStack(spacing: 0) {
-                            Image("yard-home")
-                                .resizable()
-                                .scaledToFill()
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 168)
-                                .clipped()
-                                .accessibilityHidden(true)
+                            FitPhoto(name: "yard-home", height: 168)
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Get your yard done this week")
                                     .appText(28, weight: .bold, relativeTo: .title)
@@ -187,10 +181,15 @@ struct JobCard: View {
                         .foregroundStyle(inkSoft)
                 }
                 if let name = job.photoNames.first, let image = PhotoStore.image(name) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity, minHeight: 88, maxHeight: 160)
+                    Color.clear
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 120)
+                        .overlay {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                        }
+                        .clipped()
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .accessibilityLabel("Job photo")
                 }
@@ -247,13 +246,8 @@ struct PostJobView: View {
                 Color.clear
             } else if finished {
                 VStack(spacing: 16) {
-                    Image("yard-mow")
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 220)
-                        .clipped()
+                    FitPhoto(name: "yard-mow", height: 200)
                         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        .accessibilityHidden(true)
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 44))
                         .foregroundStyle(pineText)

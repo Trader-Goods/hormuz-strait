@@ -8,25 +8,6 @@ struct WelcomeView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .top) {
-            Image("yard-mow")
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
-                .ignoresSafeArea()
-                .accessibilityHidden(true)
-            LinearGradient(
-                colors: [
-                    .black.opacity(0.62),
-                    .black.opacity(0.38),
-                    .black.opacity(0.86)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(spacing: 12) {
@@ -123,8 +104,33 @@ struct WelcomeView: View {
                         HelpLinks()
                     }
                 }
-                .padding(20)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                GeometryReader { geo in
+                    ZStack {
+                        Image("yard-mow")
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geo.size.width, height: geo.size.height)
+                            .clipped()
+                        LinearGradient(
+                            colors: [
+                                .black.opacity(0.62),
+                                .black.opacity(0.38),
+                                .black.opacity(0.86)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+                }
+                .ignoresSafeArea()
             }
             .background(Color.black)
             .toolbar(.hidden, for: .navigationBar)
@@ -152,6 +158,7 @@ private func roleRow(_ title: String, symbol: String, tint: Color) -> some View 
             Text(title)
                 .appText(22, weight: .bold, relativeTo: .title2)
                 .foregroundStyle(ink)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
             Image(systemName: "chevron.right")
@@ -304,13 +311,8 @@ struct HowItWorksView: View {
                         .foregroundStyle(pineText)
                         .frame(minHeight: 56)
                     }
-                    Image(pages[page].0)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(maxWidth: .infinity, minHeight: 220, maxHeight: 280)
-                        .clipped()
+                    FitPhoto(name: pages[page].0, height: 220)
                         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                        .accessibilityHidden(true)
                     Text(pages[page].1)
                         .tracking(-0.4)
                         .appText(34, weight: .bold, relativeTo: .largeTitle)
@@ -386,13 +388,8 @@ private struct HowItWorksReplay: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Image(pages[page].0)
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity, minHeight: 220, maxHeight: 280)
-                .clipped()
+            FitPhoto(name: pages[page].0, height: 220)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .accessibilityHidden(true)
             Text(pages[page].1)
                 .appText(34, weight: .bold, relativeTo: .largeTitle)
                 .foregroundStyle(ink)

@@ -43,6 +43,9 @@ names = [d["name"] for d in data["devicetypes"]]
 prefs = {
     "6.7": ["iPhone 16 Plus", "iPhone 15 Plus", "iPhone 15 Pro Max", "iPhone 14 Plus", "iPhone 14 Pro Max", "iPhone 16 Pro Max", "iPhone 17 Pro Max"],
     "6.5": ["iPhone 11 Pro Max", "iPhone XS Max"],
+    "se": ["iPhone SE (3rd generation)", "iPhone SE (2nd generation)", "iPhone 16e"],
+    "15": ["iPhone 15", "iPhone 16", "iPhone 14"],
+    "15pm": ["iPhone 15 Pro Max", "iPhone 16 Pro Max", "iPhone 14 Pro Max"],
 }[want]
 for name in prefs:
     if name in names:
@@ -123,9 +126,40 @@ boot_one() {
   xcrun simctl delete "$udid" || true
 }
 
+# welcome and home at the default size and the largest accessibility size
+layout_text() {
+  local label="$1"
+  local name runtime udid
+  if ! name="$(pick_device "$label")"; then
+    echo "No $label device type"
+    return 0
+  fi
+  runtime="$(pick_runtime)"
+  echo "Layout check $label on $name"
+  udid="$(xcrun simctl create "Contractor-layout-$label" "$name" "$runtime")"
+  xcrun simctl boot "$udid"
+  xcrun simctl bootstatus "$udid" -b
+  xcrun simctl privacy "$udid" grant location "$BUNDLE" || true
+  xcrun simctl install "$udid" "$APP_PATH"
+  xcrun simctl ui "$udid" content_size large || true
+  grab "$udid" welcome "$OUT/raw/${label}-welcome.png"
+  grab "$udid" home "$OUT/raw/${label}-home.png"
+  xcrun simctl ui "$udid" content_size accessibility-extra-extra-extra-large \
+    || xcrun simctl ui "$udid" content_size AX5 \
+    || true
+  sleep 2
+  grab "$udid" welcome "$OUT/raw/${label}-welcome-ax.png"
+  grab "$udid" home "$OUT/raw/${label}-home-ax.png"
+  xcrun simctl shutdown "$udid" || true
+  xcrun simctl delete "$udid" || true
+}
+
 RUNTIME_OK=0
 boot_one 6.7 && RUNTIME_OK=1
 boot_one 6.5 || echo "6.5 device unavailable; marketing frames will scale the 6.7 captures"
+layout_text se || true
+layout_text 15 || true
+layout_text 15pm || true
 test "$RUNTIME_OK" = 1
 python3 "$ROOT/scripts/marketing_frames.py" "$OUT/raw" "$OUT/marketing"
 echo "Screenshots in $OUT"

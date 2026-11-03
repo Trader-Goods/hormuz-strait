@@ -200,6 +200,25 @@ private struct SecondaryButtonBody<Label: View>: View {
     }
 }
 
+/// A photo that fills a fixed box. The image is not allowed to widen its parent.
+struct FitPhoto: View {
+    var name: String
+    var height: CGFloat
+
+    var body: some View {
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .overlay {
+                Image(name)
+                    .resizable()
+                    .scaledToFill()
+            }
+            .clipped()
+            .accessibilityHidden(true)
+    }
+}
+
 func yardPhoto(for serviceID: String) -> String? {
     switch serviceID {
     case "mowing": return "yard-mow"
@@ -219,13 +238,7 @@ struct PhotoTile: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Image(name)
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity)
-                .frame(height: 112)
-                .clipped()
-                .accessibilityHidden(true)
+            FitPhoto(name: name, height: 112)
             Text(title)
                 .appText(18, weight: .bold)
                 .foregroundStyle(.white)
@@ -256,13 +269,8 @@ struct FriendlyEmpty: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let photo {
-                Image(photo)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity, minHeight: 160, maxHeight: 200)
-                    .clipped()
+                FitPhoto(name: photo, height: 168)
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .accessibilityHidden(true)
             } else {
                 Image(systemName: symbol)
                     .appText(28, weight: .bold, relativeTo: .title)
@@ -491,13 +499,8 @@ struct SuccessCover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             if let photo {
-                Image(photo)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 220)
-                    .clipped()
+                FitPhoto(name: photo, height: 200)
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .accessibilityHidden(true)
             } else {
                 Image(systemName: symbol)
                     .appText(48, weight: .bold, relativeTo: .largeTitle)
