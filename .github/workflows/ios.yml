@@ -9,7 +9,7 @@ on:
 jobs:
   testflight:
     name: Build, sign and upload to TestFlight
-    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[assign-only]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[assign-only]') && !contains(github.event.head_commit.message, '[shots-only]') }}
     runs-on: macos-15-intel
     timeout-minutes: 45
     env:
@@ -153,9 +153,9 @@ jobs:
 
   screenshots:
     name: Capture simulator screenshots
-    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[assign-only]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[assign-only]') }}
     runs-on: macos-15-intel
-    timeout-minutes: 90
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@v4
 
@@ -172,6 +172,8 @@ jobs:
           echo "$RUNNER_TEMP/shots/bin" >> "$GITHUB_PATH"
 
       - name: Build and capture
+        env:
+          SHOT_PLAN: ${{ contains(github.event.head_commit.message, '[shots-only]') && 'preview' || 'full' }}
         run: bash scripts/capture_screenshots.sh "$GITHUB_WORKSPACE/artifacts/screenshots"
 
       - uses: actions/upload-artifact@v4

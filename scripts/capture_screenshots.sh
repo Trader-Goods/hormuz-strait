@@ -156,11 +156,17 @@ layout_text() {
   xcrun simctl delete "$udid" || true
 }
 
+if [ "${SHOT_PLAN:-full}" = "preview" ]; then
+  layout_text se
+  layout_text 15pm
+  echo "Preview screenshots in $OUT"
+  exit 0
+fi
+
 RUNTIME_OK=0
 boot_one 6.7 && RUNTIME_OK=1
 boot_one 6.5 || echo "6.5 device unavailable; marketing frames will scale the 6.7 captures"
 layout_text se || true
-layout_text 15 || true
 layout_text 15pm || true
 test "$RUNTIME_OK" = 1
 python3 "$ROOT/scripts/marketing_frames.py" "$OUT/raw" "$OUT/marketing"
