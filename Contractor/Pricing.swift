@@ -137,7 +137,11 @@ struct RegionalRateCard: Codable, Equatable {
                     "moving": ServiceRate(smallCents: 16000, mediumCents: 26000, largeCents: 40000, smallMinutes: 120, mediumMinutes: 180, largeMinutes: 240, obstacleCents: 4000, obstacleMinutes: 30),
                 ]
             ),
-            RateRegion(id: "nwOhio", name: "Northwest Ohio", zipPrefixes: ["435", "436"], factor: 0.75, services: [:]),
+            RateRegion(id: "nwOhio", name: "Northwest Ohio", zipPrefixes: ["435", "436"], factor: 0.75, services: [
+                "mowing": ServiceRate(smallCents: 4800, mediumCents: 6500, largeCents: 10000, smallMinutes: 45, mediumMinutes: 60, largeMinutes: 90, obstacleCents: 1000, obstacleMinutes: 15),
+                "leafCleanup": ServiceRate(smallCents: 3500, mediumCents: 5000, largeCents: 7500, smallMinutes: 40, mediumMinutes: 60, largeMinutes: 90, obstacleCents: 1000, obstacleMinutes: 15),
+                "hedgeTrim": ServiceRate(smallCents: 4000, mediumCents: 5500, largeCents: 8000, smallMinutes: 40, mediumMinutes: 60, largeMinutes: 90, obstacleCents: 1000, obstacleMinutes: 15),
+            ]),
             RateRegion(id: "ohio", name: "Ohio", zipPrefixes: ["43", "44", "45"], factor: 0.8, services: [:]),
         ]
     )
@@ -188,7 +192,9 @@ struct RuleBasedEstimator: PriceEstimator {
         if service == nil {
             questions.append("Which service do you need?")
         }
-        let rate = service.flatMap { region?.services[$0.id] ?? baseline?.services[$0.id] }
+        let localRate = service.flatMap { region?.services[$0.id] }
+        let rate = localRate ?? service.flatMap { baseline?.services[$0.id] }
+        let appliedFactor = localRate == nil ? factor : 1
         if service != nil && rate == nil {
             questions.append("That service is not on the rate card yet.")
         }
@@ -261,15 +267,15 @@ struct RuleBasedEstimator: PriceEstimator {
             size = "medium"
             assumptions.append("The lot size was described in words, so the medium rate was used. This is not a measurement.")
         }
-        var cents = Self.scaled(rate.cents(for: size), factor: factor)
+        var cents = Self.scaled(rate.cents(for: size), factor: appliedFactor)
         var minutes = rate.minutes(for: size)
         if !obstacles.isEmpty {
-            let extra = Self.scaled(rate.obstacleCents, factor: factor)
+            let extra = Self.scaled(rate.obstacleCents, factor: appliedFactor)
             cents += extra
             minutes += rate.obstacleMinutes
             assumptions.append("Obstacles add \(Money.string(cents: extra)) and \(rate.obstacleMinutes) minutes from the rate card.")
         }
-        if factor != 1 {
+        if appliedFactor != 1 {
             assumptions.append(String(format: "%@ uses %.2f times the US card, set near local one-day prices. This is editable configuration, not a live survey.", rateName, factor))
         }
         if service.id == "moving" {

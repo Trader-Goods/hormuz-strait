@@ -25,7 +25,11 @@
       "name": "Northwest Ohio",
       "zipPrefixes": ["435", "436"],
       "factor": 0.75,
-      "services": {}
+      "services": {
+        "mowing": {"smallCents": 4800, "mediumCents": 6500, "largeCents": 10000, "smallMinutes": 45, "mediumMinutes": 60, "largeMinutes": 90, "obstacleCents": 1000, "obstacleMinutes": 15},
+        "leafCleanup": {"smallCents": 3500, "mediumCents": 5000, "largeCents": 7500, "smallMinutes": 40, "mediumMinutes": 60, "largeMinutes": 90, "obstacleCents": 1000, "obstacleMinutes": 15},
+        "hedgeTrim": {"smallCents": 4000, "mediumCents": 5500, "largeCents": 8000, "smallMinutes": 40, "mediumMinutes": 60, "largeMinutes": 90, "obstacleCents": 1000, "obstacleMinutes": 15}
+      }
     },
     {
       "id": "ohio",

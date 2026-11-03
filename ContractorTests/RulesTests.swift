@@ -190,7 +190,17 @@ final class RulesTests: XCTestCase {
             details: "Please mow the front and back.", photoCount: 0, zip: "43537"
         ))
         XCTAssertEqual(toledo.rateName, "Northwest Ohio")
-        XCTAssertEqual(toledo.suggestedCents, 5_600)
+        XCTAssertEqual(toledo.suggestedCents, 6_500)
+        let leaves = estimator.estimateSync(PricingRequest(
+            serviceType: "leafCleanup", yardSize: "Medium", lotSize: "", rooms: 0, obstacles: "",
+            details: "Please clear the front and back.", photoCount: 0, zip: "43537"
+        ))
+        XCTAssertEqual(leaves.suggestedCents, 5_000)
+        let hedge = estimator.estimateSync(PricingRequest(
+            serviceType: "hedgeTrim", yardSize: "Medium", lotSize: "", rooms: 0, obstacles: "",
+            details: "Please trim the front hedge.", photoCount: 0, zip: "43537"
+        ))
+        XCTAssertEqual(hedge.suggestedCents, 5_500)
         let ohio = estimator.estimateSync(PricingRequest(
             serviceType: "mowing", yardSize: "Medium", lotSize: "", rooms: 0, obstacles: "",
             details: "Please mow the front and back.", photoCount: 0, zip: "43215"
