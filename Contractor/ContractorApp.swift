@@ -284,7 +284,6 @@ struct JobProgress: View {
                             .foregroundStyle(index <= step ? .white : inkSoft)
                             .frame(width: 48, height: 48)
                             .background(index <= step ? (index == step ? buttonGreen : pineText) : Color.primary.opacity(0.08), in: Circle())
-                            .symbolEffect(.bounce, value: step)
                             .accessibilityHidden(true)
                         Text(title)
                             .appText(18, weight: index == step ? .bold : .semibold)
@@ -485,36 +484,39 @@ struct AppTabBar: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(alignment: .top, spacing: 2) {
-            ForEach(tabs) { tab in
-                let on = selection == tab.id
-                Button {
-                    Haptic.tap()
-                    selection = tab.id
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: on ? tab.selectedSymbol : tab.symbol)
-                            .appText(20, weight: .bold, relativeTo: .headline)
-                            .accessibilityHidden(true)
-                        Text(tab.title)
-                            .appText(18, weight: on ? .bold : .semibold)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Capsule()
-                            .fill(on ? pineText : Color.clear)
-                            .frame(height: 4)
-                            .accessibilityHidden(true)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 4) {
+                ForEach(tabs) { tab in
+                    let on = selection == tab.id
+                    Button {
+                        Haptic.tap()
+                        selection = tab.id
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: on ? tab.selectedSymbol : tab.symbol)
+                                .appText(20, weight: .bold, relativeTo: .headline)
+                                .accessibilityHidden(true)
+                            Text(tab.title)
+                                .appText(18, weight: on ? .bold : .semibold)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: true, vertical: true)
+                            Capsule()
+                                .fill(on ? pineText : Color.clear)
+                                .frame(height: 4)
+                                .accessibilityHidden(true)
+                        }
+                        .foregroundStyle(on ? pineText : ink)
+                        .frame(minWidth: dynamicTypeSize.isAccessibilitySize ? 120 : 76, minHeight: 56)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
                     }
-                    .foregroundStyle(on ? pineText : ink)
-                    .frame(maxWidth: .infinity, minHeight: 56)
-                    .padding(.vertical, 6)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(tab.title)
+                    .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(tab.title)
-                .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
             }
+            .padding(.horizontal, 6)
         }
-        .padding(.horizontal, 6)
         .padding(.bottom, 4)
         .background(cardFill.shadow(color: .black.opacity(0.06), radius: 8, y: -2))
     }

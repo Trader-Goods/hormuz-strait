@@ -101,6 +101,7 @@ struct CustomerHome: View {
 
 struct JobCard: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     var job: JobRecord
     var quoteCount: Int
     var exact = true
@@ -116,51 +117,53 @@ struct JobCard: View {
 
     var body: some View {
         Card {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 10) {
-                        Image(systemName: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
-                            .appText(20, weight: .bold, relativeTo: .headline)
-                            .foregroundStyle(.white)
-                            .frame(width: 48, height: 48)
-                            .background(serviceTint(job), in: Circle())
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(job.serviceTitle)
-                                .appText(22, weight: .bold, relativeTo: .title2)
-                                .foregroundStyle(ink)
-                            Text(job.place(exact: exact))
-                                .appText()
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 4)
-                        if job.offeredPriceCents > 0 {
-                            PriceChip(cents: job.offeredPriceCents)
-                        }
-                    }
-                    HStack(spacing: 6) {
-                        InfoChip(text: job.whenLabel, symbol: "clock.fill")
-                        if let milesText {
-                            InfoChip(text: milesText, symbol: "location.fill")
-                        }
-                        if SampleJobs.contains(job.id) {
-                            Text("Sample").appText(weight: .semibold).foregroundStyle(amber)
-                        }
-                        UnreadBadge(count: unread)
-                    }
-                    StatusBadge(status: job.status)
-                    if quoteCount > 0 {
-                        Text("\(quoteCount) offer\(quoteCount == 1 ? "" : "s")")
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
+                        .appText(20, weight: .bold, relativeTo: .headline)
+                        .foregroundStyle(.white)
+                        .frame(width: 48, height: 48)
+                        .background(serviceTint(job), in: Circle())
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(job.serviceTitle)
+                            .appText(22, weight: .bold, relativeTo: .title2)
+                            .foregroundStyle(ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(job.place(exact: exact))
                             .appText()
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(inkSoft)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if job.offeredPriceCents > 0, !dynamicTypeSize.isAccessibilitySize {
+                        PriceChip(cents: job.offeredPriceCents)
+                    }
+                }
+                if job.offeredPriceCents > 0, dynamicTypeSize.isAccessibilitySize {
+                    PriceChip(cents: job.offeredPriceCents)
+                }
+                InfoChip(text: job.whenLabel, symbol: "clock.fill")
+                if let milesText {
+                    InfoChip(text: milesText, symbol: "location.fill")
+                }
+                if SampleJobs.contains(job.id) {
+                    Text("Sample").appText(weight: .semibold).foregroundStyle(amberText)
+                }
+                UnreadBadge(count: unread)
+                StatusBadge(status: job.status)
+                if quoteCount > 0 {
+                    Text("\(quoteCount) offer\(quoteCount == 1 ? "" : "s")")
+                        .appText()
+                        .foregroundStyle(inkSoft)
                 }
                 if let name = job.photoNames.first, let image = PhotoStore.image(name) {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 72, height: 72)
+                        .frame(maxWidth: .infinity, minHeight: 88, maxHeight: 160)
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .accessibilityLabel("Job photo")
                 }
             }
         }

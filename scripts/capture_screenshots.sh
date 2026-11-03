@@ -53,6 +53,34 @@ raise SystemExit(1)
 PY
 }
 
+grab() {
+  local udid="$1" shot="$2" dest="$3" try
+  for try in 1 2 3 4; do
+    SIMCTL_CHILD_SCREENSHOT="$shot" xcrun simctl launch --terminate-running-process "$udid" "$BUNDLE" >/dev/null
+    xcrun simctl openurl "$udid" "contractorpros://screenshot" || true
+    if [ "$shot" = "map" ]; then sleep 10; else sleep 6; fi
+    xcrun simctl io "$udid" screenshot "$dest"
+    if python3 - "$dest" <<'PY'
+import sys
+from PIL import Image, ImageStat
+im = Image.open(sys.argv[1]).convert("RGB")
+w, h = im.size
+sample = im.crop((w // 8, h // 6, 7 * w // 8, 5 * h // 6)).resize((60, 80))
+stat = ImageStat.Stat(sample)
+mean = sum(stat.mean) / 3
+spread = sum(stat.stddev) / 3
+# A blank launch screen is flat white or flat black. A real screen has color variation.
+raise SystemExit(0 if 18 < mean < 248 and spread > 12 else 1)
+PY
+    then
+      echo "captured $dest"
+      return 0
+    fi
+    echo "blank frame for $shot, try $try"
+  done
+  echo "kept last frame for $dest"
+}
+
 boot_one() {
   local label="$1"
   local name
@@ -77,24 +105,18 @@ boot_one() {
   xcrun simctl privacy "$udid" grant photos "$BUNDLE" || true
   xcrun simctl location "$udid" set 41.562,-83.654 || true
   xcrun simctl install "$udid" "$APP_PATH"
-  local shot wait
+  local shot dest try
   xcrun simctl ui "$udid" content_size large || true
   for shot in welcome home map post pay; do
-    if [ "$shot" = "map" ]; then wait=8; else wait=4; fi
-    SIMCTL_CHILD_SCREENSHOT="$shot" xcrun simctl launch --terminate-running-process "$udid" "$BUNDLE"
-    sleep "$wait"
-    xcrun simctl io "$udid" screenshot "$OUT/raw/${label}-${shot}.png"
-    echo "captured ${label}-${shot}"
+    grab "$udid" "$shot" "$OUT/raw/${label}-${shot}.png"
   done
   if [ "$label" = "6.7" ]; then
     xcrun simctl ui "$udid" content_size accessibility-extra-extra-extra-large \
       || xcrun simctl ui "$udid" content_size AX5 \
       || true
+    sleep 2
     for shot in welcome home pay; do
-      SIMCTL_CHILD_SCREENSHOT="$shot" xcrun simctl launch --terminate-running-process "$udid" "$BUNDLE"
-      sleep 5
-      xcrun simctl io "$udid" screenshot "$OUT/raw/large-${shot}.png"
-      echo "captured large-${shot}"
+      grab "$udid" "$shot" "$OUT/raw/large-${shot}.png"
     done
   fi
   xcrun simctl shutdown "$udid" || true
