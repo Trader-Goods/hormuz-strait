@@ -123,8 +123,34 @@ enum Terms {
 
     The street address is shown to the assigned contractor only after that authorization. Reviews apply only to jobs booked in the app. Phone numbers, emails, and links in chat stay hidden until then.
 
-    A later review window (planned at 72 hours after the contractor submits completion) will be disclosed before it can approve a payout. This build does not auto-approve work or send a payout.
+    After the contractor marks a job done, the customer has 48 hours to approve it. If the customer does nothing, the job is approved. This build does not capture a card or send a payout.
     """
+}
+
+enum Payments {
+    /// Stripe is not connected. Confirming records a hold and does not charge a card.
+    static let isReady = false
+
+    static func authorize(jobID: UUID, amountCents: Int) async -> Bool {
+        _ = (jobID, amountCents)
+        return true
+    }
+}
+
+enum PushNotifications {
+    /// APNs is not configured. Call this where a push should be sent later.
+    static func proAccepted(jobID: UUID) {
+        print("push hook: pro accepted \(jobID.uuidString)")
+    }
+}
+
+enum Payouts {
+    /// Stripe Connect is not connected in this build. Calling this does not move money.
+    static let isReady = false
+
+    static func connect() async -> String {
+        "Payouts coming soon. Set up payouts"
+    }
 }
 
 enum Guarantee {

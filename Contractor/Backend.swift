@@ -72,7 +72,13 @@ protocol ContractorAPI: AnyObject {
     func quotes(for jobID: UUID) async throws -> [QuoteRecord]
     func myQuotes() async throws -> [QuoteRecord]
     func bookings() async throws -> [BookingRecord]
-    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool) async throws -> JobRecord
+    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool, timing: String) async throws -> JobRecord
+    func startJob(jobID: UUID) async throws
+    func markJobDone(jobID: UUID, note: String, photos: [Data]) async throws
+    func confirmAndPay(jobID: UUID) async throws
+    func approveJob(jobID: UUID) async throws
+    func reportJobProblem(jobID: UUID, reason: String) async throws
+    func autoApproveDueJobs() async
     func acceptListing(jobID: UUID) async throws -> BookingRecord
     func notices() async throws -> [NoticeRecord]
     func rememberJobLocation(id: UUID, latitude: Double, longitude: Double) async
@@ -286,13 +292,13 @@ final class MockBackend: ContractorAPI {
         return book.bookings.filter { $0.proID == sessionID || $0.customerID == sessionID }
     }
 
-    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool) async throws -> JobRecord {
+    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool, timing: String) async throws -> JobRecord {
         guard let sessionID else { throw MarketplaceError.wrongAccount }
         var names: [String] = []
         for photo in photos {
             if let name = await PhotoStore.save(photo) { names.append(name) }
         }
-        let job = try book.postJob(customerID: sessionID, category: category, street: street, city: city, state: state, zip: zip, latitude: latitude, longitude: longitude, scheduledOn: scheduledOn, details: details, photoNames: names, offeredPriceCents: offeredPriceCents, serviceType: serviceType, estimate: estimate, allowsMultiple: allowsMultiple, publish: publish)
+        let job = try book.postJob(customerID: sessionID, category: category, street: street, city: city, state: state, zip: zip, latitude: latitude, longitude: longitude, scheduledOn: scheduledOn, details: details, photoNames: names, offeredPriceCents: offeredPriceCents, serviceType: serviceType, estimate: estimate, allowsMultiple: allowsMultiple, publish: publish, timing: timing)
         persist()
         return job
     }
@@ -340,6 +346,49 @@ final class MockBackend: ContractorAPI {
     func declineQuote(quoteID: UUID) async throws {
         guard let sessionID else { throw MarketplaceError.wrongAccount }
         try book.declineQuote(customerID: sessionID, quoteID: quoteID)
+        persist()
+    }
+
+    func startJob(jobID: UUID) async throws {
+        guard let sessionID else { throw MarketplaceError.wrongAccount }
+        try book.startJob(proID: sessionID, jobID: jobID)
+        persist()
+    }
+
+    func markJobDone(jobID: UUID, note: String, photos: [Data]) async throws {
+        guard let sessionID else { throw MarketplaceError.wrongAccount }
+        var names: [String] = []
+        for photo in photos {
+            if let name = await PhotoStore.save(photo) { names.append(name) }
+        }
+        try book.markJobDone(proID: sessionID, jobID: jobID, note: note, photoNames: names)
+        persist()
+    }
+
+    func confirmAndPay(jobID: UUID) async throws {
+        guard let sessionID else { throw MarketplaceError.wrongAccount }
+        guard await Payments.authorize(jobID: jobID, amountCents: 0) else {
+            throw MarketplaceError.server("Payment could not be started.")
+        }
+        try book.confirmAndPay(customerID: sessionID, jobID: jobID)
+        persist()
+    }
+
+    func approveJob(jobID: UUID) async throws {
+        guard let sessionID else { throw MarketplaceError.wrongAccount }
+        try book.approveJob(customerID: sessionID, jobID: jobID)
+        persist()
+    }
+
+    func reportJobProblem(jobID: UUID, reason: String) async throws {
+        guard let sessionID else { throw MarketplaceError.wrongAccount }
+        try book.reportJobProblem(customerID: sessionID, jobID: jobID, reason: reason)
+        persist()
+    }
+
+    func autoApproveDueJobs() async {
+        book.expireUnconfirmed()
+        book.autoApproveDue()
         persist()
     }
 
@@ -651,7 +700,7 @@ final class SupabaseBackend: ContractorAPI {
         )
     }
 
-    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool) async throws -> JobRecord {
+    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, latitude: Double?, longitude: Double?, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool, timing: String) async throws -> JobRecord {
         guard let userID, accessToken != nil else { throw MarketplaceError.needsSignIn }
         let me = try await currentUser()
         guard me.role == .customer else { throw MarketplaceError.wrongAccount }
@@ -684,6 +733,7 @@ final class SupabaseBackend: ContractorAPI {
             "offered_price_cents": offeredPriceCents,
             "allows_multiple": allowsMultiple,
             "estimated_minutes": estimate?.estimatedMinutes ?? 0,
+            "timing": JobTiming(rawValue: timing)?.rawValue ?? JobTiming.flexible.rawValue,
         ]
         var payload = body
         if let estimate {
@@ -703,6 +753,47 @@ final class SupabaseBackend: ContractorAPI {
         let rows: [JobRecord] = try await post("/rest/v1/jobs", body: payload)
         guard let job = rows.first else { throw MarketplaceError.missing }
         return job
+    }
+
+    func startJob(jobID: UUID) async throws {
+        _ = try await send(path: "/rest/v1/rpc/start_job", method: "POST", body: ["p_job_id": jobID.uuidString], auth: true)
+    }
+
+    func markJobDone(jobID: UUID, note: String, photos: [Data]) async throws {
+        var names: [String] = []
+        for photo in photos {
+            names.append(try await uploadCompletion(jobID: jobID, data: photo))
+        }
+        _ = try await send(path: "/rest/v1/rpc/mark_job_done", method: "POST", body: [
+            "p_job_id": jobID.uuidString,
+            "p_note": note,
+            "p_photos": names,
+        ], auth: true)
+    }
+
+    func confirmAndPay(jobID: UUID) async throws {
+        let rows: [BookingRecord] = (try? await get("/rest/v1/bookings?job_id=eq.\(jobID.uuidString)&select=*")) ?? []
+        let amount = rows.first { $0.charge.status == "pending" }?.priceCents ?? 0
+        guard await Payments.authorize(jobID: jobID, amountCents: amount) else {
+            throw MarketplaceError.server("Payment could not be started.")
+        }
+        _ = try await send(path: "/rest/v1/rpc/confirm_and_pay", method: "POST", body: ["p_job_id": jobID.uuidString], auth: true)
+    }
+
+    func approveJob(jobID: UUID) async throws {
+        _ = try await send(path: "/rest/v1/rpc/approve_job", method: "POST", body: ["p_job_id": jobID.uuidString], auth: true)
+    }
+
+    func reportJobProblem(jobID: UUID, reason: String) async throws {
+        _ = try await send(path: "/rest/v1/rpc/report_job_problem", method: "POST", body: [
+            "p_job_id": jobID.uuidString,
+            "p_reason": reason,
+        ], auth: true)
+    }
+
+    func autoApproveDueJobs() async {
+        _ = try? await send(path: "/rest/v1/rpc/expire_unconfirmed_jobs", method: "POST", body: [:], auth: true)
+        _ = try? await send(path: "/rest/v1/rpc/auto_approve_due_jobs", method: "POST", body: [:], auth: true)
     }
 
     func acceptListing(jobID: UUID) async throws -> BookingRecord {
@@ -1132,6 +1223,30 @@ final class SupabaseBackend: ContractorAPI {
             let message = Self.serverMessage(from: body, status: http.statusCode)
             print("Contractor photo upload failed: \(http.statusCode) \(message)")
             if http.statusCode == 401 { throw MarketplaceError.needsSignIn }
+            throw MarketplaceError.server(message)
+        }
+        return name
+    }
+
+    private func uploadCompletion(jobID: UUID, data: Data) async throws -> String {
+        guard let accessToken else { throw MarketplaceError.needsSignIn }
+        guard let jpeg = await PhotoStore.compressedJPEG(data) else {
+            throw MarketplaceError.server("That photo could not be saved.")
+        }
+        let name = "completions/\(jobID.uuidString.lowercased())/\(UUID().uuidString.lowercased()).jpg"
+        guard let uploadURL = URL(string: "storage/v1/object/job-photos/\(name)", relativeTo: base)?.absoluteURL else {
+            throw MarketplaceError.invalid
+        }
+        var request = URLRequest(url: uploadURL)
+        request.httpMethod = "POST"
+        request.setValue(key, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("image/jpeg", forHTTPHeaderField: "Content-Type")
+        request.httpBody = jpeg
+        let (body, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw MarketplaceError.server("Photo upload failed.") }
+        guard (200..<300).contains(http.statusCode) else {
+            let message = Self.serverMessage(from: body, status: http.statusCode)
             throw MarketplaceError.server(message)
         }
         return name

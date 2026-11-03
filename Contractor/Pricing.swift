@@ -92,6 +92,8 @@ struct RateRegion: Codable, Equatable, Identifiable {
     var name: String
     /// Empty matches nothing. The `default` region is the fallback. Prefixes let an owner add a region without shipping code.
     var zipPrefixes: [String]
+    /// Multiplier on the US card. 1 leaves the national rate unchanged.
+    var factor: Double = 1
     var services: [String: ServiceRate]
 }
 
@@ -101,12 +103,17 @@ struct RegionalRateCard: Codable, Equatable {
 
     func region(for zip: String) -> RateRegion? {
         let normalized = USAddress.normalizeZip(zip)
-        if let match = regions.first(where: { region in
-            !region.zipPrefixes.isEmpty && region.zipPrefixes.contains { normalized.hasPrefix($0) }
-        }) {
+        let matches = regions.filter { region in
+            region.zipPrefixes.contains { normalized.hasPrefix($0) }
+        }
+        if let match = matches.max(by: { longestPrefix($0, zip: normalized) < longestPrefix($1, zip: normalized) }) {
             return match
         }
         return regions.first { $0.id == "default" } ?? regions.first
+    }
+
+    private func longestPrefix(_ region: RateRegion, zip: String) -> Int {
+        region.zipPrefixes.filter { zip.hasPrefix($0) }.map(\.count).max() ?? 0
     }
 
     static let starter = RegionalRateCard(
@@ -117,15 +124,21 @@ struct RegionalRateCard: Codable, Equatable {
                 name: "US default",
                 zipPrefixes: [],
                 services: [
-                    "mowing": ServiceRate(smallCents: 5500, mediumCents: 8500, largeCents: 13000, smallMinutes: 45, mediumMinutes: 60, largeMinutes: 90, obstacleCents: 1500, obstacleMinutes: 15),
-                    "edging": ServiceRate(smallCents: 3500, mediumCents: 5000, largeCents: 7500, smallMinutes: 30, mediumMinutes: 40, largeMinutes: 55, obstacleCents: 1000, obstacleMinutes: 10),
-                    "trimming": ServiceRate(smallCents: 4500, mediumCents: 7000, largeCents: 11000, smallMinutes: 40, mediumMinutes: 55, largeMinutes: 80, obstacleCents: 2000, obstacleMinutes: 20),
-                    "leafCleanup": ServiceRate(smallCents: 6000, mediumCents: 9500, largeCents: 15000, smallMinutes: 50, mediumMinutes: 75, largeMinutes: 110, obstacleCents: 2000, obstacleMinutes: 20),
-                    "landscaping": ServiceRate(smallCents: 12000, mediumCents: 20000, largeCents: 35000, smallMinutes: 90, mediumMinutes: 150, largeMinutes: 240, obstacleCents: 4000, obstacleMinutes: 30),
-                    "yardOther": ServiceRate(smallCents: 5000, mediumCents: 8000, largeCents: 12000, smallMinutes: 45, mediumMinutes: 60, largeMinutes: 90, obstacleCents: 1500, obstacleMinutes: 15),
-                    "moving": ServiceRate(smallCents: 18000, mediumCents: 32000, largeCents: 48000, smallMinutes: 120, mediumMinutes: 210, largeMinutes: 300, obstacleCents: 5000, obstacleMinutes: 30),
+                    "mowing": ServiceRate(smallCents: 5500, mediumCents: 7500, largeCents: 11500, smallMinutes: 45, mediumMinutes: 60, largeMinutes: 90, obstacleCents: 1500, obstacleMinutes: 15),
+                    "edging": ServiceRate(smallCents: 4000, mediumCents: 5500, largeCents: 7500, smallMinutes: 30, mediumMinutes: 40, largeMinutes: 55, obstacleCents: 1000, obstacleMinutes: 10),
+                    "trimming": ServiceRate(smallCents: 4500, mediumCents: 6500, largeCents: 9500, smallMinutes: 40, mediumMinutes: 55, largeMinutes: 80, obstacleCents: 1500, obstacleMinutes: 15),
+                    "hedgeTrim": ServiceRate(smallCents: 11000, mediumCents: 18000, largeCents: 28000, smallMinutes: 60, mediumMinutes: 90, largeMinutes: 150, obstacleCents: 2500, obstacleMinutes: 20),
+                    "leafCleanup": ServiceRate(smallCents: 16000, mediumCents: 24000, largeCents: 36000, smallMinutes: 60, mediumMinutes: 90, largeMinutes: 140, obstacleCents: 2500, obstacleMinutes: 20),
+                    "mulching": ServiceRate(smallCents: 16000, mediumCents: 24000, largeCents: 37000, smallMinutes: 60, mediumMinutes: 90, largeMinutes: 150, obstacleCents: 2000, obstacleMinutes: 20),
+                    "gutters": ServiceRate(smallCents: 12000, mediumCents: 17500, largeCents: 24000, smallMinutes: 60, mediumMinutes: 90, largeMinutes: 120, obstacleCents: 2500, obstacleMinutes: 20),
+                    "junkRemoval": ServiceRate(smallCents: 20000, mediumCents: 33000, largeCents: 50000, smallMinutes: 60, mediumMinutes: 120, largeMinutes: 180, obstacleCents: 4000, obstacleMinutes: 30),
+                    "landscaping": ServiceRate(smallCents: 16000, mediumCents: 25000, largeCents: 40000, smallMinutes: 90, mediumMinutes: 150, largeMinutes: 240, obstacleCents: 4000, obstacleMinutes: 30),
+                    "yardOther": ServiceRate(smallCents: 6000, mediumCents: 10000, largeCents: 16000, smallMinutes: 45, mediumMinutes: 60, largeMinutes: 90, obstacleCents: 1500, obstacleMinutes: 15),
+                    "moving": ServiceRate(smallCents: 16000, mediumCents: 26000, largeCents: 40000, smallMinutes: 120, mediumMinutes: 180, largeMinutes: 240, obstacleCents: 4000, obstacleMinutes: 30),
                 ]
             ),
+            RateRegion(id: "nwOhio", name: "Northwest Ohio", zipPrefixes: ["435", "436"], factor: 0.75, services: [:]),
+            RateRegion(id: "ohio", name: "Ohio", zipPrefixes: ["43", "44", "45"], factor: 0.8, services: [:]),
         ]
     )
 }
@@ -166,6 +179,8 @@ struct RuleBasedEstimator: PriceEstimator {
 
     func estimateSync(_ request: PricingRequest) -> PricingResult {
         let region = rates.region(for: request.zip)
+        let baseline = rates.regions.first { $0.id == "default" } ?? region
+        let factor = region?.factor ?? 1
         let disclaimer = rates.disclaimer
         let rateName = region?.name ?? "US default"
         let service = ServiceCatalog.find(request.serviceType)
@@ -173,7 +188,7 @@ struct RuleBasedEstimator: PriceEstimator {
         if service == nil {
             questions.append("Which service do you need?")
         }
-        let rate = service.flatMap { region?.services[$0.id] }
+        let rate = service.flatMap { region?.services[$0.id] ?? baseline?.services[$0.id] }
         if service != nil && rate == nil {
             questions.append("That service is not on the rate card yet.")
         }
@@ -246,12 +261,19 @@ struct RuleBasedEstimator: PriceEstimator {
             size = "medium"
             assumptions.append("The lot size was described in words, so the medium rate was used. This is not a measurement.")
         }
-        var cents = rate.cents(for: size)
+        var cents = Self.scaled(rate.cents(for: size), factor: factor)
         var minutes = rate.minutes(for: size)
         if !obstacles.isEmpty {
-            cents += rate.obstacleCents
+            let extra = Self.scaled(rate.obstacleCents, factor: factor)
+            cents += extra
             minutes += rate.obstacleMinutes
-            assumptions.append("Obstacles add \(Money.string(cents: rate.obstacleCents)) and \(rate.obstacleMinutes) minutes from the rate card.")
+            assumptions.append("Obstacles add \(Money.string(cents: extra)) and \(rate.obstacleMinutes) minutes from the rate card.")
+        }
+        if factor != 1 {
+            assumptions.append(String(format: "%@ uses %.2f times the US card, set near local one-day prices. This is editable configuration, not a live survey.", rateName, factor))
+        }
+        if service.id == "moving" {
+            assumptions.append("Help moving for a short one-day job. A medium job is about two movers for a few hours, not a full-service move.")
         }
         if request.photoCount > 0 {
             assumptions.append("\(request.photoCount) photo\(request.photoCount == 1 ? "" : "s") will be shown to the contractor. Photos are not measured.")
@@ -275,6 +297,10 @@ struct RuleBasedEstimator: PriceEstimator {
             disclaimer: disclaimer,
             isGuaranteedQuote: false
         )
+    }
+
+    private static func scaled(_ cents: Int, factor: Double) -> Int {
+        Int((Double(cents) * factor / 100).rounded()) * 100
     }
 
     private static func difficulty(minutes: Int, obstacles: Bool) -> String {

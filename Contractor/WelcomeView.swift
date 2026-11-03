@@ -162,7 +162,7 @@ struct SignUpView: View {
                     TextField("Business name", text: $business)
                     Stepper("Service radius: \(radius) miles", value: $radius, in: 5...200, step: 5)
                     Text("Services").font(.headline)
-                    ForEach(ServiceCatalog.active) { service in
+                    ForEach(ServiceCatalog.featured + ServiceCatalog.more) { service in
                         Toggle(isOn: Binding(
                             get: { selectedServices.contains(service.id) },
                             set: { on in

@@ -5,15 +5,34 @@
       "id": "default",
       "name": "US default",
       "zipPrefixes": [],
+      "factor": 1,
       "services": {
-        "mowing": {"smallCents": 5500, "mediumCents": 8500, "largeCents": 13000, "smallMinutes": 45, "mediumMinutes": 60, "largeMinutes": 90, "obstacleCents": 1500, "obstacleMinutes": 15},
-        "edging": {"smallCents": 3500, "mediumCents": 5000, "largeCents": 7500, "smallMinutes": 30, "mediumMinutes": 40, "largeMinutes": 55, "obstacleCents": 1000, "obstacleMinutes": 10},
-        "trimming": {"smallCents": 4500, "mediumCents": 7000, "largeCents": 11000, "smallMinutes": 40, "mediumMinutes": 55, "largeMinutes": 80, "obstacleCents": 2000, "obstacleMinutes": 20},
-        "leafCleanup": {"smallCents": 6000, "mediumCents": 9500, "largeCents": 15000, "smallMinutes": 50, "mediumMinutes": 75, "largeMinutes": 110, "obstacleCents": 2000, "obstacleMinutes": 20},
-        "landscaping": {"smallCents": 12000, "mediumCents": 20000, "largeCents": 35000, "smallMinutes": 90, "mediumMinutes": 150, "largeMinutes": 240, "obstacleCents": 4000, "obstacleMinutes": 30},
-        "yardOther": {"smallCents": 5000, "mediumCents": 8000, "largeCents": 12000, "smallMinutes": 45, "mediumMinutes": 60, "largeMinutes": 90, "obstacleCents": 1500, "obstacleMinutes": 15},
-        "moving": {"smallCents": 18000, "mediumCents": 32000, "largeCents": 48000, "smallMinutes": 120, "mediumMinutes": 210, "largeMinutes": 300, "obstacleCents": 5000, "obstacleMinutes": 30}
+        "mowing": {"smallCents": 5500, "mediumCents": 7500, "largeCents": 11500, "smallMinutes": 45, "mediumMinutes": 60, "largeMinutes": 90, "obstacleCents": 1500, "obstacleMinutes": 15},
+        "edging": {"smallCents": 4000, "mediumCents": 5500, "largeCents": 7500, "smallMinutes": 30, "mediumMinutes": 40, "largeMinutes": 55, "obstacleCents": 1000, "obstacleMinutes": 10},
+        "trimming": {"smallCents": 4500, "mediumCents": 6500, "largeCents": 9500, "smallMinutes": 40, "mediumMinutes": 55, "largeMinutes": 80, "obstacleCents": 1500, "obstacleMinutes": 15},
+        "hedgeTrim": {"smallCents": 11000, "mediumCents": 18000, "largeCents": 28000, "smallMinutes": 60, "mediumMinutes": 90, "largeMinutes": 150, "obstacleCents": 2500, "obstacleMinutes": 20},
+        "leafCleanup": {"smallCents": 16000, "mediumCents": 24000, "largeCents": 36000, "smallMinutes": 60, "mediumMinutes": 90, "largeMinutes": 140, "obstacleCents": 2500, "obstacleMinutes": 20},
+        "mulching": {"smallCents": 16000, "mediumCents": 24000, "largeCents": 37000, "smallMinutes": 60, "mediumMinutes": 90, "largeMinutes": 150, "obstacleCents": 2000, "obstacleMinutes": 20},
+        "gutters": {"smallCents": 12000, "mediumCents": 17500, "largeCents": 24000, "smallMinutes": 60, "mediumMinutes": 90, "largeMinutes": 120, "obstacleCents": 2500, "obstacleMinutes": 20},
+        "junkRemoval": {"smallCents": 20000, "mediumCents": 33000, "largeCents": 50000, "smallMinutes": 60, "mediumMinutes": 120, "largeMinutes": 180, "obstacleCents": 4000, "obstacleMinutes": 30},
+        "landscaping": {"smallCents": 16000, "mediumCents": 25000, "largeCents": 40000, "smallMinutes": 90, "mediumMinutes": 150, "largeMinutes": 240, "obstacleCents": 4000, "obstacleMinutes": 30},
+        "yardOther": {"smallCents": 6000, "mediumCents": 10000, "largeCents": 16000, "smallMinutes": 45, "mediumMinutes": 60, "largeMinutes": 90, "obstacleCents": 1500, "obstacleMinutes": 15},
+        "moving": {"smallCents": 16000, "mediumCents": 26000, "largeCents": 40000, "smallMinutes": 120, "mediumMinutes": 180, "largeMinutes": 240, "obstacleCents": 4000, "obstacleMinutes": 30}
       }
+    },
+    {
+      "id": "nwOhio",
+      "name": "Northwest Ohio",
+      "zipPrefixes": ["435", "436"],
+      "factor": 0.75,
+      "services": {}
+    },
+    {
+      "id": "ohio",
+      "name": "Ohio",
+      "zipPrefixes": ["43", "44", "45"],
+      "factor": 0.8,
+      "services": {}
     }
   ]
 }

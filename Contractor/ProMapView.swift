@@ -277,7 +277,7 @@ private struct JobPinCard: View {
                 if !readOnly {
                     Text(job.details.summary(for: job.category))
                 }
-                Text("\(DayStamp.display(job.scheduledOn)) · \(distance)")
+                Text("\(job.whenLabel) · \(distance)")
                     .foregroundStyle(.secondary)
                 if job.estimatedMinutes > 0 {
                     Text("About \(job.estimatedMinutes) minutes").font(.footnote).foregroundStyle(.secondary)
@@ -397,7 +397,7 @@ private struct MapPriceRow: View {
                     if job.offeredPriceCents > 0 {
                         PriceChip(cents: job.offeredPriceCents)
                     }
-                    Text(DayStamp.display(job.scheduledOn))
+                    Text(job.whenLabel)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -429,7 +429,7 @@ struct MapPriceDetail: View {
                     if job.offeredPriceCents > 0 {
                         PriceChip(cents: job.offeredPriceCents)
                     }
-                    Text(DayStamp.display(job.scheduledOn))
+                    Text(job.whenLabel)
                         .foregroundStyle(.secondary)
                     if job.estimatedMinutes > 0 {
                         Text("About \(job.estimatedMinutes) minutes")

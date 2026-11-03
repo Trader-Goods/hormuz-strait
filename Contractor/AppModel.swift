@@ -180,6 +180,7 @@ final class AppModel: ObservableObject {
     }
 
     private func load() async throws {
+            await self.api.autoApproveDueJobs()
             self.people = [:]
             if self.session?.role == .customer {
                 self.jobs = try await self.api.customerJobs()
@@ -237,7 +238,7 @@ final class AppModel: ObservableObject {
             }
     }
 
-    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool) async -> Bool {
+    func postJob(category: ServiceCategory, street: String, city: String, state: String, zip: String, scheduledOn: String, details: JobDetails, photos: [Data], offeredPriceCents: Int, serviceType: String, estimate: PriceEstimate?, allowsMultiple: Bool, publish: Bool, timing: String) async -> Bool {
         guard let current = session else {
             postSignIn = true
             return false
@@ -250,7 +251,7 @@ final class AppModel: ObservableObject {
         }
         await run {
             do {
-                _ = try await self.api.postJob(category: category, street: street, city: city, state: state, zip: zip, latitude: point?.latitude, longitude: point?.longitude, scheduledOn: scheduledOn, details: details, photos: photos, offeredPriceCents: offeredPriceCents, serviceType: serviceType, estimate: estimate, allowsMultiple: allowsMultiple, publish: publish)
+                _ = try await self.api.postJob(category: category, street: street, city: city, state: state, zip: zip, latitude: point?.latitude, longitude: point?.longitude, scheduledOn: scheduledOn, details: details, photos: photos, offeredPriceCents: offeredPriceCents, serviceType: serviceType, estimate: estimate, allowsMultiple: allowsMultiple, publish: publish, timing: timing)
                 ok = true
                 Haptic.success()
                 await self.reload()
@@ -295,6 +296,60 @@ final class AppModel: ObservableObject {
             print("Contractor job load failed: \(error)")
             return Self.describe(error)
         }
+    }
+
+    func startJob(jobID: UUID) async -> Bool {
+        var ok = false
+        await run {
+            try await self.api.startJob(jobID: jobID)
+            ok = true
+            Haptic.success()
+            await self.reload()
+        }
+        return ok
+    }
+
+    func markJobDone(jobID: UUID, note: String, photos: [Data]) async -> Bool {
+        var ok = false
+        await run {
+            try await self.api.markJobDone(jobID: jobID, note: note, photos: photos)
+            ok = true
+            Haptic.success()
+            await self.reload()
+        }
+        return ok
+    }
+
+    func confirmAndPay(jobID: UUID) async -> Bool {
+        var ok = false
+        await run {
+            try await self.api.confirmAndPay(jobID: jobID)
+            ok = true
+            Haptic.success()
+            await self.reload()
+        }
+        return ok
+    }
+
+    func approveJob(jobID: UUID) async -> Bool {
+        var ok = false
+        await run {
+            try await self.api.approveJob(jobID: jobID)
+            ok = true
+            Haptic.success()
+            await self.reload()
+        }
+        return ok
+    }
+
+    func reportJobProblem(jobID: UUID, reason: String) async -> Bool {
+        var ok = false
+        await run {
+            try await self.api.reportJobProblem(jobID: jobID, reason: reason)
+            ok = true
+            await self.reload()
+        }
+        return ok
     }
 
     func acceptListing(jobID: UUID) async -> Bool {
@@ -389,7 +444,12 @@ final class AppModel: ObservableObject {
 
     func contactUnlocked(jobID: UUID) -> Bool {
         guard let job = jobs.first(where: { $0.id == jobID }) else { return false }
-        guard job.status == .booked || job.status == .completed else { return false }
+        switch job.status {
+        case .booked, .inProgress, .awaitingReview, .disputed, .completed, .approved:
+            break
+        default:
+            return false
+        }
         return booking(for: jobID)?.paidInApp == true
     }
 

@@ -55,6 +55,45 @@ struct PriceChip: View {
     }
 }
 
+struct JobProgress: View {
+    var status: JobStatus
+
+    private var step: Int {
+        switch status {
+        case .booked: return 0
+        case .inProgress: return 1
+        case .awaitingReview, .disputed: return 2
+        case .completed, .approved, .payoutProcessing: return 3
+        default: return -1
+        }
+    }
+
+    private let titles = ["Booked", "In progress", "Done", "Paid"]
+
+    var body: some View {
+        if step >= 0 {
+            HStack(alignment: .top, spacing: 6) {
+                ForEach(Array(titles.enumerated()), id: \.offset) { index, title in
+                    VStack(spacing: 6) {
+                        Circle()
+                            .fill(index <= step ? pine : Color.primary.opacity(0.15))
+                            .frame(width: 12, height: 12)
+                            .accessibilityHidden(true)
+                        Text(title)
+                            .font(.caption2.weight(index == step ? .bold : .regular))
+                            .foregroundStyle(index <= step ? ink : Color.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .accessibilityLabel(index == step ? "\(title), current step" : title)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Job progress, \(titles[step])")
+        }
+    }
+}
+
 struct StatusBadge: View {
     var title: String
 

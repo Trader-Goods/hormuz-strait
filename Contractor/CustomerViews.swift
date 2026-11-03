@@ -6,6 +6,7 @@ import UIKit
 
 struct CustomerHome: View {
     @EnvironmentObject private var model: AppModel
+    @State private var showAccepted = false
 
     var body: some View {
         NavigationStack {
@@ -25,6 +26,23 @@ struct CustomerHome: View {
                         .font(.title2.weight(.semibold))
                     if !model.notices.isEmpty {
                         NoticeList()
+                    }
+                    if let waiting = model.jobs.first(where: { $0.status == .awaitingPayment }) {
+                        NavigationLink {
+                            ConfirmPayView(jobID: waiting.id)
+                        } label: {
+                            Card {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("A pro accepted your job. Confirm & pay to book them.")
+                                        .font(.headline)
+                                        .foregroundStyle(ink)
+                                    Text("Confirm & pay")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(pine)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
                     }
                     if model.busy && model.jobs.isEmpty {
                         SkeletonList()
@@ -64,8 +82,29 @@ struct CustomerHome: View {
             }
             .background(paper)
             .toolbar(.hidden, for: .navigationBar)
+            .onChange(of: model.jobs.map { "\($0.id.uuidString):\($0.status.rawValue)" }.joined()) { _, _ in
+                noteAcceptedJobs()
+            }
+            .onAppear { noteAcceptedJobs() }
+            .alert("A pro accepted your job", isPresented: $showAccepted) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("A pro accepted your job. Confirm & pay to book them.")
+            }
             .task { await model.reload() }
         }
+    }
+
+    private func noteAcceptedJobs() {
+        var fresh = false
+        for job in model.jobs where job.status == .awaitingPayment {
+            let key = "contractor.pushedAccept.\(job.id.uuidString)"
+            guard !UserDefaults.standard.bool(forKey: key) else { continue }
+            UserDefaults.standard.set(true, forKey: key)
+            PushNotifications.proAccepted(jobID: job.id)
+            fresh = true
+        }
+        if fresh { showAccepted = true }
     }
 }
 
@@ -89,7 +128,7 @@ struct JobCard: View {
                     Text("Sample").font(.caption.weight(.semibold)).foregroundStyle(clay)
                 }
                 Text(job.place(exact: exact)).font(.headline).foregroundStyle(ink)
-                Text("\(DayStamp.display(job.scheduledOn)) · \(job.details.summary(for: job.category))")
+                Text("\(job.whenLabel) · \(job.details.summary(for: job.category))")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 HStack {
@@ -120,7 +159,7 @@ struct PostJobView: View {
     @State private var state = ""
     @State private var zip = ""
     @State private var query = ""
-    @State private var when = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
+    @State private var timing = JobTiming.flexible
     @State private var lawnSize = "Unknown"
     @State private var lotSize = ""
     @State private var rooms = 2
@@ -240,7 +279,7 @@ struct PostJobView: View {
         switch step {
         case 0: return "Service"
         case 1: return "Details"
-        case 2: return "Where and when"
+        case 2: return "Where"
         case 3: return "Price"
         default: return "Review"
         }
@@ -258,8 +297,18 @@ struct PostJobView: View {
     }
 
     private var serviceStep: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            serviceGrid(ServiceCatalog.featured)
+            DisclosureGroup("Other one-day jobs") {
+                serviceGrid(ServiceCatalog.more)
+            }
+            .font(.subheadline)
+        }
+    }
+
+    private func serviceGrid(_ items: [ServiceType]) -> some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 10)], spacing: 10) {
-            ForEach(ServiceCatalog.active) { item in
+            ForEach(items) { item in
                 Button {
                     serviceType = item.id
                     Haptic.tap()
@@ -372,7 +421,28 @@ struct PostJobView: View {
             if !addressReady, !street.isEmpty || !city.isEmpty || !state.isEmpty || !zip.isEmpty {
                 Text(USAddress.incompleteMessage).font(.footnote).foregroundStyle(.red)
             }
-            DatePicker("Date and time", selection: $when, displayedComponents: [.date, .hourAndMinute])
+            Text("When do you need it?").font(.headline)
+            ForEach(JobTiming.allCases) { choice in
+                Button {
+                    timing = choice
+                    Haptic.tap()
+                } label: {
+                    HStack {
+                        Text(choice.title).foregroundStyle(ink)
+                        Spacer()
+                        if timing == choice {
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(pine)
+                        }
+                    }
+                    .padding(12)
+                    .background(
+                        timing == choice ? pine.opacity(0.14) : Color(uiColor: .secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(timing == choice ? .isSelected : [])
+            }
         }
     }
 
@@ -414,7 +484,7 @@ struct PostJobView: View {
                     .font(.headline)
                     .foregroundStyle(service?.category == .moving ? clay : pine)
                 Text("\(street), \(city), \(state) \(zip)")
-                Text(when.formatted(date: .abbreviated, time: .shortened))
+                Text(timing.title)
                     .foregroundStyle(.secondary)
                 PriceEditor(offered: $offered)
                 Toggle("Allow more than one contractor", isOn: $allowsMultiple)
@@ -462,17 +532,9 @@ struct PostJobView: View {
         )
     }
 
-    private var notesWithTime: String {
-        let time = when.formatted(date: .omitted, time: .shortened)
-        let trimmed = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.contains("Time:") { return trimmed }
-        if trimmed.isEmpty { return "Time: \(time)" }
-        return trimmed + "\nTime: \(time)"
-    }
-
     private func save(publish: Bool) async {
         rememberDraft()
-        let details = JobDetails(lawnSize: lawnSize, lotSize: lotSize, rooms: rooms, stairs: stairs, obstacles: request.obstacles, notes: notesWithTime)
+        let details = JobDetails(lawnSize: lawnSize, lotSize: lotSize, rooms: rooms, stairs: stairs, obstacles: request.obstacles, notes: notes)
         let savedEstimate = result.flatMap { $0.suggestedCents == nil ? nil : PriceEstimate($0) }
         let ok = await model.postJob(
             category: service?.category ?? .lawn,
@@ -480,14 +542,15 @@ struct PostJobView: View {
             city: city,
             state: state,
             zip: zip,
-            scheduledOn: DayStamp.string(from: when),
+            scheduledOn: DayStamp.string(from: Date()),
             details: details,
             photos: photos,
             offeredPriceCents: offeredCents,
             serviceType: serviceType,
             estimate: savedEstimate,
             allowsMultiple: allowsMultiple,
-            publish: publish
+            publish: publish,
+            timing: timing.rawValue
         )
         if ok {
             if publish { PostDraft.clear() }
@@ -511,7 +574,7 @@ struct PostJobView: View {
             rooms: rooms,
             stairs: stairs,
             allowsMultiple: allowsMultiple,
-            when: when,
+            timing: timing.rawValue,
             step: step
         ).save()
     }
@@ -531,7 +594,7 @@ struct PostJobView: View {
         rooms = draft.rooms
         stairs = draft.stairs
         allowsMultiple = draft.allowsMultiple
-        when = draft.when
+        timing = JobTiming(rawValue: draft.timing) ?? .flexible
         step = min(max(draft.step, 0), 4)
     }
 }
@@ -550,7 +613,7 @@ private struct PostDraft: Codable {
     var rooms: Int
     var stairs: Bool
     var allowsMultiple: Bool
-    var when: Date
+    var timing: String
     var step: Int
 
     func save() {
@@ -807,6 +870,8 @@ struct JobDetailView: View {
     @State private var rating = 5
     @State private var review = ""
     @State private var proPhone = ""
+    @State private var reporting = false
+    @State private var problem = ""
 
     private var job: JobRecord? { model.jobs.first { $0.id == jobID } }
 
@@ -822,8 +887,38 @@ struct JobDetailView: View {
                     if job.offeredPriceCents > 0 {
                         PriceChip(cents: job.offeredPriceCents)
                     }
-                    Text("\(DayStamp.display(job.scheduledOn)) · \(job.details.summary(for: job.category))")
+                    if job.status == .awaitingPayment {
+                        NavigationLink {
+                            ConfirmPayView(jobID: job.id)
+                        } label: {
+                            Text("Confirm & pay")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    if job.showsWorkProgress {
+                        JobProgress(status: job.status)
+                    }
+                    Text("\(job.whenLabel) · \(job.details.summary(for: job.category))")
                         .foregroundStyle(.secondary)
+                    if job.status == .awaitingReview {
+                        Button("Approve & pay") {
+                            Haptic.tap()
+                            Task { _ = await model.approveJob(jobID: job.id) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.busy)
+                        Button("Report a problem") { reporting = true }
+                            .buttonStyle(.bordered)
+                    }
+                    if let note = job.completionNote, !note.isEmpty, job.status == .awaitingReview || job.status == .disputed || job.status == .completed {
+                        Text(note)
+                    }
+                    if job.showsWorkProgress {
+                        NavigationLink("How finishing a job works") { HowFinishingWorksView() }
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                     if let estimate = job.estimate {
                         Text(estimate.explanation)
                         Text(estimate.disclaimer).font(.footnote).foregroundStyle(.secondary)
@@ -878,7 +973,40 @@ struct JobDetailView: View {
         }
         .background(paper)
         .navigationTitle("Job")
+        .onAppear {
+            guard let job, job.status == .awaitingPayment else { return }
+            let key = "contractor.pushedAccept.\(job.id.uuidString)"
+            guard !UserDefaults.standard.bool(forKey: key) else { return }
+            UserDefaults.standard.set(true, forKey: key)
+            PushNotifications.proAccepted(jobID: job.id)
+        }
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $reporting) {
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 12) {
+                    TextField("What went wrong?", text: $problem, axis: .vertical)
+                        .lineLimit(3...6)
+                    Button("Send") {
+                        Task {
+                            let ok = await model.reportJobProblem(jobID: jobID, reason: problem)
+                            if ok { reporting = false }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.busy || problem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Spacer()
+                }
+                .padding(20)
+                .navigationTitle("Report a problem")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Close") { reporting = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
         .task(id: jobID) {
             proPhone = ""
             guard model.contactUnlocked(jobID: jobID),
@@ -928,6 +1056,51 @@ struct JobDetailView: View {
         }
     }
 
+}
+
+struct ConfirmPayView: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    var jobID: UUID
+    @State private var booked = false
+
+    private var job: JobRecord? { model.jobs.first { $0.id == jobID } }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Payments coming soon")
+                    .font(.title2.weight(.bold))
+                if let job, job.offeredPriceCents > 0 || (model.booking(for: jobID)?.priceCents ?? 0) > 0 {
+                    let cents = model.booking(for: jobID)?.priceCents ?? job.offeredPriceCents
+                    PriceChip(cents: cents)
+                    Text("Fee \(FeeSchedule.launch.percent)% (\(Money.string(cents: BookingFee.feeCents(priceCents: cents)))). No card is charged in this build.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                if booked {
+                    Text("Booked")
+                        .font(.headline)
+                } else {
+                    Button(model.busy ? "Confirming…" : "Confirm & pay") {
+                        Task {
+                            let ok = await model.confirmAndPay(jobID: jobID)
+                            if ok { booked = true }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.busy)
+                }
+                if let error = model.errorMessage {
+                    Text(error).foregroundStyle(.red)
+                }
+            }
+            .padding(20)
+        }
+        .background(paper)
+        .navigationTitle("Confirm & pay")
+        .navigationBarTitleDisplayMode(.inline)
+    }
 }
 
 struct QuoteCard: View {

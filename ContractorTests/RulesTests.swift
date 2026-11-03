@@ -31,7 +31,8 @@ final class RulesTests: XCTestCase {
         let greenline = try XCTUnwrap(book.users.first { $0.user.email == "greenline@contractor.demo" }?.user)
         let first = try book.acceptListing(proID: greenline.id, jobID: job.id)
         XCTAssertEqual(first.feePercent, 5)
-        XCTAssertEqual(first.charge.status, "authorized")
+        XCTAssertEqual(first.charge.status, "pending")
+        XCTAssertEqual(book.jobs.first { $0.id == job.id }?.status, .awaitingPayment)
         XCTAssertEqual(book.bookings.filter { $0.jobID == job.id }.count, 1)
         let other = try readyPro(&book, email: "pat@example.com", categories: [.lawn])
         XCTAssertThrowsError(try book.acceptListing(proID: other.id, jobID: job.id))
@@ -130,7 +131,11 @@ final class RulesTests: XCTestCase {
         var book = MarketplaceBook.demo()
         let quote = try XCTUnwrap(book.quotes.first)
         let job = try XCTUnwrap(book.jobs.first { $0.id == quote.jobID })
-        let first = try book.book(customerID: job.customerID, quoteID: quote.id)
+        let held = try book.book(customerID: job.customerID, quoteID: quote.id)
+        XCTAssertEqual(held.charge.status, "pending")
+        XCTAssertFalse(book.canSeePhone(of: quote.proID, viewer: UserRecord(id: job.customerID, role: .customer, email: "", displayName: "", zip: job.zip, phoneVerified: true, businessName: "", categories: [], serviceZips: [], rating: 0, reviewCount: 0)))
+        try book.confirmAndPay(customerID: job.customerID, jobID: job.id)
+        let first = try XCTUnwrap(book.bookings.first { $0.id == held.id })
         XCTAssertTrue(first.paidInApp)
         XCTAssertEqual(first.feePercent, 5)
         XCTAssertEqual(first.charge.status, "authorized")
@@ -163,9 +168,9 @@ final class RulesTests: XCTestCase {
             serviceType: "mowing", yardSize: "Medium", lotSize: "", rooms: 0, obstacles: "",
             details: "Please mow the front and back.", photoCount: 1, zip: "94110"
         ))
-        XCTAssertEqual(priced.suggestedCents, 8_500)
-        XCTAssertEqual(priced.lowCents, 6_800)
-        XCTAssertEqual(priced.highCents, 10_200)
+        XCTAssertEqual(priced.suggestedCents, 7_500)
+        XCTAssertEqual(priced.lowCents, 6_000)
+        XCTAssertEqual(priced.highCents, 9_000)
         XCTAssertEqual(priced.estimatedMinutes, 60)
         XCTAssertEqual(priced.rateName, "US default")
         XCTAssertTrue(priced.disclaimer.contains("not a survey"))
@@ -179,7 +184,19 @@ final class RulesTests: XCTestCase {
             details: "Please mow the front and back.", photoCount: 0, zip: "94110"
         ))
         XCTAssertEqual(bay.rateName, "Bay config")
-        XCTAssertEqual(bay.suggestedCents, 8_500)
+        XCTAssertEqual(bay.suggestedCents, 7_500)
+        let toledo = estimator.estimateSync(PricingRequest(
+            serviceType: "mowing", yardSize: "Medium", lotSize: "", rooms: 0, obstacles: "",
+            details: "Please mow the front and back.", photoCount: 0, zip: "43537"
+        ))
+        XCTAssertEqual(toledo.rateName, "Northwest Ohio")
+        XCTAssertEqual(toledo.suggestedCents, 5_600)
+        let ohio = estimator.estimateSync(PricingRequest(
+            serviceType: "mowing", yardSize: "Medium", lotSize: "", rooms: 0, obstacles: "",
+            details: "Please mow the front and back.", photoCount: 0, zip: "43215"
+        ))
+        XCTAssertEqual(ohio.rateName, "Ohio")
+        XCTAssertEqual(ohio.suggestedCents, 6_000)
     }
 
     func testMarketplaceHidesTheStreetUntilAnAuthorizedBooking() throws {
@@ -198,6 +215,9 @@ final class RulesTests: XCTestCase {
             XCTAssertEqual(error as? MarketplaceError, .notReady)
         }
         _ = try book.acceptListing(proID: greenline.id, jobID: original.id)
+        XCTAssertFalse(book.canSeeExactAddress(original, viewer: greenline))
+        XCTAssertEqual(book.jobs.first { $0.id == original.id }?.status, .awaitingPayment)
+        try book.confirmAndPay(customerID: original.customerID, jobID: original.id)
         XCTAssertTrue(book.canSeeExactAddress(original, viewer: greenline))
         let stored = try XCTUnwrap(book.jobs.first { $0.id == original.id })
         XCTAssertEqual(stored.street, original.street)
@@ -273,7 +293,38 @@ final class RulesTests: XCTestCase {
         XCTAssertFalse(book.canSeePhone(of: greenline.id, viewer: maya))
         let quote = try XCTUnwrap(book.quotes.first { $0.proID == greenline.id })
         _ = try book.book(customerID: maya.id, quoteID: quote.id)
+        XCTAssertFalse(book.canSeePhone(of: greenline.id, viewer: maya))
+        try book.confirmAndPay(customerID: maya.id, jobID: quote.jobID)
         XCTAssertTrue(book.canSeePhone(of: greenline.id, viewer: maya))
+    }
+
+    func testUnconfirmedAcceptanceExpiresAndReopensTheJob() throws {
+        var book = MarketplaceBook.demo()
+        let job = try XCTUnwrap(book.jobs.first { $0.street.contains("Park") })
+        let greenline = try XCTUnwrap(book.users.first { $0.user.email == "greenline@contractor.demo" }?.user)
+        _ = try book.acceptListing(proID: greenline.id, jobID: job.id)
+        XCTAssertFalse(book.openJobs(for: greenline).contains { $0.id == job.id })
+        book.jobs[book.jobs.firstIndex { $0.id == job.id }!].confirmBy = Date().addingTimeInterval(-60)
+        book.expireUnconfirmed()
+        XCTAssertEqual(book.jobs.first { $0.id == job.id }?.status, .awaitingAcceptance)
+        XCTAssertTrue(book.openJobs(for: greenline).contains { $0.id == job.id })
+        XCTAssertTrue(book.notices.contains { $0.userID == greenline.id && $0.title == "Acceptance expired" })
+    }
+
+    func testMarkDoneThenApproveCompletesTheJob() throws {
+        var book = MarketplaceBook.demo()
+        let job = try XCTUnwrap(book.jobs.first { $0.street.contains("Park") })
+        let greenline = try XCTUnwrap(book.users.first { $0.user.email == "greenline@contractor.demo" }?.user)
+        _ = try book.acceptListing(proID: greenline.id, jobID: job.id)
+        try book.confirmAndPay(customerID: job.customerID, jobID: job.id)
+        try book.startJob(proID: greenline.id, jobID: job.id)
+        XCTAssertEqual(book.jobs.first { $0.id == job.id }?.status, .inProgress)
+        try book.markJobDone(proID: greenline.id, jobID: job.id, note: "Gate closed", photoNames: [])
+        XCTAssertEqual(book.jobs.first { $0.id == job.id }?.status, .awaitingReview)
+        XCTAssertThrowsError(try book.approveJob(customerID: greenline.id, jobID: job.id))
+        try book.approveJob(customerID: job.customerID, jobID: job.id)
+        XCTAssertEqual(book.jobs.first { $0.id == job.id }?.status, .completed)
+        XCTAssertEqual(book.bookings.first { $0.jobID == job.id }?.charge.status, "authorized")
     }
 
     func testMissingJobDetailsStillDecode() throws {

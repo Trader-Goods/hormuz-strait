@@ -171,7 +171,7 @@ struct MarketplaceBook: Codable, Equatable {
             guard job.status.isListed else { return false }
             guard pro.reaches(job) else { return false }
             if let until = job.listedUntil, until < Date() { return false }
-            if bookings.contains(where: { $0.jobID == job.id && $0.proID == pro.id && $0.charge.status != "failed" }) {
+            if bookings.contains(where: { $0.jobID == job.id && $0.proID == pro.id && Self.blocksAnotherAccept($0.charge.status) }) {
                 return false
             }
             return true
@@ -284,6 +284,63 @@ struct MarketplaceBook: Codable, Equatable {
         quotes[index].status = .declined
     }
 
+    mutating func startJob(proID: UUID, jobID: UUID) throws {
+        guard bookedPro(proID, jobID: jobID) else { throw MarketplaceError.wrongAccount }
+        guard let index = jobs.firstIndex(where: { $0.id == jobID }) else { throw MarketplaceError.missing }
+        guard jobs[index].status == .booked else { throw MarketplaceError.closed }
+        jobs[index].status = .inProgress
+        jobs[index].startedAt = Date()
+    }
+
+    mutating func markJobDone(proID: UUID, jobID: UUID, note: String, photoNames: [String]) throws {
+        guard bookedPro(proID, jobID: jobID) else { throw MarketplaceError.wrongAccount }
+        guard let index = jobs.firstIndex(where: { $0.id == jobID }) else { throw MarketplaceError.missing }
+        guard jobs[index].status == .inProgress else { throw MarketplaceError.closed }
+        jobs[index].status = .awaitingReview
+        jobs[index].markedDoneAt = Date()
+        jobs[index].completionNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        jobs[index].completionPhotoNames = photoNames
+    }
+
+    mutating func approveJob(customerID: UUID, jobID: UUID) throws {
+        guard let index = jobs.firstIndex(where: { $0.id == jobID }) else { throw MarketplaceError.missing }
+        guard jobs[index].customerID == customerID else { throw MarketplaceError.wrongAccount }
+        guard jobs[index].status == .awaitingReview else { throw MarketplaceError.closed }
+        jobs[index].status = .completed
+        jobs[index].approvedAt = Date()
+    }
+
+    mutating func reportJobProblem(customerID: UUID, jobID: UUID, reason: String) throws {
+        let text = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { throw MarketplaceError.invalid }
+        guard let index = jobs.firstIndex(where: { $0.id == jobID }) else { throw MarketplaceError.missing }
+        guard jobs[index].customerID == customerID else { throw MarketplaceError.wrongAccount }
+        guard jobs[index].status == .awaitingReview else { throw MarketplaceError.closed }
+        jobs[index].status = .disputed
+        let note = jobs[index].completionNote ?? ""
+        jobs[index].completionNote = note.isEmpty ? text : note + "\n" + text
+    }
+
+    mutating func autoApproveDue(now: Date = Date()) {
+        let cutoff = now.addingTimeInterval(-48 * 60 * 60)
+        for index in jobs.indices {
+            guard jobs[index].status == .awaitingReview, let done = jobs[index].markedDoneAt, done <= cutoff else { continue }
+            jobs[index].status = .completed
+            jobs[index].approvedAt = now
+        }
+    }
+
+    private static func blocksAnotherAccept(_ status: String) -> Bool {
+        status != "failed" && status != "canceled"
+    }
+
+    private func bookedPro(_ proID: UUID, jobID: UUID) -> Bool {
+        bookings.contains { booking in
+            booking.jobID == jobID && booking.proID == proID && booking.paidInApp
+                && (booking.charge.status == "authorized" || booking.charge.status == "captured")
+        }
+    }
+
     mutating func postJob(
         customerID: UUID,
         category: ServiceCategory,
@@ -300,7 +357,8 @@ struct MarketplaceBook: Codable, Equatable {
         serviceType: String = "",
         estimate: PriceEstimate? = nil,
         allowsMultiple: Bool = false,
-        publish: Bool = true
+        publish: Bool = true,
+        timing: String = "flexible"
     ) throws -> JobRecord {
         guard let customer = user(customerID), customer.role == .customer else { throw MarketplaceError.wrongAccount }
         guard customer.phoneVerified else { throw MarketplaceError.notVerified }
@@ -335,7 +393,8 @@ struct MarketplaceBook: Codable, Equatable {
             allowsMultiple: allowsMultiple,
             estimate: estimate,
             estimatedMinutes: estimate?.estimatedMinutes ?? 0,
-            listedUntil: publish ? created.addingTimeInterval(14 * 24 * 3600) : nil
+            listedUntil: publish ? created.addingTimeInterval(14 * 24 * 3600) : nil,
+            timing: JobTiming(rawValue: timing)?.rawValue ?? JobTiming.flexible.rawValue
         )
         jobs.append(job)
         log(actorID: customerID, jobID: job.id, action: publish ? "posted" : "draft", detail: publish ? "Listing published at \(offeredPriceCents) cents." : "Draft saved.")
@@ -376,7 +435,7 @@ struct MarketplaceBook: Codable, Equatable {
         guard job.status.isListed else { throw MarketplaceError.closed }
         guard job.offeredPriceCents > 0 else { throw MarketplaceError.invalid }
         guard pro.reaches(job) else { throw MarketplaceError.outsideArea }
-        if !job.allowsMultiple && bookings.contains(where: { $0.jobID == jobID && $0.charge.status != "failed" }) {
+        if !job.allowsMultiple && bookings.contains(where: { $0.jobID == jobID && Self.blocksAnotherAccept($0.charge.status) }) {
             throw MarketplaceError.taken
         }
         let quoteID = upsertAcceptanceQuote(proID: proID, jobID: jobID, priceCents: job.offeredPriceCents, message: "Accepted the offered price.")
@@ -390,7 +449,7 @@ struct MarketplaceBook: Codable, Equatable {
         guard jobs[jobIndex].customerID == customerID else { throw MarketplaceError.wrongAccount }
         guard jobs[jobIndex].status.isListed else { throw MarketplaceError.closed }
         guard quote.status == .sent else { throw MarketplaceError.closed }
-        if !jobs[jobIndex].allowsMultiple && bookings.contains(where: { $0.jobID == quote.jobID && $0.charge.status != "failed" }) {
+        if !jobs[jobIndex].allowsMultiple && bookings.contains(where: { $0.jobID == quote.jobID && Self.blocksAnotherAccept($0.charge.status) }) {
             throw MarketplaceError.taken
         }
         quotes[quoteIndex].status = .accepted
@@ -454,7 +513,8 @@ struct MarketplaceBook: Codable, Equatable {
         priceCents: Int,
         percent: Int,
         repeatOf: UUID?,
-        recurrence: String
+        recurrence: String,
+        hold: Bool = false
     ) -> BookingRecord {
         let fee = BookingFee.feeCents(priceCents: priceCents, percent: percent)
         let charge = PlatformCharge(
@@ -462,7 +522,7 @@ struct MarketplaceBook: Codable, Equatable {
             applicationFeeCents: fee,
             proPayoutCents: max(0, priceCents - fee),
             currency: "usd",
-            status: "authorized",
+            status: hold ? "pending" : "authorized",
             connectedAccountID: "",
             processingCents: 0
         )
@@ -475,7 +535,7 @@ struct MarketplaceBook: Codable, Equatable {
             priceCents: priceCents,
             feeCents: fee,
             feePercent: percent,
-            paidInApp: true,
+            paidInApp: !hold,
             charge: charge,
             repeatOfBookingID: repeatOf,
             recurrence: recurrence,
@@ -498,7 +558,7 @@ struct MarketplaceBook: Codable, Equatable {
     private mutating func claim(jobIndex: Int, proID: UUID, priceCents: Int, quoteID: UUID) throws -> BookingRecord {
         let job = jobs[jobIndex]
         guard let pro = user(proID), pro.canTakeJobs else { throw MarketplaceError.notReady }
-        if !job.allowsMultiple && bookings.contains(where: { $0.jobID == job.id && $0.charge.status != "failed" }) {
+        if !job.allowsMultiple && bookings.contains(where: { $0.jobID == job.id && Self.blocksAnotherAccept($0.charge.status) }) {
             throw MarketplaceError.taken
         }
         jobs[jobIndex].status = .awaitingPayment
@@ -515,14 +575,49 @@ struct MarketplaceBook: Codable, Equatable {
             priceCents: priceCents,
             percent: fees.percent,
             repeatOf: nil,
-            recurrence: ""
+            recurrence: "",
+            hold: true
         )
         bookings.append(booking)
-        jobs[jobIndex].status = job.allowsMultiple ? .awaitingAcceptance : .booked
-        notify(userID: job.customerID, title: "Job accepted", body: "\(pro.publicName) accepted. The price is authorized, not captured, and the street is now available to that contractor.", jobID: job.id)
-        notify(userID: proID, title: "You are booked", body: "The street address is available on this job. The customer has not been charged yet.", jobID: job.id)
-        log(actorID: proID, jobID: job.id, action: "booked", detail: "Authorized \(priceCents) cents. Fee \(booking.feeCents) cents. Status authorized, not captured.")
+        if job.allowsMultiple {
+            jobs[jobIndex].status = .awaitingAcceptance
+        } else {
+            jobs[jobIndex].status = .awaitingPayment
+            jobs[jobIndex].confirmBy = Date().addingTimeInterval(24 * 60 * 60)
+        }
+        notify(userID: job.customerID, title: "Pro accepted", body: "A pro accepted your job. Confirm & pay to book them.", jobID: job.id)
+        notify(userID: proID, title: "Waiting for the customer", body: "The customer has 24 hours to confirm. You are not booked yet.", jobID: job.id)
+        log(actorID: proID, jobID: job.id, action: "accepted", detail: "Waiting for the customer to confirm. No card yet. Fee \(booking.feeCents) cents.")
         return booking
+    }
+
+    mutating func confirmAndPay(customerID: UUID, jobID: UUID) throws {
+        guard let index = jobs.firstIndex(where: { $0.id == jobID }) else { throw MarketplaceError.missing }
+        guard jobs[index].customerID == customerID else { throw MarketplaceError.wrongAccount }
+        guard let bookingIndex = bookings.firstIndex(where: { $0.jobID == jobID && $0.charge.status == "pending" }) else {
+            throw MarketplaceError.closed
+        }
+        bookings[bookingIndex].charge.status = "authorized"
+        bookings[bookingIndex].paidInApp = true
+        if !jobs[index].allowsMultiple {
+            jobs[index].status = .booked
+            jobs[index].confirmBy = nil
+        }
+        notify(userID: bookings[bookingIndex].proID, title: "You are booked", body: "The customer confirmed. The street is available. The price is authorized, not captured.", jobID: jobID)
+        log(actorID: customerID, jobID: jobID, action: "confirmed", detail: "Customer confirmed. Hold recorded, not captured.")
+    }
+
+    mutating func expireUnconfirmed(now: Date = Date()) {
+        for index in jobs.indices {
+            guard jobs[index].status == .awaitingPayment, let by = jobs[index].confirmBy, by <= now else { continue }
+            let jobID = jobs[index].id
+            jobs[index].status = .awaitingAcceptance
+            jobs[index].confirmBy = nil
+            for bookingIndex in bookings.indices where bookings[bookingIndex].jobID == jobID && bookings[bookingIndex].charge.status == "pending" {
+                bookings[bookingIndex].charge.status = "canceled"
+                notify(userID: bookings[bookingIndex].proID, title: "Acceptance expired", body: "The customer did not confirm. This job is open again.", jobID: jobID)
+            }
+        }
     }
 
     private mutating func notify(userID: UUID, title: String, body: String, jobID: UUID?) {

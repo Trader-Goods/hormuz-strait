@@ -67,6 +67,7 @@ struct ProHome: View {
             VStack(spacing: 0) {
             BrandHeader {
                 HStack(spacing: 16) {
+                    NavigationLink("Earnings") { EarningsView() }
                     NavigationLink("Profile") { ProProfileView() }
                     Button("Sign out") { Task { await model.signOut() } }
                         .buttonStyle(.plain)
@@ -239,6 +240,10 @@ struct ProJobView: View {
     @State private var offering = false
     @State private var loadError: String?
     @State private var checked = false
+    @State private var showDone = false
+    @State private var doneNote = ""
+    @State private var donePicker: [PhotosPickerItem] = []
+    @State private var donePhotos: [Data] = []
 
     private var job: JobRecord? { model.jobs.first { $0.id == jobID } }
     private var mine: QuoteRecord? {
@@ -259,6 +264,18 @@ struct ProJobView: View {
                     Text(job.place(exact: model.showsExactAddress(job))).font(.title2.weight(.semibold))
                     if job.offeredPriceCents > 0 {
                         PriceChip(cents: job.offeredPriceCents)
+                    }
+                    if job.status == .awaitingPayment {
+                        Text("Waiting for the customer to confirm. You are not booked yet.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    if job.showsWorkProgress {
+                        JobProgress(status: job.status)
+                        workActions(job)
+                        NavigationLink("How finishing a job works") { HowFinishingWorksView() }
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
                     }
                     JobMiniMap(job: job, exact: model.showsExactAddress(job))
                     detailLine("Service", job.serviceTitle)
@@ -356,6 +373,46 @@ struct ProJobView: View {
         .background(paper)
         .navigationTitle("Job")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showDone) {
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 12) {
+                    TextField("Note", text: $doneNote, axis: .vertical)
+                        .lineLimit(3...6)
+                    PhotosPicker(selection: $donePicker, maxSelectionCount: 4, matching: .images) {
+                        Label(donePhotos.isEmpty ? "After photos" : "\(donePhotos.count) photos", systemImage: "photo")
+                    }
+                    .onChange(of: donePicker) { _, items in
+                        Task {
+                            var loaded: [Data] = []
+                            for item in items {
+                                if let data = try? await item.loadTransferable(type: Data.self) {
+                                    loaded.append(data)
+                                }
+                            }
+                            donePhotos = loaded
+                        }
+                    }
+                    Button(model.busy ? "Saving…" : "Mark job done") {
+                        Task {
+                            let ok = await model.markJobDone(jobID: jobID, note: doneNote, photos: donePhotos)
+                            if ok { showDone = false }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.busy)
+                    Spacer()
+                }
+                .padding(20)
+                .navigationTitle("Mark job done")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Close") { showDone = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
         .sheet(isPresented: $offering) {
             NavigationStack {
                 VStack(alignment: .leading, spacing: 12) {
@@ -388,6 +445,29 @@ struct ProJobView: View {
             .presentationDetents([.medium])
         }
         .task { await loadJob() }
+    }
+
+    @ViewBuilder
+    private func workActions(_ job: JobRecord) -> some View {
+        if job.status == .booked {
+            Button("Start job") {
+                Haptic.tap()
+                Task { _ = await model.startJob(jobID: job.id) }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(model.busy)
+        } else if job.status == .inProgress {
+            Button("Mark job done") {
+                Haptic.tap()
+                showDone = true
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(model.busy)
+        } else if job.status == .awaitingReview {
+            Text("Waiting for the customer to approve. You'll be paid once they approve, or automatically after 48 hours.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private func acceptTapped(_ job: JobRecord) {
@@ -427,6 +507,7 @@ struct ProJobView: View {
     }
 
     private func whenText(_ job: JobRecord) -> String {
+        if JobTiming.label(for: job.timing) != nil { return job.whenLabel }
         let date = DayStamp.display(job.scheduledOn)
         guard let time = scheduledTime(job) else { return date }
         return "\(date) · \(time)"
@@ -573,7 +654,7 @@ struct AboutView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                aboutSection("What it is", "Yard work and moving anywhere in the US. You set a price. A contractor accepts it or makes an offer.")
+                aboutSection("What it is", "One-day yard work, with one price for the whole job. Help moving and other yard jobs are available too. A contractor accepts your price or makes an offer.")
                 aboutSection("Who is assigned", "One contractor gets the job unless you allow more than one. A listing stays up for 14 days.")
                 aboutSection("The map", "Open jobs show as price bubbles about a quarter mile from the site. The street appears after booking and payment authorization.")
                 aboutSection("Sample jobs", "Sample jobs on a contractor map are examples on this phone. They are not real customers and cannot be accepted.")
@@ -615,6 +696,100 @@ struct HowPayWorksLink: View {
     }
 }
 
+struct HowFinishingWorksView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Booked, then in progress, then done, then paid.")
+                Text("The contractor starts the job and marks it done. The customer approves it, or it is approved automatically after 48 hours.")
+                    .foregroundStyle(.secondary)
+                Text("Approving does not send money in this build. Payouts come later through Stripe.")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(20)
+        }
+        .background(paper)
+        .navigationTitle("How finishing a job works")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct EarningsView: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var section = 0
+    @State private var showPayouts = false
+
+    private var rows: [(job: JobRecord, booking: BookingRecord)] {
+        guard let me = model.session else { return [] }
+        return model.bookings.compactMap { booking in
+            guard booking.proID == me.id, let job = model.jobs.first(where: { $0.id == booking.jobID }) else { return nil }
+            return (job, booking)
+        }
+    }
+
+    private var shown: [(job: JobRecord, booking: BookingRecord)] {
+        rows.filter { item in
+            switch section {
+            case 0: return item.job.status == .awaitingReview
+            case 1: return item.job.status == .completed || item.job.status == .approved
+            default: return item.booking.charge.status == "captured"
+            }
+        }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Payouts coming soon. Set up payouts")
+                    .font(.subheadline.weight(.semibold))
+                Button("Set up payouts") { showPayouts = true }
+                    .buttonStyle(.bordered)
+                Picker("Earnings", selection: $section) {
+                    Text("Pending").tag(0)
+                    Text("Ready").tag(1)
+                    Text("Paid").tag(2)
+                }
+                .pickerStyle(.segmented)
+                if shown.isEmpty {
+                    Text(section == 2 ? "No paid jobs." : "Nothing here.")
+                        .font(.headline)
+                }
+                ForEach(shown, id: \.booking.id) { item in
+                    Card {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(item.job.serviceTitle).font(.headline)
+                            Text(item.job.whenLabel).foregroundStyle(.secondary)
+                            Text(Money.string(cents: item.booking.priceCents))
+                            Text("\(FeeSchedule.launch.percent)% fee \(Money.string(cents: item.booking.feeCents))")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            .padding(20)
+        }
+        .background(paper)
+        .navigationTitle("Earnings")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showPayouts) {
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Stripe Connect is not connected. No money is moved in this build.")
+                    Button("Close") { showPayouts = false }
+                        .buttonStyle(.borderedProminent)
+                    Spacer()
+                }
+                .padding(20)
+                .navigationTitle("Set up payouts")
+                .navigationBarTitleDisplayMode(.inline)
+                .task { _ = await Payouts.connect() }
+            }
+            .presentationDetents([.medium])
+        }
+    }
+}
+
 struct HowPayWorksView: View {
     private var percent: Int { FeeSchedule.launch.percent }
 
@@ -624,9 +799,9 @@ struct HowPayWorksView: View {
                 Text("The customer pays the agreed price in the app. Contractor keeps \(percent)%. The contractor receives the rest.")
                     .foregroundStyle(.secondary)
                 paySection("The fee", "The platform fee is a flat \(percent)% of the agreed price. The contractor receives \(100 - percent)%, minus any card-processing cost shown before the customer confirms. Processing is $0 in this TestFlight build and will be shown separately when a live card is charged.")
-                paySection("When the card is used", "Booking authorizes the agreed price. The charge is captured only after the customer approves the finished work, or after the 72-hour review window ends with no response. Nothing is captured at the moment someone accepts.")
+                paySection("When the card is used", "Booking authorizes the agreed price. The charge is captured only after the customer approves the finished work, or after 48 hours with no response. Nothing is captured at the moment someone accepts. This build does not capture a card.")
                 paySection("The street address", "The contractor sees an approximate pin and “Near city, ST ZIP” until the job is booked and the payment is authorized. The street address is shown only to the assigned contractor after that.")
-                paySection("Finishing the job", "The contractor uploads completion photos and taps Submit Completed Job. That saves the photos and tells the customer. It does not approve the work or start a payout. The customer then chooses Work Looks Complete or Report a Problem. The customer has 72 hours, with reminders during that window. If the customer does not respond, the job is approved and the payout starts. That automatic approval is part of these rules.")
+                paySection("Finishing the job", "The contractor starts the job, then marks it done. The customer can approve it or report a problem. If the customer does nothing for 48 hours, the job is approved. This build does not send a payout.")
                 paySection("A problem with the work", "Report a Problem asks for an explanation and photos. The job moves to Disputed. Both sides can add evidence. The payout waits until the dispute is resolved. A resolution can refund the customer, pay the contractor, or split the difference. The \(percent)% fee follows the customer’s payment: it is refunded when that payment is refunded.")
                 paySection("Refunds and cancellations", "The customer can cancel a listing before anyone is booked. Nothing is captured. After authorization, canceling before the work is submitted releases the authorization. A no-show or a failed payment leaves the job unpaid. After approval, a refund is a separate adjustment and does not happen by itself.")
                 paySection("Contractor payouts", "Payouts go through Stripe Connect. The contractor finishes identity and Connect setup before accepting jobs or receiving money. A failed payout stays in Payout Processing and is retried. The job is not marked paid until the payout succeeds.")

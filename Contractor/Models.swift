@@ -31,19 +31,29 @@ struct ServiceType: Identifiable, Equatable, Hashable {
 }
 
 enum ServiceCatalog {
-    /// Offered in this build. Add a `ServiceType` here, a rate in `PricingRates.json`, and the id is live.
-    static let active: [ServiceType] = [
+    /// One-day yard work shown first. One price for the whole job.
+    static let featured: [ServiceType] = [
         ServiceType(id: "mowing", title: "Mowing", category: .lawn, symbol: "leaf.fill"),
         ServiceType(id: "edging", title: "Edging", category: .lawn, symbol: "scissors"),
-        ServiceType(id: "trimming", title: "Trimming", category: .lawn, symbol: "tree"),
+        ServiceType(id: "trimming", title: "Trimming", category: .lawn, symbol: "line.3.horizontal.decrease"),
+        ServiceType(id: "hedgeTrim", title: "Hedge trimming", category: .lawn, symbol: "tree"),
         ServiceType(id: "leafCleanup", title: "Leaf cleanup", category: .lawn, symbol: "leaf"),
-        ServiceType(id: "landscaping", title: "Landscaping", category: .lawn, symbol: "camera.macro"),
-        ServiceType(id: "yardOther", title: "Other yard work", category: .lawn, symbol: "leaf.fill"),
-        ServiceType(id: "moving", title: "Moving", category: .moving, symbol: "shippingbox.fill"),
+        ServiceType(id: "mulching", title: "Mulching", category: .lawn, symbol: "square.3.layers.3d"),
+        ServiceType(id: "gutters", title: "Gutter cleaning", category: .lawn, symbol: "house"),
+        ServiceType(id: "junkRemoval", title: "Small hauling", category: .lawn, symbol: "trash"),
     ]
 
-    /// Not offered yet. They stay out of the picker until a rate and a screen are added.
-    static let planned = ["pressureWashing", "gutters", "snowRemoval", "junkRemoval"]
+    /// Still available, not featured. Not blocked.
+    static let more: [ServiceType] = [
+        ServiceType(id: "landscaping", title: "Landscaping", category: .lawn, symbol: "camera.macro"),
+        ServiceType(id: "yardOther", title: "Other yard work", category: .lawn, symbol: "leaf.fill"),
+        ServiceType(id: "moving", title: "Help moving", category: .moving, symbol: "shippingbox.fill"),
+    ]
+
+    static let active: [ServiceType] = featured + more
+
+    /// Not in the picker yet.
+    static let planned = ["pressureWashing", "snowRemoval"]
 
     static func find(_ id: String) -> ServiceType? {
         active.first { $0.id == id }
@@ -94,7 +104,7 @@ enum JobStatus: String, Codable {
         case .draft: return "Draft"
         case .posted: return "Posted"
         case .awaitingAcceptance, .open: return "Awaiting acceptance"
-        case .awaitingPayment: return "Awaiting payment confirmation"
+        case .awaitingPayment: return "Pro accepted, confirm & pay"
         case .booked: return "Booked"
         case .inProgress: return "In progress"
         case .awaitingReview: return "Awaiting customer review"
@@ -104,6 +114,27 @@ enum JobStatus: String, Codable {
         case .completed: return "Completed"
         case .canceled, .cancelled: return "Canceled"
         }
+    }
+}
+
+enum JobTiming: String, Codable, CaseIterable, Identifiable {
+    case asap
+    case thisWeek
+    case flexible
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .asap: return "ASAP"
+        case .thisWeek: return "This week"
+        case .flexible: return "Flexible"
+        }
+    }
+
+    static func label(for stored: String?) -> String? {
+        guard let stored, let value = JobTiming(rawValue: stored) else { return nil }
+        return value.title
     }
 }
 
@@ -244,9 +275,30 @@ struct JobRecord: Codable, Equatable, Identifiable {
     var estimate: PriceEstimate? = nil
     var estimatedMinutes: Int = 0
     var listedUntil: Date? = nil
+    var timing: String? = nil
+    var startedAt: Date? = nil
+    var markedDoneAt: Date? = nil
+    var approvedAt: Date? = nil
+    var completionNote: String? = nil
+    var completionPhotoNames: [String]? = nil
+    /// When a pro's acceptance expires if the customer has not confirmed.
+    var confirmBy: Date? = nil
 
     var serviceTitle: String {
         ServiceCatalog.find(serviceType)?.title ?? category.title
+    }
+
+    var whenLabel: String {
+        JobTiming.label(for: timing) ?? DayStamp.display(scheduledOn)
+    }
+
+    var showsWorkProgress: Bool {
+        switch status {
+        case .booked, .inProgress, .awaitingReview, .disputed, .completed, .approved, .payoutProcessing:
+            return true
+        default:
+            return false
+        }
     }
 
     var fullAddress: String { "\(street), \(city), \(state) \(zip)" }
