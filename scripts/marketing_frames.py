@@ -73,43 +73,75 @@ def rounded(shot: Image.Image, radius: int) -> Image.Image:
     return out
 
 
-def compose(raw: Path, caption: str, size: tuple[int, int]) -> Image.Image:
+BACKGROUNDS = {
+    "home": "yard-mow",
+    "map": "yard-hedge",
+    "post": "yard-mulch",
+    "pay": "yard-pro",
+    "welcome": "yard-leaves",
+}
+
+
+def cover(image: Image.Image, size: tuple[int, int]) -> Image.Image:
     width, height = size
-    canvas = gradient(size).convert("RGBA")
+    scale = max(width / image.width, height / image.height)
+    resized = image.resize((int(image.width * scale), int(image.height * scale)), Image.Resampling.LANCZOS)
+    left = max(0, (resized.width - width) // 2)
+    top = max(0, (resized.height - height) // 5)
+    return resized.crop((left, top, left + width, top + height))
+
+
+def photo_background(name: str, size: tuple[int, int]) -> Image.Image:
+    path = Path("Contractor/Assets.xcassets") / f"{name}.imageset" / f"{name}@3x.jpg"
+    if not path.exists():
+        path = Path(__file__).resolve().parents[1] / path
+    photo = cover(Image.open(path).convert("RGB"), size)
+    shade = Image.new("RGB", size, (6, 16, 12))
+    return Image.blend(photo, shade, 0.42)
+
+
+def compose(raw: Path, caption: str, size: tuple[int, int], background: str) -> Image.Image:
+    width, height = size
+    canvas = photo_background(background, size).convert("RGBA")
     draw = ImageDraw.Draw(canvas)
     margin = int(width * 0.08)
     text_width = width - margin * 2
-    face = font(int(width * 0.078))
+    face = font(int(width * 0.072))
     lines = wrap(draw, caption, face, text_width)
     while len(lines) > 3 and getattr(face, "size", 40) > 48:
         face = font(face.size - 4)
         lines = wrap(draw, caption, face, text_width)
-    line_h = int(getattr(face, "size", 72) * 1.15)
-    block_h = line_h * len(lines)
+    line_h = int(getattr(face, "size", 72) * 1.12)
     y = int(height * 0.055)
     for line in lines:
         draw.text((width / 2, y), line, font=face, fill=(255, 255, 255), anchor="ma")
         y += line_h
 
     shot = Image.open(raw).convert("RGBA")
-    inset = int(width * 0.045)
-    target_w = width - inset * 2
-    scale = target_w / shot.width
-    shot = shot.resize((target_w, max(1, int(shot.height * scale))), Image.Resampling.LANCZOS)
-    top = max(y + int(height * 0.025), int(height * 0.22))
-    max_h = height - top - int(height * 0.025)
+    bezel = int(width * 0.012)
+    phone_w = int(width * 0.72)
+    scale = phone_w / shot.width
+    shot = shot.resize((phone_w, max(1, int(shot.height * scale))), Image.Resampling.LANCZOS)
+    top = y + int(height * 0.035)
+    max_h = height - top - int(height * 0.045)
     if shot.height > max_h:
         shot = shot.crop((0, 0, shot.width, max_h))
-    radius = int(width * 0.045)
-    shot = rounded(shot, radius)
+    radius = int(width * 0.055)
+    inner = rounded(shot, radius)
+    frame_w = shot.width + bezel * 2
+    frame_h = shot.height + bezel * 2
+    left = (width - frame_w) // 2
+    frame = Image.new("RGBA", (frame_w, frame_h), (0, 0, 0, 0))
+    ImageDraw.Draw(frame).rounded_rectangle((0, 0, frame_w - 1, frame_h - 1), radius=radius + bezel, fill=(12, 14, 13, 255))
+    frame.paste(inner, (bezel, bezel), inner)
     shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     ImageDraw.Draw(shadow).rounded_rectangle(
-        (inset + 8, top + 16, inset + shot.width + 8, top + shot.height + 16),
-        radius=radius,
-        fill=(0, 0, 0, 70),
+        (left + 10, top + 18, left + frame_w + 10, top + frame_h + 18),
+        radius=radius + bezel,
+        fill=(0, 0, 0, 90),
     )
     canvas = Image.alpha_composite(canvas, shadow)
-    canvas.paste(shot, (inset, top), shot)
+    canvas.paste(frame, (left, top), frame)
     return canvas.convert("RGB")
 
 
@@ -127,7 +159,7 @@ def main() -> None:
             if not source.exists():
                 print(f"missing {size_name}-{shot}", file=sys.stderr)
                 continue
-            frame = compose(source, caption, pixels)
+            frame = compose(source, caption, pixels, BACKGROUNDS[shot])
             dest = folder / f"{slug}.png"
             frame.save(dest, "PNG")
             print(f"wrote {dest} {frame.size}")

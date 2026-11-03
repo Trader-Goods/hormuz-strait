@@ -8,12 +8,53 @@ struct WelcomeView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-            BrandHeader(prominent: true)
+            ZStack(alignment: .top) {
+            Image("yard-mow")
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
+            LinearGradient(
+                colors: [
+                    .black.opacity(0.62),
+                    .black.opacity(0.38),
+                    .black.opacity(0.86)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "leaf.fill")
+                            .appText(22, weight: .bold, relativeTo: .title2)
+                            .foregroundStyle(.white)
+                            .frame(width: 48, height: 48)
+                            .background(buttonGreen, in: Circle())
+                            .accessibilityHidden(true)
+                        Text("Contractor Pros")
+                            .appText(22, weight: .bold, relativeTo: .title2)
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.top, 8)
+                    Text("Yard work, done right.")
+                        .appText(40, weight: .bold, relativeTo: .largeTitle)
+                        .tracking(-0.6)
+                        .foregroundStyle(.white)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
+                        .accessibilityAddTraits(.isHeader)
                     if let error = model.errorMessage, error != "Check your email" {
-                        Text(error).foregroundStyle(.red)
+                        Text(error)
+                            .appText()
+                            .foregroundStyle(Color(red: 0.55, green: 0.08, blue: 0.08))
+                            .padding(12)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     if model.pendingConfirmation != nil {
                         Card {
@@ -78,12 +119,14 @@ struct WelcomeView: View {
                             }
                         }
                     }
-                    HelpLinks()
+                    Card {
+                        HelpLinks()
+                    }
                 }
                 .padding(20)
             }
             }
-            .background(paper)
+            .background(Color.black)
             .toolbar(.hidden, for: .navigationBar)
             .onAppear {
                 if email.isEmpty {
@@ -240,9 +283,9 @@ struct HowItWorksView: View {
     @State private var skipped = false
 
     private let pages: [(String, String, String)] = [
-        ("leaf.fill", "Tell us the job", "Pick the work, add a photo, choose when, and set your price."),
-        ("mappin.and.ellipse", "A pro nearby accepts", "You confirm and pay in the app. That books them."),
-        ("checkmark.seal.fill", "Approve when it's done", "The pro marks it done. You approve it, or it approves itself after 48 hours."),
+        ("yard-home", "Tell us the job", "Pick the work, add a photo, choose when, and set your price."),
+        ("yard-pro", "A pro nearby accepts", "You confirm and pay in the app. That books them."),
+        ("yard-mow", "Approve when it's done", "The pro marks it done. You approve it, or it approves itself after 48 hours."),
     ]
 
     var body: some View {
@@ -261,14 +304,15 @@ struct HowItWorksView: View {
                         .foregroundStyle(pineText)
                         .frame(minHeight: 56)
                     }
-                    Spacer(minLength: 12)
-                    Image(systemName: pages[page].0)
-                        .appText(48, weight: .bold, relativeTo: .largeTitle)
-                        .foregroundStyle(.white)
-                        .frame(width: 96, height: 96)
-                        .background(buttonGreen, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    Image(pages[page].0)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, minHeight: 220, maxHeight: 280)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                         .accessibilityHidden(true)
                     Text(pages[page].1)
+                        .tracking(-0.4)
                         .appText(34, weight: .bold, relativeTo: .largeTitle)
                         .foregroundStyle(ink)
                         .fixedSize(horizontal: false, vertical: true)
@@ -335,18 +379,19 @@ struct AccountView: View {
 private struct HowItWorksReplay: View {
     @State private var page = 0
     private let pages: [(String, String, String)] = [
-        ("leaf.fill", "Tell us the job", "Pick the work, add a photo, choose when, and set your price."),
-        ("mappin.and.ellipse", "A pro nearby accepts", "You confirm and pay in the app. That books them."),
-        ("checkmark.seal.fill", "Approve when it's done", "The pro marks it done. You approve it, or it approves itself after 48 hours."),
+        ("yard-home", "Tell us the job", "Pick the work, add a photo, choose when, and set your price."),
+        ("yard-pro", "A pro nearby accepts", "You confirm and pay in the app. That books them."),
+        ("yard-mow", "Approve when it's done", "The pro marks it done. You approve it, or it approves itself after 48 hours."),
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Image(systemName: pages[page].0)
-                .appText(48, weight: .bold, relativeTo: .largeTitle)
-                .foregroundStyle(.white)
-                .frame(width: 96, height: 96)
-                .background(buttonGreen, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            Image(pages[page].0)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, minHeight: 220, maxHeight: 280)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                 .accessibilityHidden(true)
             Text(pages[page].1)
                 .appText(34, weight: .bold, relativeTo: .largeTitle)

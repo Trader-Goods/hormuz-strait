@@ -1,0 +1,18 @@
+{
+  "images": [
+    {
+      "idiom": "universal",
+      "scale": "3x",
+      "filename": "yard-leaves@3x.jpg"
+    },
+    {
+      "idiom": "universal",
+      "scale": "2x",
+      "filename": "yard-leaves@2x.jpg"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

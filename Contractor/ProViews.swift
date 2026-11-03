@@ -102,7 +102,7 @@ struct ProHome: View {
                                         .buttonStyle(PrimaryButtonStyle())
                                 }
                             } else {
-                                FriendlyEmpty(symbol: "mappin.and.ellipse", title: "No open jobs.")
+                                FriendlyEmpty(symbol: "mappin.and.ellipse", title: "No open jobs.", photo: "yard-mow")
                             }
                         }
                         ForEach(openJobs) { job in
@@ -237,7 +237,8 @@ struct ProJobView: View {
                     symbol: "checkmark.circle.fill",
                     title: "You accepted this job",
                     line: "The customer has 24 hours to confirm and pay. You are not booked until then.",
-                    button: "Back to my jobs"
+                    button: "Back to my jobs",
+                    photo: "yard-pro"
                 ) {
                     acceptedSuccess = false
                 }
@@ -698,6 +699,7 @@ struct AboutView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 aboutSection("What it is", "One-day yard work, with one price for the whole job. Help moving and other yard jobs are available too. A contractor accepts your price or makes an offer.")
+                aboutSection("Photos", "Yard photos are real photographs from Pexels. The Pexels License allows commercial use without attribution. We credit the photographers anyway. Mowing: Magic K. Hedges: el jusuf. Leaves: khaled damlakhi. Mulch: Greta Hoffman. Garden beds: Egor Komarov. Older pro and homeowners: Greta Hoffman. Help moving: Ivan S.")
                 aboutSection("Who is assigned", "One contractor gets the job unless you allow more than one. A job stays open for 14 days.")
                 aboutSection("The map", "Open jobs show as price bubbles about a quarter mile from the site. The street appears after the job is booked and the card is held.")
                 aboutSection("Sample jobs", "Sample jobs on a contractor map are examples on this phone. They are not real customers and cannot be accepted.")

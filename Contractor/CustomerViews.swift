@@ -14,9 +14,38 @@ struct CustomerHome: View {
             VStack(spacing: 0) {
             BrandHeader()
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 16) {
+                    if model.session?.role == .customer {
+                        VStack(spacing: 0) {
+                            Image("yard-home")
+                                .resizable()
+                                .scaledToFill()
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 168)
+                                .clipped()
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Get your yard done this week")
+                                    .appText(28, weight: .bold, relativeTo: .title)
+                                    .tracking(-0.4)
+                                    .foregroundStyle(.white)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Button("Post a job") {
+                                    Haptic.tap()
+                                    selectTab(0)
+                                }
+                                .buttonStyle(PrimaryButtonStyle())
+                            }
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(red: 0.05, green: 0.09, blue: 0.07))
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
+                    }
                     Text("Your jobs")
                         .appText(28, weight: .bold, relativeTo: .title)
+                        .tracking(-0.3)
                     if !model.notices.isEmpty {
                         NoticeList()
                     }
@@ -47,7 +76,7 @@ struct CustomerHome: View {
                                     .buttonStyle(PrimaryButtonStyle())
                             }
                         } else {
-                            FriendlyEmpty(symbol: "leaf.fill", title: "No jobs yet.", button: model.session?.role == .customer ? "Post a job" : nil) {
+                            FriendlyEmpty(symbol: "leaf.fill", title: "No jobs yet.", photo: "yard-beds", button: model.session?.role == .customer ? "Post a job" : nil) {
                                 selectTab(0)
                             }
                         }
@@ -218,9 +247,16 @@ struct PostJobView: View {
                 Color.clear
             } else if finished {
                 VStack(spacing: 16) {
+                    Image("yard-mow")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 220)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .accessibilityHidden(true)
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 64))
-                        .foregroundStyle(pine)
+                        .font(.system(size: 44))
+                        .foregroundStyle(pineText)
                         .scaleEffect(popped ? 1 : 0.4)
                         .accessibilityHidden(true)
                     Text(savedAsDraft ? "Draft saved" : "Your job is posted")
@@ -529,25 +565,30 @@ struct PostJobView: View {
                     serviceType = item.id
                     Haptic.tap()
                 } label: {
-                    VStack(spacing: 8) {
-                        Image(systemName: item.symbol)
-                            .appText(22, weight: .semibold, relativeTo: .title2)
-                            .foregroundStyle(.white)
-                            .frame(width: 36, height: 36)
-                            .background(item.category == .moving ? clay : pine, in: Circle())
-                        Text(item.title)
-                            .appText(weight: .semibold)
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(ink)
+                    if let photo = yardPhoto(for: item.id) {
+                        PhotoTile(name: photo, title: item.title, selected: serviceType == item.id)
+                    } else {
+                        VStack(spacing: 8) {
+                            Image(systemName: item.symbol)
+                                .appText(22, weight: .semibold, relativeTo: .title2)
+                                .foregroundStyle(.white)
+                                .frame(width: 44, height: 44)
+                                .background(buttonGreen, in: Circle())
+                                .accessibilityHidden(true)
+                            Text(item.title)
+                                .appText(18, weight: .semibold)
+                                .multilineTextAlignment(.center)
+                                .foregroundStyle(ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 120)
+                        .padding(12)
+                        .background(cardFill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(serviceType == item.id ? buttonGreen : Color.primary.opacity(0.08), lineWidth: serviceType == item.id ? 3 : 1)
+                        )
                     }
-                    .frame(maxWidth: .infinity, minHeight: 96)
-                    .padding(8)
-                    .background(cardFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(serviceType == item.id ? pine : Color.primary.opacity(0.06), lineWidth: serviceType == item.id ? 2 : 1)
-                    )
-                    .shadow(color: .black.opacity(serviceType == item.id ? 0.08 : 0.04), radius: 8, y: 3)
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(serviceType == item.id ? .isSelected : [])
@@ -1023,7 +1064,8 @@ struct JobDetailView: View {
                     symbol: "checkmark.seal.fill",
                     title: "You approved this job",
                     line: "No card was charged in this test version.",
-                    button: "Back to my jobs"
+                    button: "Back to my jobs",
+                    photo: "yard-mow"
                 ) {
                     approvedSuccess = false
                 }

@@ -200,20 +200,77 @@ private struct SecondaryButtonBody<Label: View>: View {
     }
 }
 
+func yardPhoto(for serviceID: String) -> String? {
+    switch serviceID {
+    case "mowing": return "yard-mow"
+    case "hedgeTrim", "trimming": return "yard-hedge"
+    case "leafCleanup", "junkRemoval": return "yard-leaves"
+    case "mulching": return "yard-mulch"
+    case "moving": return "yard-move"
+    case "landscaping", "yardOther": return "yard-beds"
+    default: return nil
+    }
+}
+
+struct PhotoTile: View {
+    var name: String
+    var title: String
+    var selected: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Image(name)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: 112)
+                .clipped()
+                .accessibilityHidden(true)
+            Text(title)
+                .appText(18, weight: .bold)
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .background(Color(red: 0.05, green: 0.08, blue: 0.06))
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(selected ? Color.white : Color.clear, lineWidth: 3)
+        )
+        .shadow(color: .black.opacity(0.16), radius: 12, y: 6)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+    }
+}
+
 struct FriendlyEmpty: View {
     var symbol: String
     var title: String
+    var photo: String? = nil
     var button: String?
     var action: (() -> Void)?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: symbol)
-                .appText(28, weight: .bold, relativeTo: .title)
-                .foregroundStyle(pineText)
-                .frame(width: 64, height: 64)
-                .background(pine.opacity(0.16), in: Circle())
-                .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 16) {
+            if let photo {
+                Image(photo)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, minHeight: 160, maxHeight: 200)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .accessibilityHidden(true)
+            } else {
+                Image(systemName: symbol)
+                    .appText(28, weight: .bold, relativeTo: .title)
+                    .foregroundStyle(pineText)
+                    .frame(width: 64, height: 64)
+                    .background(pine.opacity(0.16), in: Circle())
+                    .accessibilityHidden(true)
+            }
             Text(title).appText(22, weight: .bold, relativeTo: .title2)
             if let button, let action {
                 Button(button, action: action)
@@ -428,16 +485,27 @@ struct SuccessCover: View {
     var title: String
     var line: String
     var button: String
+    var photo: String? = nil
     var action: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Image(systemName: symbol)
-                .appText(48, weight: .bold, relativeTo: .largeTitle)
-                .foregroundStyle(pineText)
-                .frame(width: 88, height: 88)
-                .background(pine.opacity(0.16), in: Circle())
-                .accessibilityHidden(true)
+            if let photo {
+                Image(photo)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 220)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .accessibilityHidden(true)
+            } else {
+                Image(systemName: symbol)
+                    .appText(48, weight: .bold, relativeTo: .largeTitle)
+                    .foregroundStyle(pineText)
+                    .frame(width: 88, height: 88)
+                    .background(pine.opacity(0.16), in: Circle())
+                    .accessibilityHidden(true)
+            }
             Text(title)
                 .appText(34, weight: .bold, relativeTo: .largeTitle)
                 .foregroundStyle(ink)
@@ -518,7 +586,7 @@ struct AppTabBar: View {
             .padding(.horizontal, 6)
         }
         .padding(.bottom, 4)
-        .background(cardFill.shadow(color: .black.opacity(0.06), radius: 8, y: -2))
+        .background(.ultraThinMaterial)
     }
 }
 
