@@ -123,7 +123,7 @@ enum Terms {
 
     The street address is shown to the assigned contractor only after that authorization. Reviews apply only to jobs booked in the app. Phone numbers, emails, and links in chat stay hidden until then.
 
-    After the contractor marks a job done, the customer has 48 hours to approve it. If the customer does nothing, the job is approved. This build does not capture a card or send a payout.
+    After the pro marks a job done, the customer has 48 hours to approve it. If the customer does nothing, the job is approved. This test version does not charge a card or send money.
     """
 }
 
@@ -149,7 +149,7 @@ enum Payouts {
     static let isReady = false
 
     static func connect() async -> String {
-        "Payouts coming soon. Set up payouts"
+        "Bank deposits are coming soon. No money is sent in this test version."
     }
 }
 

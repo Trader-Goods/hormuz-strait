@@ -78,6 +78,7 @@ boot_one() {
   xcrun simctl location "$udid" set 41.562,-83.654 || true
   xcrun simctl install "$udid" "$APP_PATH"
   local shot wait
+  xcrun simctl ui "$udid" content_size large || true
   for shot in welcome home map post pay; do
     if [ "$shot" = "map" ]; then wait=8; else wait=4; fi
     SIMCTL_CHILD_SCREENSHOT="$shot" xcrun simctl launch --terminate-running-process "$udid" "$BUNDLE"
@@ -85,6 +86,17 @@ boot_one() {
     xcrun simctl io "$udid" screenshot "$OUT/raw/${label}-${shot}.png"
     echo "captured ${label}-${shot}"
   done
+  if [ "$label" = "6.7" ]; then
+    xcrun simctl ui "$udid" content_size accessibility-extra-extra-extra-large \
+      || xcrun simctl ui "$udid" content_size AX5 \
+      || true
+    for shot in welcome home pay; do
+      SIMCTL_CHILD_SCREENSHOT="$shot" xcrun simctl launch --terminate-running-process "$udid" "$BUNDLE"
+      sleep 5
+      xcrun simctl io "$udid" screenshot "$OUT/raw/large-${shot}.png"
+      echo "captured large-${shot}"
+    done
+  fi
   xcrun simctl shutdown "$udid" || true
   xcrun simctl delete "$udid" || true
 }

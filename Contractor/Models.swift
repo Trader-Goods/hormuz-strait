@@ -102,17 +102,31 @@ enum JobStatus: String, Codable {
     var title: String {
         switch self {
         case .draft: return "Draft"
-        case .posted: return "Posted"
-        case .awaitingAcceptance, .open: return "Awaiting acceptance"
-        case .awaitingPayment: return "Pro accepted, confirm & pay"
+        case .posted, .awaitingAcceptance, .open: return "Open"
+        case .awaitingPayment: return "Waiting for payment"
         case .booked: return "Booked"
-        case .inProgress: return "In progress"
-        case .awaitingReview: return "Awaiting customer review"
-        case .disputed: return "Disputed"
+        case .inProgress: return "Working"
+        case .awaitingReview: return "Waiting for approval"
+        case .disputed: return "Problem reported"
         case .approved: return "Approved"
-        case .payoutProcessing: return "Payout processing"
-        case .completed: return "Completed"
+        case .payoutProcessing: return "Sending money"
+        case .completed: return "Finished"
         case .canceled, .cancelled: return "Canceled"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .draft: return "doc.text"
+        case .posted, .awaitingAcceptance, .open: return "magnifyingglass"
+        case .awaitingPayment: return "creditcard"
+        case .booked: return "calendar"
+        case .inProgress: return "wrench.and.screwdriver.fill"
+        case .awaitingReview: return "flag.fill"
+        case .disputed: return "exclamationmark.triangle.fill"
+        case .approved, .completed: return "checkmark.circle.fill"
+        case .payoutProcessing: return "banknote"
+        case .canceled, .cancelled: return "xmark.circle"
         }
     }
 }

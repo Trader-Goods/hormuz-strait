@@ -19,11 +19,11 @@ struct ChatView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     if unlocked {
                         Text("This job was booked in the app, so contact details can be shown.")
-                            .font(.footnote)
+                            .appText()
                             .foregroundStyle(.secondary)
                     } else {
                         Text(ContactFilter.notice)
-                            .font(.footnote)
+                            .appText()
                             .foregroundStyle(.secondary)
                     }
                     ForEach(lines) { line in
@@ -43,18 +43,20 @@ struct ChatView: View {
             }
             if !unlocked && ContactFilter.display(draft, unlocked: false).masked {
                 Text("Contact details in this message stay hidden until you book.")
-                    .font(.footnote)
+                    .appText()
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 12)
             }
-            HStack {
+            VStack(spacing: 8) {
                 TextField("Message", text: $draft)
-                    .textFieldStyle(.roundedBorder)
-                Button("Send") {
+                    .softField()
+                Button("Send message") {
+                    Haptic.tap()
                     let text = draft
                     draft = ""
                     Task { lines = await model.sendMessage(jobID: jobID, proID: proID, body: text) }
                 }
+                .buttonStyle(PrimaryButtonStyle())
                 .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .padding(12)

@@ -567,7 +567,7 @@ final class AppModel: ObservableObject {
         case .taken:
             return "Another contractor already accepted this job."
         case .notReady:
-            return "Confirm your identity and mark payouts ready before accepting a job. Stripe Connect is not live in this demo."
+            return "Finish your profile before you accept a job. Confirm who you are, and mark that you are ready to be paid. Bank deposits are not turned on in this test version."
         case .notVerified:
             return "Verify your phone before posting or accepting."
         case .alreadyQuoted:

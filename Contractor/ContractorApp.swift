@@ -58,7 +58,21 @@ let ink = Color(uiColor: UIColor { trait in
 })
 let pine = Color(red: 0.18, green: 0.62, blue: 0.36)
 let leafLight = Color(red: 0.235, green: 0.796, blue: 0.498)
+/// Dark enough for white button labels and for text on the light background.
+let buttonGreen = Color(red: 0.078, green: 0.42, blue: 0.22)
+let buttonGreenDeep = Color(red: 0.05, green: 0.29, blue: 0.16)
+let pineText = Color(uiColor: UIColor { trait in
+    trait.userInterfaceStyle == .dark
+        ? UIColor(red: 0.55, green: 0.85, blue: 0.65, alpha: 1)
+        : UIColor(red: 0.06, green: 0.35, blue: 0.19, alpha: 1)
+})
+let inkSoft = Color(uiColor: UIColor { trait in
+    trait.userInterfaceStyle == .dark
+        ? UIColor(red: 0.78, green: 0.84, blue: 0.79, alpha: 1)
+        : UIColor(red: 0.22, green: 0.29, blue: 0.25, alpha: 1)
+})
 let amber = Color(red: 0.96, green: 0.62, blue: 0.16)
+let amberText = Color(red: 0.28, green: 0.14, blue: 0.02)
 let clay = amber
 let paper = Color(uiColor: UIColor { trait in
     trait.userInterfaceStyle == .dark
@@ -74,6 +88,45 @@ let cardFill = Color(uiColor: UIColor { trait in
 extension Font {
     static func rounded(_ style: Font.TextStyle, weight: Font.Weight = .bold) -> Font {
         .system(style, design: .rounded).weight(weight)
+    }
+}
+
+enum AppFont {
+    static func text(_ size: CGFloat, weight: Font.Weight = .regular, relativeTo style: Font.TextStyle = .body) -> Font {
+        let scaled = UIFontMetrics(forTextStyle: uiStyle(style)).scaledValue(for: size)
+        return .system(size: max(size, scaled), weight: weight, design: .rounded)
+    }
+
+    private static func uiStyle(_ style: Font.TextStyle) -> UIFont.TextStyle {
+        if style == .largeTitle { return .largeTitle }
+        if style == .title { return .title1 }
+        if style == .title2 { return .title2 }
+        if style == .title3 { return .title3 }
+        if style == .headline { return .headline }
+        if style == .body { return .body }
+        if style == .callout { return .callout }
+        if style == .subheadline { return .subheadline }
+        if style == .footnote { return .footnote }
+        if style == .caption { return .caption1 }
+        if style == .caption2 { return .caption2 }
+        return .body
+    }
+}
+
+private struct AppTextModifier: ViewModifier {
+    var size: CGFloat
+    var weight: Font.Weight
+    var style: Font.TextStyle
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    func body(content: Content) -> some View {
+        content.font(AppFont.text(size, weight: weight, relativeTo: style))
+    }
+}
+
+extension View {
+    func appText(_ size: CGFloat = 18, weight: Font.Weight = .regular, relativeTo style: Font.TextStyle = .body) -> some View {
+        modifier(AppTextModifier(size: size, weight: weight, style: style))
     }
 }
 
@@ -93,41 +146,57 @@ func serviceTint(_ job: JobRecord) -> Color {
 }
 
 struct PrimaryButtonStyle: ButtonStyle {
-    @Environment(\.colorScheme) private var colorScheme
-
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.rounded(.headline))
+        PrimaryButtonBody(pressed: configuration.isPressed) { configuration.label }
+    }
+}
+
+private struct PrimaryButtonBody<Label: View>: View {
+    var pressed: Bool
+    @ViewBuilder var label: Label
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        label
+            .font(AppFont.text(20, weight: .semibold, relativeTo: .headline))
+            .multilineTextAlignment(.center)
             .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             .background(
-                LinearGradient(
-                    colors: colorScheme == .dark
-                        ? [Color(red: 0.22, green: 0.55, blue: 0.38), Color(red: 0.10, green: 0.36, blue: 0.24)]
-                        : [leafLight, pine],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+                LinearGradient(colors: [buttonGreen, buttonGreenDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
             )
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: pine.opacity(configuration.isPressed ? 0.1 : 0.28), radius: 10, y: 4)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.spring(duration: 0.22), value: configuration.isPressed)
+            .shadow(color: buttonGreen.opacity(pressed ? 0.1 : 0.28), radius: 10, y: 4)
+            .scaleEffect(pressed ? 0.98 : 1)
+            .animation(.spring(duration: 0.22), value: pressed)
     }
 }
 
 struct SecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.rounded(.subheadline))
-            .foregroundStyle(pine)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(pine.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(pine.opacity(0.45), lineWidth: 1.5))
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.spring(duration: 0.22), value: configuration.isPressed)
+        SecondaryButtonBody(pressed: configuration.isPressed) { configuration.label }
+    }
+}
+
+private struct SecondaryButtonBody<Label: View>: View {
+    var pressed: Bool
+    @ViewBuilder var label: Label
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        label
+            .font(AppFont.text(20, weight: .semibold, relativeTo: .headline))
+            .multilineTextAlignment(.center)
+            .foregroundStyle(pineText)
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.white.opacity(0.001), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(pineText, lineWidth: 2))
+            .scaleEffect(pressed ? 0.98 : 1)
+            .animation(.spring(duration: 0.22), value: pressed)
     }
 }
 
@@ -140,11 +209,12 @@ struct FriendlyEmpty: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Image(systemName: symbol)
-                .font(.rounded(.title2))
-                .foregroundStyle(pine)
-                .frame(width: 52, height: 52)
-                .background(pine.opacity(0.12), in: Circle())
-            Text(title).font(.rounded(.headline))
+                .appText(28, weight: .bold, relativeTo: .title)
+                .foregroundStyle(pineText)
+                .frame(width: 64, height: 64)
+                .background(pine.opacity(0.16), in: Circle())
+                .accessibilityHidden(true)
+            Text(title).appText(22, weight: .bold, relativeTo: .title2)
             if let button, let action {
                 Button(button, action: action)
                     .buttonStyle(PrimaryButtonStyle())
@@ -164,11 +234,11 @@ struct PriceChip: View {
 
     var body: some View {
         Text(Money.compact(cents: cents))
-            .font(.rounded(.subheadline))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .appText(20, weight: .bold, relativeTo: .headline)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
             .background(amber, in: Capsule())
-            .foregroundStyle(Color(red: 0.22, green: 0.12, blue: 0.02))
+            .foregroundStyle(amberText)
             .accessibilityLabel("Price \(Money.string(cents: cents))")
     }
 }
@@ -179,11 +249,12 @@ struct InfoChip: View {
 
     var body: some View {
         Label(text, systemImage: symbol)
-            .font(.rounded(.caption, weight: .semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(pine.opacity(0.12), in: Capsule())
-            .foregroundStyle(pine)
+            .appText(18, weight: .semibold)
+            .labelStyle(.titleAndIcon)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(pine.opacity(0.14), in: Capsule())
+            .foregroundStyle(pineText)
     }
 }
 
@@ -200,7 +271,7 @@ struct JobProgress: View {
         }
     }
 
-    private let titles = ["Booked", "In progress", "Done", "Paid"]
+    private let titles = ["Booked", "Working", "Done", "Paid"]
     private let symbols = ["calendar", "wrench.and.screwdriver.fill", "flag.fill", "dollarsign.circle.fill"]
 
     var body: some View {
@@ -209,15 +280,17 @@ struct JobProgress: View {
                 ForEach(Array(titles.enumerated()), id: \.offset) { index, title in
                     VStack(spacing: 6) {
                         Image(systemName: index < step ? "checkmark.circle.fill" : symbols[index])
-                            .font(.title3)
-                            .foregroundStyle(index <= step ? .white : Color.secondary)
-                            .frame(width: 36, height: 36)
-                            .background(index <= step ? (index == step ? amber : pine) : Color.primary.opacity(0.08), in: Circle())
+                            .appText(22, weight: .bold, relativeTo: .title2)
+                            .foregroundStyle(index <= step ? .white : inkSoft)
+                            .frame(width: 48, height: 48)
+                            .background(index <= step ? (index == step ? buttonGreen : pineText) : Color.primary.opacity(0.08), in: Circle())
                             .symbolEffect(.bounce, value: step)
+                            .accessibilityHidden(true)
                         Text(title)
-                            .font(.rounded(.caption2, weight: index == step ? .bold : .semibold))
-                            .foregroundStyle(index <= step ? ink : Color.secondary)
+                            .appText(18, weight: index == step ? .bold : .semibold)
+                            .foregroundStyle(ink)
                             .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity)
                     .accessibilityLabel(index == step ? "\(title), current step" : (index < step ? "\(title), done" : title))
@@ -232,16 +305,218 @@ struct JobProgress: View {
 
 struct StatusBadge: View {
     var title: String
-    var tint: Color = pine
+    var symbol: String = "circle.fill"
+    var tint: Color = pineText
+
+    init(title: String, symbol: String = "circle.fill", tint: Color = pineText) {
+        self.title = title
+        self.symbol = symbol
+        self.tint = tint
+    }
+
+    init(status: JobStatus) {
+        title = status.title
+        symbol = status.symbol
+        tint = statusTint(status)
+    }
 
     var body: some View {
-        Text(title)
-            .font(.rounded(.caption2, weight: .bold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .foregroundStyle(tint)
-            .background(tint.opacity(0.14), in: Capsule())
-            .accessibilityLabel("Status \(title)")
+        HStack(spacing: 8) {
+            Image(systemName: symbol)
+                .foregroundStyle(tint)
+                .accessibilityHidden(true)
+            Text(title)
+                .foregroundStyle(ink)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .appText(18, weight: .semibold)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(tint.opacity(0.16), in: Capsule())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Status \(title)")
+    }
+}
+
+struct NextStepBar: View {
+    var text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "arrow.right.circle.fill")
+                .foregroundStyle(pineText)
+                .accessibilityHidden(true)
+            Text(text)
+                .foregroundStyle(ink)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .appText(18, weight: .semibold)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(pine.opacity(0.14))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("What happens next. \(text)")
+    }
+}
+
+func nextStepText(_ job: JobRecord, role: UserRole) -> String {
+    switch (role, job.status) {
+    case (.customer, .posted), (.customer, .open), (.customer, .awaitingAcceptance), (.customer, .draft):
+        return "A pro near you can accept this price."
+    case (.customer, .awaitingPayment):
+        return "Confirm and pay to book this pro."
+    case (.customer, .booked):
+        return "The pro starts when they arrive."
+    case (.customer, .inProgress):
+        return "The pro is working. You approve it when they finish."
+    case (.customer, .awaitingReview):
+        return "Look it over, then approve the job."
+    case (.customer, .disputed):
+        return "You reported a problem. The pro can see your note."
+    case (.customer, .completed), (.customer, .approved), (.customer, .payoutProcessing):
+        return "This job is finished. No card was charged in this test version."
+    case (.pro, .posted), (.pro, .open), (.pro, .awaitingAcceptance):
+        return "Accept this job if the price and place work for you."
+    case (.pro, .awaitingPayment):
+        return "Wait for the customer to confirm. You are not booked yet."
+    case (.pro, .booked):
+        return "Start the job when you arrive."
+    case (.pro, .inProgress):
+        return "When you finish, send it for approval."
+    case (.pro, .awaitingReview):
+        return "The customer has 48 hours to approve. This test version does not send money."
+    case (.pro, .disputed):
+        return "The customer reported a problem. Read their note."
+    case (.pro, .completed), (.pro, .approved), (.pro, .payoutProcessing):
+        return "The customer approved this job. This test version does not send money yet."
+    default:
+        return "This job is closed."
+    }
+}
+
+struct ConfirmChoice: View {
+    var title: String
+    var yes: String
+    var no: String = "No"
+    var onYes: () -> Void
+    var onNo: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title)
+                .appText(28, weight: .bold, relativeTo: .title)
+                .foregroundStyle(ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(yes) {
+                Haptic.tap()
+                onYes()
+            }
+            .buttonStyle(PrimaryButtonStyle())
+            Button(no) {
+                Haptic.tap()
+                onNo()
+            }
+            .buttonStyle(SecondaryButtonStyle())
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(paper)
+    }
+}
+
+struct SuccessCover: View {
+    var symbol: String
+    var title: String
+    var line: String
+    var button: String
+    var action: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Image(systemName: symbol)
+                .appText(48, weight: .bold, relativeTo: .largeTitle)
+                .foregroundStyle(pineText)
+                .frame(width: 88, height: 88)
+                .background(pine.opacity(0.16), in: Circle())
+                .accessibilityHidden(true)
+            Text(title)
+                .appText(34, weight: .bold, relativeTo: .largeTitle)
+                .foregroundStyle(ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(line)
+                .appText()
+                .foregroundStyle(inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(button, action: action)
+                .buttonStyle(PrimaryButtonStyle())
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(paper)
+    }
+}
+
+struct SelectTabAction {
+    var call: (Int) -> Void
+    func callAsFunction(_ tab: Int) { call(tab) }
+}
+
+private struct SelectTabKey: EnvironmentKey {
+    static let defaultValue = SelectTabAction { _ in }
+}
+
+extension EnvironmentValues {
+    var selectTab: SelectTabAction {
+        get { self[SelectTabKey.self] }
+        set { self[SelectTabKey.self] = newValue }
+    }
+}
+
+struct AppTab: Identifiable {
+    var id: Int
+    var title: String
+    var symbol: String
+    var selectedSymbol: String
+}
+
+struct AppTabBar: View {
+    @Binding var selection: Int
+    var tabs: [AppTab]
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 2) {
+            ForEach(tabs) { tab in
+                let on = selection == tab.id
+                Button {
+                    Haptic.tap()
+                    selection = tab.id
+                } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: on ? tab.selectedSymbol : tab.symbol)
+                            .appText(20, weight: .bold, relativeTo: .headline)
+                            .accessibilityHidden(true)
+                        Text(tab.title)
+                            .appText(18, weight: on ? .bold : .semibold)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Capsule()
+                            .fill(on ? pineText : Color.clear)
+                            .frame(height: 4)
+                            .accessibilityHidden(true)
+                    }
+                    .foregroundStyle(on ? pineText : ink)
+                    .frame(maxWidth: .infinity, minHeight: 56)
+                    .padding(.vertical, 6)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tab.title)
+                .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.bottom, 4)
+        .background(cardFill.shadow(color: .black.opacity(0.06), radius: 8, y: -2))
     }
 }
 
@@ -254,11 +529,11 @@ struct BrandHeader<Trailing: View>: View {
         let top: Color
         let bottom: Color
         if colorScheme == .dark {
-            top = Color(red: 0.16, green: 0.48, blue: 0.32)
-            bottom = Color(red: 0.05, green: 0.22, blue: 0.14)
+            top = Color(red: 0.10, green: 0.32, blue: 0.22)
+            bottom = Color(red: 0.04, green: 0.16, blue: 0.11)
         } else {
-            top = leafLight
-            bottom = Color(red: 0.12, green: 0.48, blue: 0.30)
+            top = Color(red: 0.55, green: 0.86, blue: 0.64)
+            bottom = Color(red: 0.32, green: 0.72, blue: 0.48)
         }
         return LinearGradient(colors: [top, bottom], startPoint: .top, endPoint: .bottom)
     }
@@ -266,18 +541,19 @@ struct BrandHeader<Trailing: View>: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "leaf.fill")
-                .font((prominent ? Font.title3 : Font.body).weight(.bold))
+                .appText(prominent ? 28 : 20, weight: .bold, relativeTo: .title2)
                 .foregroundStyle(.white)
-                .frame(width: prominent ? 48 : 32, height: prominent ? 48 : 32)
-                .background(.white.opacity(0.18), in: Circle())
+                .frame(width: prominent ? 56 : 40, height: prominent ? 56 : 40)
+                .background(buttonGreen, in: Circle())
+                .accessibilityHidden(true)
             Text("Contractor Pros")
-                .font(.rounded(prominent ? .title2 : .title3))
-                .foregroundStyle(.white)
-                .lineLimit(1)
+                .appText(prominent ? 28 : 22, weight: .bold, relativeTo: prominent ? .title : .title2)
+                .foregroundStyle(colorScheme == .dark ? Color.white : ink)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
             trailing
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.white)
+                .appText(18, weight: .semibold)
+                .foregroundStyle(colorScheme == .dark ? Color.white : ink)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, prominent ? 22 : 10)
@@ -320,11 +596,11 @@ struct PressableCardStyle: ButtonStyle {
 func statusTint(_ status: JobStatus) -> Color {
     switch status {
     case .awaitingPayment, .awaitingReview, .disputed:
-        return amber
+        return amberText
     case .canceled, .cancelled:
-        return Color.secondary
+        return inkSoft
     default:
-        return pine
+        return pineText
     }
 }
 
@@ -392,32 +668,69 @@ private struct RootTabs: View {
 
 struct CustomerShell: View {
     @EnvironmentObject private var model: AppModel
-    @State private var tab = ProcessInfo.processInfo.environment["SCREENSHOT"] == "map" ? 1 : 0
+    @State private var tab = CustomerShell.startingTab
+
+    private static var startingTab: Int {
+        switch ProcessInfo.processInfo.environment["SCREENSHOT"] {
+        case "map": return 2
+        case "post": return 0
+        default: return 1
+        }
+    }
+
+    private var tabs: [AppTab] {
+        [
+            AppTab(id: 0, title: "Post a Job", symbol: "plus.circle", selectedSymbol: "plus.circle.fill"),
+            AppTab(id: 1, title: "My Jobs", symbol: "list.bullet.rectangle", selectedSymbol: "list.bullet.rectangle.fill"),
+            AppTab(id: 2, title: "Prices Near Me", symbol: "map", selectedSymbol: "map.fill"),
+            AppTab(id: 3, title: "Me", symbol: "person", selectedSymbol: "person.fill"),
+        ]
+    }
 
     var body: some View {
-        TabView(selection: $tab) {
-            CustomerHome()
-                .tabItem { Label("Jobs", systemImage: "list.bullet.rectangle.fill") }
-                .badge(model.unreadTotal > 0 ? Text("\(model.unreadTotal)") : nil)
-                .tag(0)
-            NearbyPricesPage(readOnly: true)
-                .tabItem { Label("Map", systemImage: "map.fill") }
-                .tag(1)
+        VStack(spacing: 0) {
+            Group {
+                switch tab {
+                case 0: PostJobView()
+                case 2: NearbyPricesPage(readOnly: true)
+                case 3: AccountView()
+                default: CustomerHome()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            AppTabBar(selection: $tab, tabs: tabs)
         }
+        .environment(\.selectTab, SelectTabAction { tab = $0 })
     }
 }
 
 struct ProShell: View {
     @EnvironmentObject private var model: AppModel
+    @State private var tab = 0
+
+    private var tabs: [AppTab] {
+        [
+            AppTab(id: 0, title: "Jobs Near Me", symbol: "mappin.and.ellipse", selectedSymbol: "mappin.circle.fill"),
+            AppTab(id: 1, title: "My Jobs", symbol: "list.bullet.rectangle", selectedSymbol: "list.bullet.rectangle.fill"),
+            AppTab(id: 2, title: "Money", symbol: "dollarsign.circle", selectedSymbol: "dollarsign.circle.fill"),
+            AppTab(id: 3, title: "Me", symbol: "person", selectedSymbol: "person.fill"),
+        ]
+    }
 
     var body: some View {
-        TabView {
-            ProHome()
-                .tabItem { Label("Jobs", systemImage: "list.bullet.rectangle.fill") }
-                .badge(model.unreadTotal > 0 ? Text("\(model.unreadTotal)") : nil)
-            NearbyPricesPage(readOnly: false)
-                .tabItem { Label("Map", systemImage: "map.fill") }
+        VStack(spacing: 0) {
+            Group {
+                switch tab {
+                case 1: ProHome(lane: 1)
+                case 2: EarningsView()
+                case 3: AccountView()
+                default: ProHome(lane: 0)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            AppTabBar(selection: $tab, tabs: tabs)
         }
+        .environment(\.selectTab, SelectTabAction { tab = $0 })
     }
 }
 
@@ -442,7 +755,7 @@ struct UnreadBadge: View {
     var body: some View {
         if count > 0 {
             Text("\(count)")
-                .font(.caption2.weight(.bold))
+                .appText(18, weight: .bold)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
@@ -468,6 +781,6 @@ struct Card<Content: View>: View {
 
 func paymentLine(priceCents: Int, percent: Int) -> String {
     let fee = BookingFee.feeCents(priceCents: priceCents, percent: percent)
-    let payout = BookingFee.payoutCents(priceCents: priceCents, percent: percent)
-    return "Agreed price \(Money.string(cents: priceCents)). Contractor keeps \(percent)% (\(Money.string(cents: fee))). The contractor receives \(Money.string(cents: payout)), before processing. \(FeeSchedule.launch.processingNote) Status: authorized, not captured."
+    let keep = BookingFee.payoutCents(priceCents: priceCents, percent: percent)
+    return "Price \(Money.string(cents: priceCents)). Contractor Pros keeps \(percent)% (\(Money.string(cents: fee))). The pro gets \(Money.string(cents: keep)) before card fees. \(FeeSchedule.launch.processingNote) The card is held, not charged, in this test version."
 }

@@ -19,7 +19,7 @@ struct WelcomeView: View {
                         Card {
                             VStack(alignment: .leading, spacing: 10) {
                                 Text("Check your email")
-                                    .font(.headline)
+                                    .appText(20, weight: .semibold, relativeTo: .headline)
                                 ConfirmSignInButton()
                             }
                         }
@@ -28,21 +28,21 @@ struct WelcomeView: View {
                         Haptic.tap()
                         role = .customer
                     } label: {
-                        roleRow("I need help", symbol: "house.fill", tint: pine)
+                        roleRow("I need help with a job", symbol: "house.fill", tint: pine)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("I need help")
+                    .accessibilityLabel("I need help with a job")
                     Button {
                         Haptic.tap()
                         role = .pro
                     } label: {
-                        roleRow("I'm a pro", symbol: "wrench.and.screwdriver.fill", tint: clay)
+                        roleRow("I'm a pro, I want work", symbol: "wrench.and.screwdriver.fill", tint: clay)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("I'm a pro")
+                    .accessibilityLabel("I'm a pro, I want work")
                     Card {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Sign in").font(.rounded(.headline))
+                            Text("Sign in").appText(22, weight: .bold, relativeTo: .title2)
                             TextField("Email", text: $email)
                                 .textInputAutocapitalization(.never)
                                 .keyboardType(.emailAddress)
@@ -63,9 +63,9 @@ struct WelcomeView: View {
                     if !model.live {
                         Card {
                             VStack(alignment: .leading, spacing: 10) {
-                                Text("Try the demo").font(.headline)
+                                Text("Try the demo").appText(20, weight: .semibold, relativeTo: .headline)
                                 Text("Password for both is demo1234.")
-                                    .font(.footnote)
+                                    .appText()
                                     .foregroundStyle(.secondary)
                                 Button("Open as Maya, a customer") {
                                     Task { await model.signIn(email: "maya@contractor.demo", password: "demo1234") }
@@ -91,7 +91,7 @@ struct WelcomeView: View {
                 }
             }
             .navigationDestination(item: $role) { selected in
-                SignUpView(role: selected, email: email, password: password)
+                HowItWorksView(role: selected, email: email, password: password)
             }
         }
     }
@@ -101,24 +101,22 @@ private func roleRow(_ title: String, symbol: String, tint: Color) -> some View 
     Card {
         HStack(spacing: 14) {
             Image(systemName: symbol)
-                .font(.title2.weight(.semibold))
+                .appText(28, weight: .bold, relativeTo: .title)
                 .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
-                .background(
-                    LinearGradient(colors: [tint.opacity(0.85), tint], startPoint: .top, endPoint: .bottom),
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                )
+                .frame(width: 64, height: 64)
+                .background(buttonGreen, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .accessibilityHidden(true)
             Text(title)
-                .font(.rounded(.title3))
+                .appText(22, weight: .bold, relativeTo: .title2)
                 .foregroundStyle(ink)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(tint)
-                .frame(width: 28, height: 28)
-                .background(tint.opacity(0.12), in: Circle())
+                .appText(weight: .semibold)
+                .foregroundStyle(pineText)
+                .accessibilityHidden(true)
         }
-        .padding(.vertical, 4)
+        .frame(minHeight: 72)
     }
 }
 
@@ -144,7 +142,7 @@ struct SignUpView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 Text(role == .customer ? "Customer sign up" : "Pro sign up")
-                    .font(.rounded(.title2))
+                    .appText(28, weight: .bold, relativeTo: .title)
                 TextField("Your name", text: $name)
                     .textContentType(.name)
                     .softField()
@@ -162,7 +160,7 @@ struct SignUpView: View {
                     .softField()
                 if !zip.isEmpty && !USAddress.isValidZip(zip) {
                     Text("Enter a 5-digit US ZIP.")
-                        .font(.footnote)
+                        .appText()
                         .foregroundStyle(.red)
                 }
                 if role == .pro {
@@ -172,13 +170,19 @@ struct SignUpView: View {
                         .softField()
                     if !phone.isEmpty && USPhone.e164(phone) == nil {
                         Text("Enter a US phone number.")
-                            .font(.footnote)
+                            .appText()
                             .foregroundStyle(.red)
                     }
                     TextField("Business name", text: $business)
                         .softField()
-                    Stepper("Service radius: \(radius) miles", value: $radius, in: 5...200, step: 5)
-                    Text("Services").font(.rounded(.headline))
+                    Text("How far I'll travel")
+                        .appText(22, weight: .bold, relativeTo: .title2)
+                    Text("You'll see jobs inside this distance.")
+                        .appText()
+                        .foregroundStyle(inkSoft)
+                    Stepper("\(radius) miles", value: $radius, in: 5...200, step: 5)
+                        .accessibilityLabel("How far I'll travel, \(radius) miles")
+                    Text("Services").appText(22, weight: .bold, relativeTo: .title2)
                     ForEach(ServiceCatalog.featured + ServiceCatalog.more) { service in
                         Toggle(isOn: Binding(
                             get: { selectedServices.contains(service.id) },
@@ -228,6 +232,148 @@ struct SignUpView: View {
     }
 }
 
+struct HowItWorksView: View {
+    var role: UserRole
+    var email: String
+    var password: String
+    @State private var page = 0
+    @State private var skipped = false
+
+    private let pages: [(String, String, String)] = [
+        ("leaf.fill", "Tell us the job", "Pick the work, add a photo, choose when, and set your price."),
+        ("mappin.and.ellipse", "A pro nearby accepts", "You confirm and pay in the app. That books them."),
+        ("checkmark.seal.fill", "Approve when it's done", "The pro marks it done. You approve it, or it approves itself after 48 hours."),
+    ]
+
+    var body: some View {
+        Group {
+            if skipped {
+                SignUpView(role: role, email: email, password: password)
+            } else {
+                VStack(alignment: .leading, spacing: 20) {
+                    HStack {
+                        Spacer()
+                        Button("Skip") {
+                            Haptic.tap()
+                            skipped = true
+                        }
+                        .appText(20, weight: .semibold, relativeTo: .headline)
+                        .foregroundStyle(pineText)
+                        .frame(minHeight: 56)
+                    }
+                    Spacer(minLength: 12)
+                    Image(systemName: pages[page].0)
+                        .appText(48, weight: .bold, relativeTo: .largeTitle)
+                        .foregroundStyle(.white)
+                        .frame(width: 96, height: 96)
+                        .background(buttonGreen, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                        .accessibilityHidden(true)
+                    Text(pages[page].1)
+                        .appText(34, weight: .bold, relativeTo: .largeTitle)
+                        .foregroundStyle(ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(pages[page].2)
+                        .appText(20, weight: .regular, relativeTo: .title3)
+                        .foregroundStyle(inkSoft)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("\(page + 1) of 3")
+                        .appText(18, weight: .semibold)
+                        .foregroundStyle(pineText)
+                        .accessibilityLabel("Screen \(page + 1) of 3")
+                    Spacer()
+                    Button(page == 2 ? "Create my account" : "Next") {
+                        Haptic.tap()
+                        if page == 2 { skipped = true } else { page += 1 }
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .background(paper)
+                .animation(.spring(duration: 0.3), value: page)
+            }
+        }
+        .navigationTitle("How it works")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct AccountView: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                BrandHeader()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(model.session?.displayName.isEmpty == false ? (model.session?.displayName ?? "Me") : "Me")
+                            .appText(34, weight: .bold, relativeTo: .largeTitle)
+                            .foregroundStyle(ink)
+                        if model.session?.role == .pro {
+                            NavigationLink("My profile") { ProProfileView() }
+                                .buttonStyle(SecondaryButtonStyle())
+                        }
+                        NavigationLink("How it works") { HowItWorksReplay() }
+                            .buttonStyle(SecondaryButtonStyle())
+                        HelpLinks()
+                        Button("Sign out") {
+                            Haptic.tap()
+                            Task { await model.signOut() }
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                    }
+                    .padding(20)
+                }
+            }
+            .background(paper)
+            .toolbar(.hidden, for: .navigationBar)
+        }
+    }
+}
+
+private struct HowItWorksReplay: View {
+    @State private var page = 0
+    private let pages: [(String, String, String)] = [
+        ("leaf.fill", "Tell us the job", "Pick the work, add a photo, choose when, and set your price."),
+        ("mappin.and.ellipse", "A pro nearby accepts", "You confirm and pay in the app. That books them."),
+        ("checkmark.seal.fill", "Approve when it's done", "The pro marks it done. You approve it, or it approves itself after 48 hours."),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Image(systemName: pages[page].0)
+                .appText(48, weight: .bold, relativeTo: .largeTitle)
+                .foregroundStyle(.white)
+                .frame(width: 96, height: 96)
+                .background(buttonGreen, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .accessibilityHidden(true)
+            Text(pages[page].1)
+                .appText(34, weight: .bold, relativeTo: .largeTitle)
+                .foregroundStyle(ink)
+            Text(pages[page].2)
+                .appText()
+                .foregroundStyle(inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("\(page + 1) of 3")
+                .appText(18, weight: .semibold)
+                .foregroundStyle(pineText)
+            Spacer()
+            if page < 2 {
+                Button("Next") {
+                    Haptic.tap()
+                    page += 1
+                }
+                .buttonStyle(PrimaryButtonStyle())
+            }
+        }
+        .padding(24)
+        .background(paper)
+        .navigationTitle("How it works")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 struct ConfirmSignInButton: View {
     @EnvironmentObject private var model: AppModel
 
@@ -248,7 +394,7 @@ struct VerifyPhoneView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Confirm your phone")
-                .font(.rounded(.largeTitle))
+                .appText(34, weight: .bold, relativeTo: .largeTitle)
             if let error = model.errorMessage {
                 Text(error).foregroundStyle(.red)
             }

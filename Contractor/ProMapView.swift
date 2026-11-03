@@ -88,7 +88,7 @@ struct JobMiniMap: View {
             ))) {
                 Annotation(job.serviceTitle, coordinate: CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude)) {
                     Image(systemName: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
-                        .font(.body.weight(.semibold))
+                        .appText(20, weight: .semibold, relativeTo: .headline)
                         .foregroundStyle(.white)
                         .padding(8)
                         .background(job.category == .moving ? clay : pine, in: Circle())
@@ -166,7 +166,7 @@ struct ProJobMap: View {
 
             if locating {
                 Text("Locating job sites…")
-                    .font(.footnote)
+                    .appText()
                     .foregroundStyle(.secondary)
             }
             if let job = selectedJob {
@@ -257,13 +257,13 @@ private struct MapPriceMarker: View {
     var body: some View {
         VStack(spacing: 2) {
             Text(label)
-                .font(.rounded(.caption, weight: .bold))
+                .appText(weight: .bold)
                 .foregroundStyle(Color(red: 0.2, green: 0.1, blue: 0.02))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(amber, in: Capsule())
             Image(systemName: clustered ? "square.3.layers.3d.down.right.fill" : symbol)
-                .font(.caption.weight(.bold))
+                .appText(weight: .semibold)
                 .foregroundStyle(.white)
                 .frame(width: 36, height: 36)
                 .background(tint, in: Circle())
@@ -291,14 +291,14 @@ private struct JobPinCard: View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
                 Label(job.serviceTitle, systemImage: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
-                    .font(.subheadline.weight(.semibold))
+                    .appText(weight: .semibold)
                     .foregroundStyle(job.category == .moving ? clay : pine)
                 if SampleJobs.contains(job.id) {
-                    Text("Sample — not a real customer").font(.caption.weight(.semibold)).foregroundStyle(clay)
+                    Text("Sample — not a real customer").appText(weight: .semibold).foregroundStyle(clay)
                 }
-                Text(Money.string(cents: job.offeredPriceCents)).font(.title3.weight(.semibold))
+                Text(Money.string(cents: job.offeredPriceCents)).appText(22, weight: .semibold, relativeTo: .title2)
                 Text(job.place(exact: readOnly ? false : model.showsExactAddress(job)))
-                    .font(.headline)
+                    .appText(20, weight: .semibold, relativeTo: .headline)
                     .foregroundStyle(ink)
                 if !readOnly {
                     Text(job.details.summary(for: job.category))
@@ -306,10 +306,10 @@ private struct JobPinCard: View {
                 Text("\(job.whenLabel) · \(distance)")
                     .foregroundStyle(.secondary)
                 if job.estimatedMinutes > 0 {
-                    Text("About \(job.estimatedMinutes) minutes").font(.footnote).foregroundStyle(.secondary)
+                    Text("About \(job.estimatedMinutes) minutes").appText().foregroundStyle(.secondary)
                 }
                 if !readOnly, let estimate = job.estimate {
-                    Text(estimate.explanation).font(.footnote)
+                    Text(estimate.explanation).appText()
                 }
             }
         }
@@ -416,16 +416,16 @@ private struct MapPriceRow: View {
         Card {
             HStack(spacing: 12) {
                 Image(systemName: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
-                    .font(.body.weight(.bold))
+                    .appText(20, weight: .bold, relativeTo: .headline)
                     .foregroundStyle(.white)
                     .frame(width: 44, height: 44)
                     .background(serviceTint(job), in: Circle())
                 VStack(alignment: .leading, spacing: 4) {
                     Text(job.serviceTitle)
-                        .font(.rounded(.headline))
+                        .appText(22, weight: .bold, relativeTo: .title2)
                         .foregroundStyle(ink)
                     Text(job.place(exact: false))
-                        .font(.subheadline)
+                        .appText()
                         .foregroundStyle(.secondary)
                     InfoChip(text: job.whenLabel, symbol: "clock.fill")
                 }
@@ -452,12 +452,12 @@ struct MapPriceDetail: View {
             VStack(alignment: .leading, spacing: 14) {
                 if let job {
                     Label(job.serviceTitle, systemImage: ServiceCatalog.find(job.serviceType)?.symbol ?? job.category.symbol)
-                        .font(.subheadline.weight(.semibold))
+                        .appText(weight: .semibold)
                         .foregroundStyle(job.category == .moving ? clay : pine)
                     if SampleJobs.contains(job.id) {
-                        Text("Sample").font(.caption.weight(.semibold)).foregroundStyle(clay)
+                        Text("Sample").appText(weight: .semibold).foregroundStyle(clay)
                     }
-                    Text(job.place(exact: false)).font(.title2.weight(.semibold))
+                    Text(job.place(exact: false)).appText(28, weight: .bold, relativeTo: .title)
                     if job.offeredPriceCents > 0 {
                         PriceChip(cents: job.offeredPriceCents)
                     }
@@ -465,11 +465,11 @@ struct MapPriceDetail: View {
                         .foregroundStyle(.secondary)
                     if job.estimatedMinutes > 0 {
                         Text("About \(job.estimatedMinutes) minutes")
-                            .font(.footnote)
+                            .appText()
                             .foregroundStyle(.secondary)
                     }
                 } else {
-                    Text("This job is unavailable.").font(.headline)
+                    Text("This job is unavailable.").appText(20, weight: .semibold, relativeTo: .headline)
                 }
             }
             .padding(20)

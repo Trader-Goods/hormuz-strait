@@ -166,7 +166,10 @@ jobs:
           xcodebuild -version
 
       - name: Install Pillow
-        run: python3 -m pip install --user pillow
+        run: |
+          python3 -m venv "$RUNNER_TEMP/shots"
+          "$RUNNER_TEMP/shots/bin/pip" install pillow
+          echo "$RUNNER_TEMP/shots/bin" >> "$GITHUB_PATH"
 
       - name: Build and capture
         run: bash scripts/capture_screenshots.sh "$GITHUB_WORKSPACE/artifacts/screenshots"
