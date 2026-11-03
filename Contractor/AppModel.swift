@@ -55,7 +55,7 @@ final class AppModel: ObservableObject {
         customer.latitude = 41.562
         customer.longitude = -83.654
         customer.radiusMiles = 4
-        if name != "welcome" { session = customer }
+        if name != "welcome" && name != "preview" { session = customer }
         let home = JobRecord(
             id: UUID(uuidString: "30000000-0000-0000-0000-0000000000a1")!,
             customerID: customerID, category: .lawn, street: "418 River Road", city: "Maumee", state: "OH", zip: "43537",

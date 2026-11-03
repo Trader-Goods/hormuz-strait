@@ -60,7 +60,6 @@ grab() {
   local udid="$1" shot="$2" dest="$3" try
   for try in 1 2 3 4; do
     SIMCTL_CHILD_SCREENSHOT="$shot" xcrun simctl launch --terminate-running-process "$udid" "$BUNDLE" >/dev/null
-    xcrun simctl openurl "$udid" "contractorpros://screenshot" || true
     if [ "$shot" = "map" ] || [ "$shot" = "preview" ]; then sleep 10; else sleep 6; fi
     xcrun simctl io "$udid" screenshot "$dest"
     if python3 - "$dest" <<'PY'
