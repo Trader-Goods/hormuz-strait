@@ -185,7 +185,8 @@ jobs:
     timeout-minutes: 50
     env:
       BUNDLE_ID: com.tradergoods.madewithlove
-      BUILD_NUMBER: "9"
+      BUILD_NUMBER: "12"
+      UPLOAD_REPORT_ONLY: "1"
     steps:
       - uses: actions/checkout@v4
 

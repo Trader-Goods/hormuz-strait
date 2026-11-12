@@ -124,21 +124,75 @@ def group_access(auth, group):
 
 def find_build(auth, app, number):
     queries = [
-        {"filter[app]": app, "filter[version]": number, "sort": "-uploadedDate", "limit": 5},
-        {"filter[app]": app, "sort": "-uploadedDate", "limit": 8},
+        {"filter[app]": app, "filter[version]": number, "limit": 5},
+        {"filter[app]": app, "sort": "-uploadedDate", "limit": 15},
     ]
+    for state in ("PROCESSING", "FAILED", "INVALID", "VALID"):
+        queries.append({
+            "filter[app]": app,
+            "filter[version]": number,
+            "filter[processingState]": state,
+            "limit": 5,
+        })
     seen = []
     for params in queries:
-        found = api("GET", "/v1/builds?" + urllib.parse.urlencode(params), auth).get("data", [])
+        try:
+            found = api("GET", "/v1/builds?" + urllib.parse.urlencode(params), auth).get("data", [])
+        except SystemExit:
+            continue
         for item in found:
             attributes = item.get("attributes", {})
             version = str(attributes.get("version"))
             state = attributes.get("processingState")
-            seen.append(f"{version}:{state}")
+            label = f"{version}:{state}"
+            if label not in seen:
+                seen.append(label)
             if version == str(number):
                 return item["id"], state
-    print("recent builds " + ", ".join(seen[:8]))
+    print("recent builds " + ", ".join(seen[:12]))
     return None, None
+
+
+def upload_state_name(state):
+    if isinstance(state, str):
+        return state, []
+    if not isinstance(state, dict):
+        return "", []
+    details = []
+    for kind in ("errors", "warnings", "infos"):
+        for detail in state.get(kind) or []:
+            if isinstance(detail, dict):
+                details.append(
+                    f"{kind}: {detail.get('code') or ''} {detail.get('description') or ''}".strip()
+                )
+            else:
+                details.append(f"{kind}: {detail}")
+    return str(state.get("state") or ""), details
+
+
+def report_uploads(auth, app, number):
+    """Print Build Uploads, which exist before a TestFlight build row does."""
+    query = urllib.parse.urlencode({"limit": 20, "sort": "-uploadedDate"})
+    try:
+        found = api("GET", f"/v1/apps/{app}/buildUploads?{query}", auth).get("data", [])
+    except SystemExit as error:
+        print(f"build uploads unavailable ({getattr(error, 'code', '')})")
+        return None
+    if not found:
+        print("no build uploads")
+        return None
+    failure = None
+    for item in found:
+        attributes = item.get("attributes") or {}
+        version = str(attributes.get("cfBundleVersion") or "")
+        name, details = upload_state_name(attributes.get("state"))
+        line = f"upload {version} {attributes.get('cfBundleShortVersionString') or ''} {name}".strip()
+        if details:
+            line += " | " + " | ".join(details)
+        print(line)
+        if version == str(number) and name == "FAILED":
+            failure = line
+    return failure
 
 
 def beta_state(auth, build):
@@ -364,6 +418,14 @@ def main():
     number = os.environ["BUILD_NUMBER"]
     auth = token()
     app = app_id(auth, os.environ["BUNDLE_ID"])
+    failure = report_uploads(auth, app, number)
+    if failure:
+        raise SystemExit(failure)
+    if os.environ.get("UPLOAD_REPORT_ONLY") == "1":
+        build_id, state = find_build(auth, app, number)
+        if build_id:
+            print(f"build {number} visible, state {state}")
+        return
     group = find_group(auth, app)
     add_internal_testers(auth, app, group)
     deadline = time.time() + WAIT_SECONDS
@@ -379,6 +441,9 @@ def main():
                 break
         else:
             print(f"waiting for build {number}")
+            failure = report_uploads(auth, app, number)
+            if failure:
+                raise SystemExit(failure)
         time.sleep(20)
     if not build_id:
         raise SystemExit("uploaded build did not appear")
