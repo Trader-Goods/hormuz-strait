@@ -16,7 +16,7 @@ from prepare_appstore_signing import api, token
 GROUP_NAME = "Me"
 EXTERNAL_GROUP_ID = "ec01899f-2e43-4eca-80c0-41031d7b61fc"
 EXTERNAL_GROUP_NAME = "Family & Friends"
-WAIT_SECONDS = 20 * 60
+WAIT_SECONDS = 40 * 60
 API_HOST = "https://api.appstoreconnect.apple.com"
 
 
@@ -123,17 +123,21 @@ def group_access(auth, group):
 
 
 def find_build(auth, app, number):
-    query = urllib.parse.urlencode({
-        "filter[app]": app,
-        "filter[version]": number,
-        "sort": "-uploadedDate",
-        "limit": 5,
-    })
-    found = api("GET", "/v1/builds?" + query, auth).get("data", [])
-    for item in found:
-        attributes = item.get("attributes", {})
-        if str(attributes.get("version")) == str(number):
-            return item["id"], attributes.get("processingState")
+    queries = [
+        {"filter[app]": app, "filter[version]": number, "sort": "-uploadedDate", "limit": 5},
+        {"filter[app]": app, "sort": "-uploadedDate", "limit": 8},
+    ]
+    seen = []
+    for params in queries:
+        found = api("GET", "/v1/builds?" + urllib.parse.urlencode(params), auth).get("data", [])
+        for item in found:
+            attributes = item.get("attributes", {})
+            version = str(attributes.get("version"))
+            state = attributes.get("processingState")
+            seen.append(f"{version}:{state}")
+            if version == str(number):
+                return item["id"], state
+    print("recent builds " + ", ".join(seen[:8]))
     return None, None
 
 
