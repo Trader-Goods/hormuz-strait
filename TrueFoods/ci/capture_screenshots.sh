@@ -57,5 +57,41 @@ xcrun simctl ui "$UDID" content_size accessibility-extra-extra-extra-large || tr
 capture result-large-text result || true
 xcrun simctl ui "$UDID" content_size large || true
 
+# Home on a small phone and a large phone, one simulator at a time.
+python3 - << 'PY' > "$RUNNER_TEMP/truefoods-extra-devices.txt"
+import json, subprocess
+raw = subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"])
+data = json.loads(raw)
+wanted = ["iPhone SE (3rd generation)", "iPhone 16 Pro Max", "iPhone 15 Pro Max"]
+found = {}
+for runtime, items in data.get("devices", {}).items():
+    if "iOS" not in runtime:
+        continue
+    for item in items:
+        if item.get("isAvailable") and item.get("name") in wanted and item["name"] not in found:
+            found[item["name"]] = item["udid"]
+for name in wanted:
+    if name in found:
+        print(found[name] + "\t" + name)
+PY
+while IFS=$'\t' read -r EXTRA_UDID EXTRA_NAME; do
+  [ -n "${EXTRA_UDID:-}" ] || continue
+  if [ "$EXTRA_UDID" = "$UDID" ]; then
+    continue
+  fi
+  xcrun simctl shutdown "$UDID" || true
+  xcrun simctl boot "$EXTRA_UDID" || true
+  xcrun simctl bootstatus "$EXTRA_UDID" -b
+  xcrun simctl ui "$EXTRA_UDID" appearance light || true
+  xcrun simctl install "$EXTRA_UDID" "$APP"
+  xcrun simctl status_bar "$EXTRA_UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --cellularMode active --cellularBars 4 --wifiBars 3 || true
+  slug=$(printf '%s' "$EXTRA_NAME" | tr ' ' '-' | tr -d '()')
+  xcrun simctl terminate "$EXTRA_UDID" com.tradergoods.madewithlove || true
+  xcrun simctl launch "$EXTRA_UDID" com.tradergoods.madewithlove -screenshot home
+  sleep 8
+  xcrun simctl io "$EXTRA_UDID" screenshot "$OUT/home-$slug.png"
+  xcrun simctl shutdown "$EXTRA_UDID" || true
+done < "$RUNNER_TEMP/truefoods-extra-devices.txt"
+
 xcrun simctl shutdown "$UDID" || true
 ls -lh "$OUT"

@@ -1,7 +1,16 @@
 import Foundation
 
 enum ScoreRules {
-    static let start = 80
+    static let start = 100
+    static let novaPenalty = 20
+    static let addedSugarPenalty = 20
+    static let sugarFallbackPenalty = 12
+    static let sodiumPenalty = 12
+    static let saturatedFatPenalty = 12
+    static let avoidPenalty = 16
+    static let dyePenalty = 15
+    static let limitPenalty = 8
+    static let dyeIDs: Set<String> = ["red-40", "yellow-5", "yellow-6", "blue-1", "blue-2", "green-3", "red-3"]
     static let addedSugarDV = 50.0
     static let sodiumDV = 2300.0
     static let saturatedFatDV = 20.0
@@ -83,62 +92,57 @@ enum ScoreEngine {
         var reasons: [ScoreReason] = []
 
         if let added = product.addedSugar, added >= ScoreRules.highAddedSugar {
-            value -= 18
+            value -= ScoreRules.addedSugarPenalty
             reasons.append(ScoreReason(id: "added-sugar", title: "High added sugar", detail: "A lot of added sugar.", tone: .avoid))
         } else if product.addedSugar == nil, let sugar = product.sugar, sugar >= ScoreRules.sugarFallback {
-            value -= 10
+            value -= ScoreRules.sugarFallbackPenalty
             reasons.append(ScoreReason(id: "sugar", title: "A lot of sugar", detail: "A lot of sugar.", tone: .limit))
         }
 
         if let sodium = product.sodiumMg, sodium >= ScoreRules.highSodium {
-            value -= 14
+            value -= ScoreRules.sodiumPenalty
             reasons.append(ScoreReason(id: "sodium", title: "High sodium", detail: "High in sodium.", tone: .avoid))
         }
 
         if let sat = product.saturatedFat, sat >= ScoreRules.highSaturatedFat {
-            value -= 14
+            value -= ScoreRules.saturatedFatPenalty
             reasons.append(ScoreReason(id: "sat", title: "High saturated fat", detail: "High in saturated fat.", tone: .avoid))
         }
 
         if product.nova == 4 {
-            value -= 12
+            value -= ScoreRules.novaPenalty
             reasons.append(ScoreReason(id: "nova", title: "Highly processed", detail: "Many factory steps.", tone: .limit))
         }
 
-        let avoids = notes.filter { $0.level == "avoid" }
-        let limits = notes.filter { $0.level == "limit" }
-        var avoidPoints = 0
-        for note in avoids {
-            let take = min(8, max(0, 24 - avoidPoints))
-            avoidPoints += take
-            value -= take
-            reasons.append(ScoreReason(id: "note-\(note.id)", title: note.title, detail: "Worth skipping.", tone: .avoid))
-        }
-        var limitPoints = 0
-        for note in limits {
-            let take = min(3, max(0, 12 - limitPoints))
-            limitPoints += take
-            value -= take
-            reasons.append(ScoreReason(id: "note-\(note.id)", title: note.title, detail: "Worth limiting.", tone: .limit))
+        let flagged = notes.filter { $0.level == "avoid" || $0.level == "limit" }
+        for note in flagged {
+            let dye = ScoreRules.dyeIDs.contains(note.id)
+            if note.level == "avoid" {
+                value -= ScoreRules.avoidPenalty
+            } else if dye {
+                value -= ScoreRules.dyePenalty
+            } else {
+                value -= ScoreRules.limitPenalty
+            }
+            reasons.append(ScoreReason(
+                id: "note-\(note.id)",
+                title: note.title,
+                detail: note.level == "avoid" || dye ? "Worth skipping." : "Worth limiting.",
+                tone: note.level == "avoid" || dye ? .avoid : .limit
+            ))
         }
 
         if let fiber = product.fiber, fiber >= ScoreRules.goodFiber {
-            value += 8
             reasons.append(ScoreReason(id: "fiber", title: "Good source of fiber", detail: "A helpful amount of fiber.", tone: .good))
         }
         if let protein = product.protein, protein >= ScoreRules.goodProtein {
-            value += 6
             reasons.append(ScoreReason(id: "protein", title: "Good source of protein", detail: "A helpful amount of protein.", tone: .good))
         }
-
         let count = ingredientCount(product.ingredients)
         if count > 0, count <= ScoreRules.shortList {
-            value += 6
             reasons.append(ScoreReason(id: "short", title: "Short ingredient list", detail: "Only a few ingredients.", tone: .good))
         }
-
-        if avoids.isEmpty, limits.isEmpty, product.nova != 4, !product.ingredients.isEmpty {
-            value += 4
+        if flagged.isEmpty, product.nova != 4, !product.ingredients.isEmpty {
             reasons.append(ScoreReason(id: "clean", title: "Simple ingredients", detail: "No ingredients we flag.", tone: .good))
         }
 

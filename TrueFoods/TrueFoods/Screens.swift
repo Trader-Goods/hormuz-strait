@@ -60,62 +60,53 @@ struct HomeScreen: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
-                    ProducePhoto(name: "citrus", height: 230)
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("TrueFoods")
-                            .airyTitle()
-                        Text("Scan a barcode or search a name. See the good and the bad, in plain words.")
-                            .airyBody()
-                    }
-                    Button { scanning = true } label: {
-                        BigLabel(title: "Scan a barcode", systemImage: "barcode.viewfinder")
-                    }
-                    .buttonStyle(FilledButton())
-                    NavigationLink {
-                        SearchScreen(embedded: true)
-                    } label: {
-                        BigLabel(title: "Search by name", systemImage: "magnifyingglass")
-                    }
-                    .buttonStyle(QuietButton())
-                    if busy {
-                        Text("Looking that up…")
-                            .airyBody()
-                    }
-                    if !message.isEmpty {
-                        Text(message)
-                            .airyBody()
-                    }
-                    if !pantry.history.isEmpty {
-                        Text("Recent")
-                            .airyTitle()
-                        ForEach(pantry.history.prefix(4)) { item in
-                            NavigationLink {
-                                ProductScreen(product: item)
-                            } label: {
-                                FoodCard(product: item)
-                            }
-                            .buttonStyle(.plain)
+                VStack(spacing: 0) {
+                    homeHero
+                    VStack(alignment: .leading, spacing: 16) {
+                        Button { scanning = true } label: {
+                            BigLabel(title: "Scan a barcode", systemImage: "barcode.viewfinder")
                         }
+                        .buttonStyle(FilledButton())
+                        NavigationLink {
+                            SearchScreen(embedded: true)
+                        } label: {
+                            BigLabel(title: "Search by name", systemImage: "magnifyingglass")
+                        }
+                        .buttonStyle(QuietButton())
+                        if busy {
+                            Text("Looking that up…")
+                                .airyBody()
+                        }
+                        if !message.isEmpty {
+                            Text(message)
+                                .airyBody()
+                        }
+                        if !pantry.history.isEmpty {
+                            Text("Recent")
+                                .airyTitle()
+                            ForEach(pantry.history.prefix(3)) { item in
+                                NavigationLink {
+                                    ProductScreen(product: item)
+                                } label: {
+                                    FoodCard(product: item)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        NavigationLink {
+                            SnapScreen()
+                        } label: {
+                            BigLabel(title: "Snap the label", systemImage: "camera")
+                        }
+                        .buttonStyle(QuietButton())
                     }
-                    NavigationLink {
-                        SnapScreen()
-                    } label: {
-                        BigLabel(title: "Snap the label", systemImage: "camera")
-                    }
-                    .buttonStyle(QuietButton())
-                    NavigationLink {
-                        ProductScreen(product: .sampleCrunch)
-                    } label: {
-                        BigLabel(title: "Try a sample food", systemImage: "leaf")
-                    }
-                    .buttonStyle(QuietButton())
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .padding(.bottom, 108)
                 }
-                .padding(.horizontal, 24)
-            .padding(.top, 24)
-            .padding(.bottom, 108)
             }
             .background(Air.canvas)
+            .ignoresSafeArea(edges: .top)
             .navigationBarHidden(true)
             .sheet(isPresented: $scanning) {
                 ScanSheet { code in
@@ -126,6 +117,48 @@ struct HomeScreen: View {
                 ProductScreen(product: item)
             }
         }
+    }
+
+    private var homeHero: some View {
+        Color.clear
+            .frame(height: 300)
+            .frame(maxWidth: .infinity)
+            .background {
+                Image("hills")
+                    .resizable()
+                    .scaledToFill()
+            }
+            .clipped()
+            .overlay {
+                LinearGradient(
+                    stops: [
+                        .init(color: .black.opacity(0.08), location: 0),
+                        .init(color: .black.opacity(0.12), location: 0.45),
+                        .init(color: .black.opacity(0.42), location: 0.72),
+                        .init(color: Air.canvas, location: 1)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+            .overlay(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("TrueFoods")
+                        .font(.system(size: 40, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                    Text("Scan a barcode. See the good and the bad.")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(.white)
+                        .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(16)
+                .background(Color.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 36)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("TrueFoods. Scan a barcode. See the good and the bad.")
     }
 
     private func lookup(_ code: String) async {
@@ -680,7 +713,7 @@ struct AboutBlock: View {
             credit("Tomatoes, peppers, and mushrooms", "engin akyurt", "https://www.pexels.com/photo/1435904/")
             credit("Leafy greens", "Karolina Grabowska", "https://www.pexels.com/photo/4198024/")
             credit("Garden vegetables", "Magda Ehlers", "https://www.pexels.com/photo/1300972/")
-            credit("App icon background, green hills", "Sergio Zhukov", "https://www.pexels.com/photo/scenic-green-hills-and-blue-skies-landscape-28578392/")
+            credit("App icon, launch screen, and home", "Sergio Zhukov", "https://www.pexels.com/photo/scenic-green-hills-and-blue-skies-landscape-28578392/")
             if let mail = URL(string: "mailto:\(Copy.support)") {
                 Link("Email \(Copy.support)", destination: mail)
                     .font(.system(size: 18, weight: .semibold))

@@ -6,11 +6,12 @@ License: [Pexels License](https://www.pexels.com/license/). Free to use, includi
 
 | Where it appears | Photograph | Photographer | Photo |
 | --- | --- | --- | --- |
-| Home | Citrus and pomegranate | engin akyurt | https://www.pexels.com/photo/1435735/ |
+| Launch screen and home | Scenic green hills and blue skies | Sergio Zhukov | https://www.pexels.com/photo/scenic-green-hills-and-blue-skies-landscape-28578392/ |
+| Also used in the app | Citrus and pomegranate | engin akyurt | https://www.pexels.com/photo/1435735/ |
 | Food cards and the score page | Tomatoes, peppers, mushrooms, and garlic | engin akyurt | https://www.pexels.com/photo/1435904/ |
 | Saved and About | Leafy greens | Karolina Grabowska | https://www.pexels.com/photo/4198024/ |
 | Snap the label | Garden vegetables | Magda Ehlers | https://www.pexels.com/photo/1300972/ |
-| App icon background | Scenic green hills and blue skies | Sergio Zhukov | https://www.pexels.com/photo/scenic-green-hills-and-blue-skies-landscape-28578392/ |
+| App icon background | Same hills photograph | Sergio Zhukov | https://www.pexels.com/photo/scenic-green-hills-and-blue-skies-landscape-28578392/ |
 
 Open Food Facts product data is © Open Food Facts contributors, [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/). https://openfoodfacts.org
 

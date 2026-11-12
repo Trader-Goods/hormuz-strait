@@ -47,7 +47,23 @@ final class ScoreTests: XCTestCase {
         let oats = ScoreEngine.score(.sampleOats, notes: oatNotes)
         XCTAssertGreaterThanOrEqual(crunch.value, 0)
         XCTAssertLessThanOrEqual(crunch.value, 100)
+        XCTAssertEqual(ScoreRules.start, 100)
+        XCTAssertGreaterThanOrEqual(oats.value, 95)
+        XCTAssertLessThanOrEqual(oats.value, 100)
+        XCTAssertLessThan(crunch.value, 45)
         XCTAssertGreaterThan(oats.value, crunch.value)
+        var processed = Product.sampleOats
+        processed.nova = 4
+        XCTAssertLessThanOrEqual(ScoreEngine.score(processed, notes: []).value, 80)
+        let red = IngredientBook.shared.first { $0.id == "red-40" }
+        let yellow = IngredientBook.shared.first { $0.id == "yellow-5" }
+        XCTAssertNotNil(red)
+        XCTAssertNotNil(yellow)
+        let plain = ScoreEngine.score(.sampleOats, notes: [])
+        let oneDye = ScoreEngine.score(.sampleOats, notes: [red!])
+        let twoDyes = ScoreEngine.score(.sampleOats, notes: [red!, yellow!])
+        XCTAssertEqual(plain.value - oneDye.value, ScoreRules.dyePenalty)
+        XCTAssertEqual(oneDye.value - twoDyes.value, ScoreRules.dyePenalty)
         XCTAssertFalse(crunch.reasons.isEmpty)
         XCTAssertTrue(crunch.reasons.contains { $0.title.localizedCaseInsensitiveContains("sugar") })
         XCTAssertFalse(crunch.reasons.contains { $0.id == "basis" })

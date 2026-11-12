@@ -2,8 +2,8 @@ import SwiftUI
 import UIKit
 
 enum Air {
-    static let canvas = dynamic(light: (0.980, 0.988, 0.976), dark: (0.07, 0.09, 0.08))
-    static let card = dynamic(light: (1, 1, 1), dark: (0.11, 0.15, 0.13))
+    static let canvas = dynamic(light: (0.925, 0.955, 0.925), dark: (0.07, 0.09, 0.08))
+    static let card = dynamic(light: (0.975, 0.988, 0.976), dark: (0.11, 0.15, 0.13))
     static let ink = dynamic(light: (0.10, 0.16, 0.12), dark: (0.95, 0.97, 0.96))
     static let secondary = dynamic(light: (0.24, 0.33, 0.27), dark: (0.76, 0.83, 0.78))
     static let leaf = dynamic(light: (0.122, 0.420, 0.227), dark: (0.56, 0.80, 0.66))
