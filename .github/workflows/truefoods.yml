@@ -30,16 +30,8 @@ jobs:
           xcodebuild -version
 
       - name: Unit tests
-        run: |
-          set -euo pipefail
-          UDID="$(python3 TrueFoods/ci/pick_simulator.py)"
-          xcrun simctl boot "$UDID" || true
-          xcrun simctl bootstatus "$UDID" -b
-          xcodebuild test \
-            -project TrueFoods/TrueFoods.xcodeproj \
-            -scheme TrueFoods \
-            -destination "platform=iOS Simulator,id=$UDID" \
-            CODE_SIGNING_ALLOWED=NO
+        timeout-minutes: 20
+        run: bash TrueFoods/ci/run_unit_tests.sh
 
       - name: Write API key
         env:
