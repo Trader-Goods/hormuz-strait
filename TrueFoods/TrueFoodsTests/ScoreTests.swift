@@ -50,6 +50,13 @@ final class ScoreTests: XCTestCase {
         XCTAssertGreaterThan(oats.value, crunch.value)
         XCTAssertFalse(crunch.reasons.isEmpty)
         XCTAssertTrue(crunch.reasons.contains { $0.title.localizedCaseInsensitiveContains("sugar") })
-        XCTAssertTrue(crunch.reasons.contains { $0.id == "basis" })
+        XCTAssertFalse(crunch.reasons.contains { $0.id == "basis" })
+        for reason in crunch.reasons + oats.reasons {
+            let line = (reason.title + " " + reason.detail).lowercased()
+            XCTAssertFalse(line.contains("subtract"))
+            XCTAssertFalse(line.contains("adds"))
+            XCTAssertFalse(line.contains("daily value"))
+            XCTAssertFalse(line.contains("start at"))
+        }
     }
 }

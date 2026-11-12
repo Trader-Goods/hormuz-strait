@@ -24,7 +24,7 @@ struct RootView: View {
             case .result:
                 NavigationStack { ProductScreen(product: .sampleCrunch) }
             case .score:
-                NavigationStack { ScoreExplainer() }
+                NavigationStack { ProductScreen(product: .sampleCrunch) }
             case .snap:
                 NavigationStack { SnapScreen(previewText: Product.sampleLabel) }
             case .home, .none:
@@ -293,10 +293,6 @@ struct MeScreen: View {
                         }
                     }
                     .onChange(of: pantry.appearance) { _, _ in pantry.saveAppearance() }
-                    NavigationLink { ScoreExplainer() } label: {
-                        BigLabel(title: "How this score works", systemImage: "info.circle")
-                    }
-                    .buttonStyle(QuietButton())
                     AboutBlock()
                 }
                 .padding(.horizontal, 24)
@@ -356,31 +352,13 @@ struct ProductScreen: View {
                 Text(shown.source)
                     .airySecondary()
                 SoftCard {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("\(report.value)")
                             .font(.system(size: 64, weight: .semibold, design: .rounded))
                             .foregroundStyle(Air.ink)
                             .accessibilityLabel("Score \(report.value) out of 100")
                         Text("out of 100")
                             .airyBody()
-                        Text("Why this score")
-                            .font(.system(size: 22, weight: .semibold, design: .rounded))
-                            .foregroundStyle(Air.ink)
-                            .padding(.top, 8)
-                        ForEach(report.reasons) { reason in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(reason.title)
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(Air.ink)
-                                Text(reason.detail)
-                                    .airySecondary()
-                            }
-                            .padding(.top, 8)
-                            Divider().background(Air.line)
-                        }
-                        NavigationLink("Read the full method") { ScoreExplainer() }
-                            .font(.system(size: 18, weight: .semibold))
-                            .padding(.top, 8)
                     }
                 }
                 ForEach(banners, id: \.self) { line in
@@ -405,23 +383,22 @@ struct ProductScreen: View {
                     )
                 }
                 .buttonStyle(QuietButton())
-                let good = report.reasons.filter { $0.tone == .good }
-                let watch = report.reasons.filter { $0.tone == .limit || $0.tone == .avoid }
+                let good = Array(report.reasons.filter { $0.tone == .good }.prefix(4))
+                let watch = Array(report.reasons.filter { $0.tone == .limit || $0.tone == .avoid }.prefix(4))
                 if !good.isEmpty {
                     Text("Good things")
                         .airyTitle()
                     ForEach(good) { reason in
-                        ToneRow(title: reason.title, detail: reason.detail, tone: .good)
+                        Bullet(title: reason.title, tone: .good)
                     }
                 }
                 if !watch.isEmpty {
                     Text("Worth a look")
                         .airyTitle()
                     ForEach(watch) { reason in
-                        ToneRow(title: reason.title, detail: reason.detail, tone: reason.tone)
+                        Bullet(title: reason.title, tone: reason.tone)
                     }
                 }
-                ingredientNotes(notes)
                 nutrition
                 if !swaps.isEmpty {
                     Text("Higher-scoring foods in a similar group")
@@ -461,39 +438,10 @@ struct ProductScreen: View {
         }
     }
 
-    private func ingredientNotes(_ notes: [IngredientNote]) -> some View {
-        let flagged = notes.filter { $0.level != "fine" }
-        let everyday = notes.filter { $0.level == "fine" }
-        return VStack(alignment: .leading, spacing: 12) {
-            if !flagged.isEmpty {
-                Text("Ingredient notes")
-                    .airyTitle()
-                ForEach(flagged) { note in
-                    VStack(alignment: .leading, spacing: 6) {
-                        ToneRow(title: note.title, detail: note.plain, tone: note.tone)
-                        if let url = URL(string: note.sourceURL) {
-                            Link("\(note.sourceName) source", destination: url)
-                                .font(.system(size: 18, weight: .semibold))
-                        }
-                    }
-                }
-            }
-            if !everyday.isEmpty {
-                DisclosureGroup("Everyday ingredients (\(everyday.count))") {
-                    Text(everyday.map(\.title).joined(separator: ", "))
-                        .airySecondary()
-                        .padding(.top, 8)
-                }
-                .font(.system(size: 18, weight: .semibold, design: .rounded))
-                .tint(Air.ink)
-            }
-        }
-    }
-
     private var nutrition: some View {
         SoftCard {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Label numbers")
+                Text("On the label")
                     .font(.system(size: 22, weight: .semibold, design: .rounded))
                 Text(shown.basis + (shown.serving.isEmpty ? "" : " · " + shown.serving))
                     .airySecondary()
@@ -545,46 +493,62 @@ struct FoodCard: View {
     }
 }
 
-struct ScoreExplainer: View {
+struct Bullet: View {
+    var title: String
+    var tone: ScoreTone
+    @ScaledMetric(relativeTo: .body) private var size: CGFloat = 18
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                ProducePhoto(name: "vegetables", height: 180)
-                Text("How this score works")
-                    .airyTitle()
-                Text("The score is a simple 0 to 100. It is information, not a grade from a doctor and not a promise that a food is healthy.")
-                    .airyBody()
-                Text("We start at \(ScoreRules.start). Then we add and subtract using the rules below. The reasons under a score are the same rules, with the numbers from that food.")
-                    .airyBody()
-                rule("High added sugar", "20% of the FDA Daily Value is \(ScoreEngine.format(ScoreRules.highAddedSugar)) g, because the daily value is \(ScoreEngine.format(ScoreRules.addedSugarDV)) g. High added sugar subtracts 18. If added sugar is missing and total sugar is \(ScoreEngine.format(ScoreRules.sugarFallback)) g or more, we subtract 10 and say so.")
-                rule("High sodium", "20% of the daily value is \(ScoreEngine.format(ScoreRules.highSodium)) mg, from \(ScoreEngine.format(ScoreRules.sodiumDV)) mg a day. That subtracts 14.")
-                rule("High saturated fat", "20% of the daily value is \(ScoreEngine.format(ScoreRules.highSaturatedFat)) g, from \(ScoreEngine.format(ScoreRules.saturatedFatDV)) g a day. That subtracts 14.")
-                rule("Ultra-processed", "NOVA group 4, when Open Food Facts provides it, subtracts 12.")
-                rule("Ingredient notes", "Each avoid ingredient subtracts 8, up to 24. Each limit ingredient subtracts 3, up to 12. The notes are a bundled list with FDA, EFSA, or WHO links. We do not use EWG.")
-                rule("Good things", "Fiber at \(ScoreEngine.format(ScoreRules.goodFiber)) g or more adds 8. Protein at \(ScoreEngine.format(ScoreRules.goodProtein)) g or more adds 6. Five ingredients or fewer adds 6. No limit or avoid match, and not NOVA 4, adds 4.")
-                Text("Amounts are per serving when we have a serving. Otherwise they are per 100 g, and the score says so. Missing numbers are left out. They are not treated as zero.")
-                    .airyBody()
-                Text(Copy.disclaimer)
-                    .airySecondary()
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 24)
-            .padding(.bottom, 108)
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(ink)
+                .accessibilityHidden(true)
+            Text(word + " · " + title)
+                .font(.system(size: size, weight: .semibold, design: .rounded))
+                .foregroundStyle(ink)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .background(Air.canvas)
-        .navigationTitle("The score")
-        .navigationBarTitleDisplayMode(.inline)
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(wash)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 
-    private func rule(_ title: String, _ detail: String) -> some View {
-        SoftCard {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(title)
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Air.ink)
-                Text(detail)
-                    .airyBody()
-            }
+    private var word: String {
+        switch tone {
+        case .good: return "Good"
+        case .limit: return "Limit"
+        case .avoid: return "Avoid"
+        case .note: return "Note"
+        }
+    }
+
+    private var symbol: String {
+        switch tone {
+        case .good: return "checkmark.circle.fill"
+        case .limit: return "minus.circle.fill"
+        case .avoid: return "exclamationmark.circle.fill"
+        case .note: return "info.circle.fill"
+        }
+    }
+
+    private var wash: Color {
+        switch tone {
+        case .good: return Air.goodWash
+        case .limit: return Air.citrusWash
+        case .avoid: return Air.tomatoWash
+        case .note: return Air.canvas
+        }
+    }
+
+    private var ink: Color {
+        switch tone {
+        case .good: return Air.goodInk
+        case .limit: return Air.citrusInk
+        case .avoid: return Air.tomatoInk
+        case .note: return Air.ink
         }
     }
 }
@@ -639,8 +603,8 @@ struct SnapScreen: View {
                         Text("No limit or avoid ingredients matched these words. The camera can miss a line, so glance at the package too.")
                             .airyBody()
                     } else {
-                        ForEach(flagged) { note in
-                            ToneRow(title: note.title, detail: note.plain, tone: note.tone)
+                        ForEach(flagged.prefix(4)) { note in
+                            Bullet(title: note.title, tone: note.tone)
                         }
                     }
                     Text(Copy.disclaimer)
@@ -696,6 +660,20 @@ struct AboutBlock: View {
                 .airyBody()
             Text("Product facts from Open Food Facts are © Open Food Facts contributors and available under the Open Database License. https://openfoodfacts.org")
                 .airyBody()
+            Text("Ingredient notes cite public pages from the FDA, EFSA, and WHO.")
+                .airyBody()
+            if let fda = URL(string: "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list") {
+                Link("FDA food additives", destination: fda)
+                    .font(.system(size: 18, weight: .semibold))
+            }
+            if let efsa = URL(string: "https://www.efsa.europa.eu/en/topics/topic/food-additives") {
+                Link("EFSA food additives", destination: efsa)
+                    .font(.system(size: 18, weight: .semibold))
+            }
+            if let who = URL(string: "https://www.who.int/news-room/fact-sheets/detail/healthy-diet") {
+                Link("WHO healthy diet", destination: who)
+                    .font(.system(size: 18, weight: .semibold))
+            }
             Text("Photos are real pictures of fresh fruit, vegetables, and greens. Pexels License, free for commercial use. Attribution is not required. We credit the photographers anyway.")
                 .airyBody()
             credit("Citrus and pomegranate", "engin akyurt", "https://www.pexels.com/photo/1435735/")

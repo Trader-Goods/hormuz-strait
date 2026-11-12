@@ -81,110 +81,28 @@ enum ScoreEngine {
     static func score(_ product: Product, notes: [IngredientNote]) -> ScoreReport {
         var value = ScoreRules.start
         var reasons: [ScoreReason] = []
-        let whereFrom = product.basis.isEmpty ? "the amounts we found" : product.basis
-
-        reasons.append(ScoreReason(
-            id: "basis",
-            title: "Where the numbers come from",
-            detail: "We start at \(ScoreRules.start). These amounts are \(whereFrom). High means 20% or more of the FDA Daily Value.",
-            tone: .note
-        ))
 
         if let added = product.addedSugar, added >= ScoreRules.highAddedSugar {
             value -= 18
-            reasons.append(ScoreReason(
-                id: "added-sugar",
-                title: "High added sugar",
-                detail: "\(format(added)) g added sugar. \(format(ScoreRules.highAddedSugar)) g is 20% of the \(format(ScoreRules.addedSugarDV)) g daily value. That subtracts 18.",
-                tone: .avoid
-            ))
+            reasons.append(ScoreReason(id: "added-sugar", title: "High added sugar", detail: "A lot of added sugar.", tone: .avoid))
         } else if product.addedSugar == nil, let sugar = product.sugar, sugar >= ScoreRules.sugarFallback {
             value -= 10
-            reasons.append(ScoreReason(
-                id: "sugar",
-                title: "A lot of sugar",
-                detail: "\(format(sugar)) g total sugar. This record did not separate added sugar, so the score uses total sugar and subtracts 10.",
-                tone: .limit
-            ))
-        } else if product.addedSugar != nil || product.sugar != nil {
-            reasons.append(ScoreReason(
-                id: "sugar-ok",
-                title: "Sugar is not high",
-                detail: "Added sugar is under \(format(ScoreRules.highAddedSugar)) g, or total sugar is modest when added sugar is missing.",
-                tone: .good
-            ))
-        } else {
-            reasons.append(ScoreReason(
-                id: "sugar-missing",
-                title: "Sugar was not listed",
-                detail: "Sugar is not part of this score because the record did not include it.",
-                tone: .note
-            ))
+            reasons.append(ScoreReason(id: "sugar", title: "A lot of sugar", detail: "A lot of sugar.", tone: .limit))
         }
 
         if let sodium = product.sodiumMg, sodium >= ScoreRules.highSodium {
             value -= 14
-            reasons.append(ScoreReason(
-                id: "sodium",
-                title: "High sodium",
-                detail: "\(format(sodium)) mg sodium. \(format(ScoreRules.highSodium)) mg is 20% of the \(format(ScoreRules.sodiumDV)) mg daily value. That subtracts 14.",
-                tone: .avoid
-            ))
-        } else if let sodium = product.sodiumMg {
-            reasons.append(ScoreReason(
-                id: "sodium-ok",
-                title: "Sodium is not high",
-                detail: "\(format(sodium)) mg sodium, under \(format(ScoreRules.highSodium)) mg.",
-                tone: .good
-            ))
-        } else {
-            reasons.append(ScoreReason(
-                id: "sodium-missing",
-                title: "Sodium was not listed",
-                detail: "Sodium is not part of this score because the record did not include it.",
-                tone: .note
-            ))
+            reasons.append(ScoreReason(id: "sodium", title: "High sodium", detail: "High in sodium.", tone: .avoid))
         }
 
         if let sat = product.saturatedFat, sat >= ScoreRules.highSaturatedFat {
             value -= 14
-            reasons.append(ScoreReason(
-                id: "sat",
-                title: "High saturated fat",
-                detail: "\(format(sat)) g saturated fat. \(format(ScoreRules.highSaturatedFat)) g is 20% of the \(format(ScoreRules.saturatedFatDV)) g daily value. That subtracts 14.",
-                tone: .avoid
-            ))
-        } else if let sat = product.saturatedFat {
-            reasons.append(ScoreReason(
-                id: "sat-ok",
-                title: "Saturated fat is not high",
-                detail: "\(format(sat)) g saturated fat, under \(format(ScoreRules.highSaturatedFat)) g.",
-                tone: .good
-            ))
+            reasons.append(ScoreReason(id: "sat", title: "High saturated fat", detail: "High in saturated fat.", tone: .avoid))
         }
 
         if product.nova == 4 {
             value -= 12
-            reasons.append(ScoreReason(
-                id: "nova",
-                title: "Ultra-processed",
-                detail: "Open Food Facts marks this NOVA group 4. That means many factory steps. That subtracts 12.",
-                tone: .limit
-            ))
-        } else if let nova = product.nova {
-            reasons.append(ScoreReason(
-                id: "nova-ok",
-                title: "Not marked ultra-processed",
-                detail: "NOVA group \(nova). Group 4 is the ultra-processed group.",
-                tone: .good
-            ))
-        } else {
-            reasons.append(ScoreReason(
-                id: "nova-missing",
-                title: "Processing level was not listed",
-                detail: "NOVA group was not in the record, so it is not part of this score.",
-                tone: .note
-            ))
+            reasons.append(ScoreReason(id: "nova", title: "Highly processed", detail: "Many factory steps.", tone: .limit))
         }
 
         let avoids = notes.filter { $0.level == "avoid" }
@@ -194,64 +112,34 @@ enum ScoreEngine {
             let take = min(8, max(0, 24 - avoidPoints))
             avoidPoints += take
             value -= take
-            reasons.append(ScoreReason(
-                id: "note-\(note.id)",
-                title: note.title,
-                detail: take > 0 ? "\(note.plain) That subtracts \(take)." : note.plain,
-                tone: .avoid
-            ))
+            reasons.append(ScoreReason(id: "note-\(note.id)", title: note.title, detail: "Worth skipping.", tone: .avoid))
         }
         var limitPoints = 0
         for note in limits {
             let take = min(3, max(0, 12 - limitPoints))
             limitPoints += take
             value -= take
-            reasons.append(ScoreReason(
-                id: "note-\(note.id)",
-                title: note.title,
-                detail: take > 0 ? "\(note.plain) That subtracts \(take)." : note.plain,
-                tone: .limit
-            ))
+            reasons.append(ScoreReason(id: "note-\(note.id)", title: note.title, detail: "Worth limiting.", tone: .limit))
         }
 
         if let fiber = product.fiber, fiber >= ScoreRules.goodFiber {
             value += 8
-            reasons.append(ScoreReason(
-                id: "fiber",
-                title: "Good source of fiber",
-                detail: "\(format(fiber)) g fiber. \(format(ScoreRules.goodFiber)) g is 10% of the \(format(ScoreRules.fiberDV)) g daily value. That adds 8.",
-                tone: .good
-            ))
+            reasons.append(ScoreReason(id: "fiber", title: "Good source of fiber", detail: "A helpful amount of fiber.", tone: .good))
         }
         if let protein = product.protein, protein >= ScoreRules.goodProtein {
             value += 6
-            reasons.append(ScoreReason(
-                id: "protein",
-                title: "Good source of protein",
-                detail: "\(format(protein)) g protein. \(format(ScoreRules.goodProtein)) g is 10% of the \(format(ScoreRules.proteinDV)) g daily value. That adds 6.",
-                tone: .good
-            ))
+            reasons.append(ScoreReason(id: "protein", title: "Good source of protein", detail: "A helpful amount of protein.", tone: .good))
         }
 
         let count = ingredientCount(product.ingredients)
         if count > 0, count <= ScoreRules.shortList {
             value += 6
-            reasons.append(ScoreReason(
-                id: "short",
-                title: "Short ingredient list",
-                detail: "\(count) ingredient\(count == 1 ? "" : "s"). \(ScoreRules.shortList) or fewer adds 6.",
-                tone: .good
-            ))
+            reasons.append(ScoreReason(id: "short", title: "Short ingredient list", detail: "Only a few ingredients.", tone: .good))
         }
 
         if avoids.isEmpty, limits.isEmpty, product.nova != 4, !product.ingredients.isEmpty {
             value += 4
-            reasons.append(ScoreReason(
-                id: "clean",
-                title: "No limit or avoid ingredients matched",
-                detail: "Nothing in our ingredient notes was marked limit or avoid, and it is not NOVA group 4. That adds 4.",
-                tone: .good
-            ))
+            reasons.append(ScoreReason(id: "clean", title: "Simple ingredients", detail: "No ingredients we flag.", tone: .good))
         }
 
         return ScoreReport(value: min(100, max(0, value)), reasons: reasons)
