@@ -177,11 +177,12 @@ def report_uploads(auth, app, number):
         found = api("GET", f"/v1/apps/{app}/buildUploads?{query}", auth).get("data", [])
     except SystemExit as error:
         print(f"build uploads unavailable ({getattr(error, 'code', '')})")
-        return None
+        return None, None
     if not found:
         print("no build uploads")
-        return None
+        return None, None
     failure = None
+    target = None
     for item in found:
         attributes = item.get("attributes") or {}
         version = str(attributes.get("cfBundleVersion") or "")
@@ -190,9 +191,12 @@ def report_uploads(auth, app, number):
         if details:
             line += " | " + " | ".join(details)
         print(line)
-        if version == str(number) and name == "FAILED":
-            failure = line
-    return failure
+        if version == str(number):
+            if name == "FAILED":
+                failure = line
+            elif target is None:
+                target = line
+    return failure, target
 
 
 def beta_state(auth, build):
@@ -418,7 +422,7 @@ def main():
     number = os.environ["BUILD_NUMBER"]
     auth = token()
     app = app_id(auth, os.environ["BUNDLE_ID"])
-    failure = report_uploads(auth, app, number)
+    failure, upload_line = report_uploads(auth, app, number)
     if failure:
         raise SystemExit(failure)
     if os.environ.get("UPLOAD_REPORT_ONLY") == "1":
@@ -441,12 +445,12 @@ def main():
                 break
         else:
             print(f"waiting for build {number}")
-            failure = report_uploads(auth, app, number)
+            failure, upload_line = report_uploads(auth, app, number)
             if failure:
                 raise SystemExit(failure)
         time.sleep(20)
     if not build_id:
-        raise SystemExit("uploaded build did not appear")
+        raise SystemExit(upload_line or "uploaded build did not appear")
 
     internal = beta_state(auth, build_id)
     print(f"internal build state {internal}")

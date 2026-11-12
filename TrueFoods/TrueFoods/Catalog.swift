@@ -50,17 +50,19 @@ enum FoodAPI {
     }
 
     static func swaps(for product: Product) async -> [Product] {
-        let category = product.categories.first?.replacingOccurrences(of: "en:", with: "").replacingOccurrences(of: "-", with: " ") ?? ""
-        guard !category.isEmpty else { return [] }
-        guard let list = try? await openFoodFactsCategory(category) else { return [] }
+        let ladder = SearchRank.categoryLadder(product.categories)
+        guard !ladder.isEmpty else { return [] }
         let mine = scoreValue(product)
-        return list
-            .filter { $0.barcode != product.barcode && $0.id != product.id }
-            .map { ($0, scoreValue($0)) }
-            .filter { $0.1 > mine }
-            .sorted { $0.1 > $1.1 }
-            .prefix(3)
-            .map(\.0)
+        var pools: [[GroceryCandidate]] = []
+        for tag in ladder {
+            let hits = (try? await searchAlicious(SearchRank.swapQuery(tag), pageSize: 40, sort: "-unique_scans_n")) ?? []
+            pools.append(hits)
+            let picked = SearchRank.higherSwaps(current: product, currentScore: mine, pools: pools, score: scoreValue)
+            if picked.count >= 3 || tag == ladder.last {
+                return picked.map(\.product)
+            }
+        }
+        return []
     }
 
     static func recall(for product: Product) async -> RecallNote? {
@@ -215,23 +217,6 @@ enum FoodAPI {
         let json = try await fetchJSON(url, paced: true)
         let products = json["products"] as? [[String: Any]] ?? []
         return products.compactMap(candidate(from:))
-    }
-
-    private static func openFoodFactsCategory(_ category: String) async throws -> [Product] {
-        var parts = URLComponents(string: "https://world.openfoodfacts.org/cgi/search.pl")!
-        parts.queryItems = [
-            URLQueryItem(name: "action", value: "process"),
-            URLQueryItem(name: "tagtype_0", value: "categories"),
-            URLQueryItem(name: "tag_contains_0", value: "contains"),
-            URLQueryItem(name: "tag_0", value: category),
-            URLQueryItem(name: "json", value: "1"),
-            URLQueryItem(name: "page_size", value: "8"),
-            URLQueryItem(name: "fields", value: "code,product_name,brands,ingredients_text,additives_tags,nova_group,categories_tags,nutriments,serving_size")
-        ]
-        guard let url = parts.url else { return [] }
-        let json = try await fetchJSON(url, paced: true)
-        let products = json["products"] as? [[String: Any]] ?? []
-        return products.compactMap { parseOFF($0, code: string($0["code"])) }
     }
 
     private static func parseOFF(_ item: [String: Any], code: String) -> Product? {

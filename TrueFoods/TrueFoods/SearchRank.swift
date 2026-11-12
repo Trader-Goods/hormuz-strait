@@ -24,6 +24,85 @@ enum SearchRank {
         return "(\(ors)) AND countries_tags:\"en:united-states\""
     }
 
+    /// Specific category first, then its parent. Open Food Facts lists the broad group first.
+    static func categoryLadder(_ tags: [String]) -> [String] {
+        let skip: Set<String> = [
+            "plant-based-foods-and-beverages", "plant-based-foods", "foods", "beverages"
+        ]
+        let cleaned = tags
+            .map { $0.lowercased().replacingOccurrences(of: "en:", with: "") }
+            .filter { !$0.isEmpty && !skip.contains($0) }
+        var ladder: [String] = []
+        for tag in cleaned.reversed() where !ladder.contains(tag) {
+            ladder.append(tag)
+            if ladder.count == 2 { break }
+        }
+        return ladder
+    }
+
+    static func swapQuery(_ tag: String) -> String {
+        let clean = tag.replacingOccurrences(of: "en:", with: "")
+        return "categories_tags:\"en:\(clean)\" AND countries_tags:\"en:united-states\""
+    }
+
+    static func isUSGrocery(_ item: GroceryCandidate) -> Bool {
+        guard item.hasImage else { return false }
+        guard item.countries.contains("en:united-states") else { return false }
+        return !item.englishName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    static func popularity(_ item: GroceryCandidate) -> Double {
+        log10(item.scans + 1) * 10 + log10(item.popularity + 1) * 2
+    }
+
+    /// Higher-scoring foods from the same group. Pools are specific category, then parent.
+    /// A short US list may use the parent. A product that is not sold in the US is never returned.
+    static func higherSwaps(
+        current: Product,
+        currentScore: Int,
+        pools: [[GroceryCandidate]],
+        score: (Product) -> Int,
+        limit: Int = 3
+    ) -> [GroceryCandidate] {
+        let own = current.barcode.isEmpty ? current.id : current.barcode
+        var gathered: [GroceryCandidate] = []
+        for (index, pool) in pools.enumerated() {
+            gathered.append(contentsOf: pool)
+            let picked = rankSwaps(own: own, currentScore: currentScore, pool: gathered, score: score, limit: limit)
+            if picked.count >= limit || index == pools.count - 1 {
+                return picked
+            }
+        }
+        return []
+    }
+
+    private static func rankSwaps(
+        own: String,
+        currentScore: Int,
+        pool: [GroceryCandidate],
+        score: (Product) -> Int,
+        limit: Int
+    ) -> [GroceryCandidate] {
+        var seen = Set<String>()
+        let eligible = pool.filter { item in
+            guard isUSGrocery(item) else { return false }
+            let code = item.product.barcode.isEmpty ? item.product.id : item.product.barcode
+            guard code != own else { return false }
+            guard score(item.product) > currentScore else { return false }
+            return seen.insert(code).inserted
+        }.sorted { lhs, rhs in
+            let left = popularity(lhs)
+            let right = popularity(rhs)
+            if left == right { return lhs.scans > rhs.scans }
+            return left > right
+        }
+        return eligible.prefix(limit).map { item in
+            var copy = item
+            copy.product.name = item.englishName
+            return copy
+        }
+    }
+
     static func ordered(_ query: String, _ items: [GroceryCandidate]) -> [GroceryCandidate] {
         let tokens = words(query)
         let phrase = tokens.joined(separator: " ")
@@ -32,17 +111,15 @@ enum SearchRank {
         var seen = Set<String>()
         var ranked: [(Double, GroceryCandidate)] = []
         for item in items {
-            guard item.hasImage else { continue }
-            guard item.countries.contains("en:united-states") else { continue }
+            guard isUSGrocery(item) else { continue }
             let name = item.englishName.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !name.isEmpty else { continue }
             let brandKey = words(item.product.brand).joined()
             let nameKey = words(name).joined()
             guard seen.insert(brandKey + "|" + nameKey).inserted else { continue }
             let nameWords = Set(words(name))
             let flat = words(name).joined()
             let categories = item.product.categories.map { $0.replacingOccurrences(of: "en:", with: "") }
-            var score = log10(item.scans + 1) * 10 + log10(item.popularity + 1) * 2
+            var score = popularity(item)
             let phraseHit = name.lowercased().contains(phrase) || (!packed.isEmpty && flat.contains(packed))
             if phraseHit { score += 80 }
             let hits = tokens.filter { nameWords.contains($0) || flat.contains($0) }.count

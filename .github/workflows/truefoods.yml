@@ -120,14 +120,33 @@ jobs:
           VERSION="$(plutil -extract CFBundleVersion raw "$RUNNER_TEMP/AppInfo.plist")"
           echo "IPA CFBundleVersion=$VERSION expected=$EXPECTED_BUILD"
           test "$VERSION" = "$EXPECTED_BUILD"
-          # Xcode 26 removed the standalone iTMSTransporter binary. altool still
-          # uploads and prints the App Store Connect rejection on stdout.
-          xcrun altool --upload-app \
-            -f "$IPA" \
-            -t ios \
-            --apiKey "$KID" \
-            --apiIssuer "$ISS" \
-            --verbose
+          # altool printed success after App Store Connect returned 500 while
+          # finishing the upload, and those packages never became builds.
+          # Xcode's export upload is the path that produced the VALID builds.
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${BUNDLE_ID}</key>
+              <string>${PROFILE_NAME}</string>
+            </dict>
+            <key>destination</key><string>upload</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/TrueFoods.xcarchive" \
+            -exportPath "$RUNNER_TEMP/upload" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$KID" \
+            -authenticationKeyIssuerID "$ISS"
 
       - name: Add build to Me and Family and Friends
         env:
@@ -186,7 +205,6 @@ jobs:
     env:
       BUNDLE_ID: com.tradergoods.madewithlove
       BUILD_NUMBER: "12"
-      UPLOAD_REPORT_ONLY: "1"
     steps:
       - uses: actions/checkout@v4
 

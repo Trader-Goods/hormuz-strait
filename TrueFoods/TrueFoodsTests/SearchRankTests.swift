@@ -29,7 +29,79 @@ final class SearchRankTests: XCTestCase {
             SearchRank.textQuery("almond milk"),
             "countries_tags:\"en:united-states\" AND almond AND milk"
         )
-        XCTAssertTrue(SearchRank.categoryQuery("almond milk")?.contains("en:almond-based-drinks") == true)
+        let category = SearchRank.categoryQuery("almond milk") ?? ""
+        XCTAssertTrue(category.contains("en:almond-based-drinks"))
+        XCTAssertTrue(category.contains("countries_tags:\"en:united-states\""))
+        XCTAssertEqual(
+            SearchRank.swapQuery("fruit-yogurts"),
+            "categories_tags:\"en:fruit-yogurts\" AND countries_tags:\"en:united-states\""
+        )
+    }
+
+    func testSearchDropsEnglishFoodsThatAreNotSoldInTheUS() {
+        let ranked = SearchRank.ordered("yogurt", [
+            food("Jaouda Perly", "Jaouda", langCountries: ["en:morocco"], scans: 500),
+            food("Plain Greek Yogurt", "Great Value", scans: 20)
+        ])
+        XCTAssertEqual(ranked.map(\.product.brand), ["Great Value"])
+    }
+
+    func testSwapsPreferPopularUSFoodsAndSkipForeignOnes() {
+        let current = food(
+            "Fruit yogurt",
+            "Store brand",
+            categories: ["en:dairies", "en:yogurts", "en:fruit-yogurts"],
+            scans: 4
+        ).product
+        let specific = [
+            food("Jaouda Perly", "Jaouda", langCountries: ["en:morocco"], scans: 500),
+            food("Lindt Excellence 90%", "Lindt", langCountries: ["en:switzerland", "en:france"], scans: 900),
+            food("Plain Greek Yogurt", "Great Value", scans: 30)
+        ]
+        let parent = [
+            food("Ekibio Tartines craquantes au sarrasin", "Ekibio", langCountries: ["en:france"], scans: 400),
+            food("Whole Milk Yogurt", "Kroger", scans: 80),
+            food("Nonfat Greek Yogurt", "Chobani", scans: 200)
+        ]
+        let scores = [
+            "Store brand Fruit yogurt": 40,
+            "Jaouda Jaouda Perly": 90,
+            "Lindt Lindt Excellence 90%": 95,
+            "Great Value Plain Greek Yogurt": 70,
+            "Ekibio Ekibio Tartines craquantes au sarrasin": 88,
+            "Kroger Whole Milk Yogurt": 75,
+            "Chobani Nonfat Greek Yogurt": 80
+        ]
+        let picks = SearchRank.higherSwaps(
+            current: current,
+            currentScore: 40,
+            pools: [specific, parent],
+            score: { scores["\($0.brand) \($0.name)"] ?? 0 }
+        )
+        XCTAssertEqual(picks.map { "\($0.product.brand) \($0.product.name)" }, [
+            "Chobani Nonfat Greek Yogurt",
+            "Kroger Whole Milk Yogurt",
+            "Great Value Plain Greek Yogurt"
+        ])
+        XCTAssertEqual(
+            SearchRank.categoryLadder(current.categories),
+            ["fruit-yogurts", "yogurts"]
+        )
+    }
+
+    func testSwapsShowNothingWhenOnlyForeignFoodsScoreHigher() {
+        let current = food("Crackers", "Store brand", categories: ["en:crackers"], scans: 2).product
+        let foreign = [
+            food("Ekibio Tartines craquantes au sarrasin", "Ekibio", langCountries: ["en:france"], scans: 400),
+            food("Lindt Excellence 90%", "Lindt", langCountries: ["en:france"], scans: 300, image: false)
+        ]
+        let picks = SearchRank.higherSwaps(
+            current: current,
+            currentScore: 10,
+            pools: [foreign],
+            score: { _ in 90 }
+        )
+        XCTAssertTrue(picks.isEmpty)
     }
 
     private func food(
