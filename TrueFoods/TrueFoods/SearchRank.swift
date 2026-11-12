@@ -55,10 +55,13 @@ enum SearchRank {
             let incidental = incidentalWords.filter { word in
                 !tokens.contains(word) && (nameWords.contains(word) || categories.contains { $0.contains(word) })
             }
-            score -= Double(45 * incidental.count)
-            if tokens.count >= 2 && !phraseHit && !categoryHit {
-                score -= 80
+            if !incidental.isEmpty && !categoryHit {
+                continue
             }
+            if tokens.count >= 2 && !phraseHit && !categoryHit {
+                continue
+            }
+            score -= Double(45 * incidental.count)
             let modifiers: Set<String> = [
                 "unsweetened", "sweetened", "original", "vanilla", "organic", "plain", "creamy",
                 "crunchy", "nonfat", "lowfat", "greek", "whole", "skim", "classic", "regular",
