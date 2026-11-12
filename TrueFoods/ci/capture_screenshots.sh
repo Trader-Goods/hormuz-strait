@@ -33,12 +33,17 @@ xcrun simctl status_bar "$UDID" override \
   --cellularBars 4 \
   --wifiBars 3 || true
 
+# The first launch after boot can still be on the home screen when the picture is taken.
+xcrun simctl launch "$UDID" com.tradergoods.madewithlove -screenshot home || true
+sleep 12
+xcrun simctl terminate "$UDID" com.tradergoods.madewithlove || true
+
 capture() {
   local name="$1"
   local shot="$2"
   xcrun simctl terminate "$UDID" com.tradergoods.madewithlove || true
   xcrun simctl launch "$UDID" com.tradergoods.madewithlove -screenshot "$shot"
-  sleep 5
+  sleep 8
   xcrun simctl io "$UDID" screenshot "$OUT/$name.png"
   test -s "$OUT/$name.png"
 }

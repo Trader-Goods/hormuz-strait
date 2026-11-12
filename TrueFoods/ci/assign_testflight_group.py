@@ -257,33 +257,96 @@ def submit_beta_review(auth, build_id):
     return True
 
 
-def link_external_group(auth, build_id):
+def find_external_group(auth, app):
+    """Family & Friends belongs to this app. A group id from another app cannot be reused."""
+    query = urllib.parse.urlencode({"filter[app]": app, "limit": 50})
+    found = api("GET", "/v1/betaGroups?" + query, auth).get("data", [])
+    for item in found:
+        attributes = item.get("attributes") or {}
+        if attributes.get("name") == EXTERNAL_GROUP_NAME and attributes.get("isInternalGroup") is False:
+            print("external group found")
+            return item["id"]
+    print("creating external group " + EXTERNAL_GROUP_NAME)
+    created = api("POST", "/v1/betaGroups", auth, {
+        "data": {
+            "type": "betaGroups",
+            "attributes": {
+                "name": EXTERNAL_GROUP_NAME,
+                "isInternalGroup": False,
+            },
+            "relationships": {
+                "app": {"data": {"type": "apps", "id": app}},
+            },
+        }
+    })
+    group = created["data"]["id"]
+    print("external group created")
+    copy_external_testers(auth, group)
+    return group
+
+
+def copy_external_testers(auth, group):
+    """Invite the people already on Contractor Pros Family & Friends."""
+    path = f"/v1/betaGroups/{EXTERNAL_GROUP_ID}/betaTesters?limit=100"
+    emails = []
+    while path:
+        try:
+            page = api("GET", path, auth)
+        except SystemExit:
+            print("could not list testers on the other app's Family & Friends group")
+            return
+        for item in page.get("data", []):
+            email = (item.get("attributes") or {}).get("email") or ""
+            if "@" in email:
+                emails.append(email)
+        path = next_path(page)
+    added = 0
+    for email in emails:
+        try:
+            api("POST", "/v1/betaTesters", auth, {
+                "data": {
+                    "type": "betaTesters",
+                    "attributes": {"email": email},
+                    "relationships": {
+                        "betaGroups": {"data": [{"type": "betaGroups", "id": group}]},
+                    },
+                }
+            }, quiet=True)
+            added += 1
+        except SystemExit as error:
+            if getattr(error, "code", None) not in (409, 422):
+                print("a Family & Friends tester could not be added")
+    if added:
+        print(f"added {added} Family & Friends testers")
+    else:
+        print("Family & Friends testers were already on the group or could not be copied")
+
+
+def link_external_group(auth, build_id, group):
     print("adding build to external group " + EXTERNAL_GROUP_NAME)
     try:
         api("POST", f"/v1/builds/{build_id}/relationships/betaGroups", auth, {
-            "data": [{"type": "betaGroups", "id": EXTERNAL_GROUP_ID}],
+            "data": [{"type": "betaGroups", "id": group}],
         })
     except SystemExit as error:
         code = getattr(error, "code", None)
-        if code == 409:
-            print("build already in external group " + EXTERNAL_GROUP_NAME)
-            return True
-        if code == 422:
-            print(f"external group link returned {code}")
-            if group_has_build(auth, EXTERNAL_GROUP_ID, build_id) or build_has_group(auth, build_id, EXTERNAL_GROUP_ID):
+        if code in (409, 422):
+            if group_has_build(auth, group, build_id) or build_has_group(auth, build_id, group):
                 print("build added to external group " + EXTERNAL_GROUP_NAME)
                 return True
+            print(f"external group link returned {code}")
             return False
         raise
     print("build added to external group " + EXTERNAL_GROUP_NAME)
     return True
 
 
-def distribute_external(auth, build_id):
-    if link_external_group(auth, build_id):
+def distribute_external(auth, app, build_id):
+    group = find_external_group(auth, app)
+    if link_external_group(auth, build_id, group):
         return
     submitted = submit_beta_review(auth, build_id)
-    if link_external_group(auth, build_id):
+    if link_external_group(auth, build_id, group):
         return
     if submitted:
         print("Family & Friends will receive this build after TestFlight beta review")
@@ -322,7 +385,7 @@ def main():
         answer_export(auth, build_id)
 
     if assigned(auth, group, build_id, False):
-        distribute_external(auth, build_id)
+        distribute_external(auth, app, build_id)
         return
 
     automatic = group_access(auth, group)
@@ -332,7 +395,7 @@ def main():
 
     link_group(auth, build_id, group)
     if assigned(auth, group, build_id, automatic):
-        distribute_external(auth, build_id)
+        distribute_external(auth, app, build_id)
         return
     raise SystemExit("build was not added to internal group Me")
 
