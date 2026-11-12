@@ -48,8 +48,21 @@ final class ScoreTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(crunch.value, 0)
         XCTAssertLessThanOrEqual(crunch.value, 100)
         XCTAssertEqual(ScoreRules.start, 100)
-        XCTAssertGreaterThanOrEqual(oats.value, 95)
-        XCTAssertLessThanOrEqual(oats.value, 100)
+        XCTAssertGreaterThanOrEqual(oats.value, 90)
+        XCTAssertLessThanOrEqual(oats.value, 95)
+        XCTAssertLessThanOrEqual(ScoreRules.refinedPenalty, 10)
+        var eggs = Product.sampleOats
+        eggs.name = "Eggs"
+        eggs.ingredients = "eggs"
+        eggs.fiber = 0
+        eggs.protein = 6
+        XCTAssertEqual(ScoreEngine.score(eggs, notes: []).value, 100)
+        var broccoli = Product.sampleOats
+        broccoli.name = "Broccoli"
+        broccoli.ingredients = "broccoli"
+        broccoli.fiber = 2
+        broccoli.protein = 2
+        XCTAssertEqual(ScoreEngine.score(broccoli, notes: []).value, 100)
         XCTAssertLessThan(crunch.value, 45)
         XCTAssertGreaterThan(oats.value, crunch.value)
         var processed = Product.sampleOats

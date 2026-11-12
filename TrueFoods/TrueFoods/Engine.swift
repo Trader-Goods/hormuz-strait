@@ -10,6 +10,8 @@ enum ScoreRules {
     static let avoidPenalty = 16
     static let dyePenalty = 15
     static let limitPenalty = 8
+    static let grainPenalty = 8
+    static let refinedPenalty = 10
     static let dyeIDs: Set<String> = ["red-40", "yellow-5", "yellow-6", "blue-1", "blue-2", "green-3", "red-3"]
     static let addedSugarDV = 50.0
     static let sodiumDV = 2300.0
@@ -146,8 +148,65 @@ enum ScoreEngine {
             reasons.append(ScoreReason(id: "clean", title: "Simple ingredients", detail: "No ingredients we flag.", tone: .good))
         }
 
+        let nourishment = nourishmentPenalty(product)
+        if nourishment > 0 {
+            value -= nourishment
+            let refined = nourishment >= ScoreRules.refinedPenalty
+            reasons.append(ScoreReason(
+                id: "nourishment",
+                title: refined ? "Mostly refined starch" : "A grain, light on protein",
+                detail: refined ? "Mostly refined starch." : "A grain, light on protein.",
+                tone: .limit
+            ))
+        }
+
         return ScoreReport(value: min(100, max(0, value)), reasons: reasons)
     }
+
+    /// A small nudge, at most 10 points. Ingredients and processing still drive the score.
+    static func nourishmentPenalty(_ product: Product) -> Int {
+        let hay = IngredientBook.normalize(
+            product.ingredients + " " + product.name + " " + product.categories.joined(separator: " ")
+        )
+        if !isDrink(hay) && containsAny(hay, nutrientDenseWords) {
+            return 0
+        }
+        if containsAny(hay, refinedMarkers) && !containsAny(hay, wholeGrainWords) {
+            return ScoreRules.refinedPenalty
+        }
+        if containsAny(hay, grainWords) {
+            return ScoreRules.grainPenalty
+        }
+        return 0
+    }
+
+    private static func isDrink(_ hay: String) -> Bool {
+        containsAny(hay, ["almondmilk", "milk", "beverage", "drink", "juice", "soda"])
+    }
+
+    private static func containsAny(_ hay: String, _ words: [String]) -> Bool {
+        words.contains { hay.contains(IngredientBook.normalize($0)) }
+    }
+
+    private static let nutrientDenseWords = [
+        "broccoli", "spinach", "kale", "lettuce", "carrot", "tomato", "cucumber", "cabbage",
+        "cauliflower", "zucchini", "vegetable", "egg", "eggs", "bean", "beans", "lentil",
+        "chickpea", "salmon", "tuna", "sardine", "cod", "trout", "fish", "walnut", "almond",
+        "cashew", "pecan", "pistachio", "peanut", "hazelnut"
+    ]
+
+    private static let refinedMarkers = [
+        "flour", "maltodextrin", "enriched", "corn syrup", "high fructose"
+    ]
+
+    private static let wholeGrainWords = [
+        "whole grain", "whole wheat", "rolled oats", "oat flakes"
+    ]
+
+    private static let grainWords = [
+        "oat", "oats", "oatmeal", "rice", "wheat", "barley", "quinoa", "grain", "cereal",
+        "bread", "pasta", "starch"
+    ]
 
     static func ingredientCount(_ text: String) -> Int {
         text.split(separator: ",")
