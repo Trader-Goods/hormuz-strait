@@ -36,7 +36,7 @@ enum FoodAPI {
         if folded.contains("sample") {
             found.append(contentsOf: [Product.sampleOats, Product.sampleCrunch])
         }
-        if let remote = try? await openFoodFactsSearch(query) {
+        if let remote = try? await grocerySearch(query) {
             found.append(contentsOf: remote)
         }
         if found.filter({ !$0.isSample }).isEmpty, let fallback = try? await usda(query: query, barcode: nil) {
@@ -121,23 +121,100 @@ enum FoodAPI {
         return parseOFF(product, code: code)
     }
 
-    private static func openFoodFactsSearch(_ query: String) async throws -> [Product] {
+    private static func grocerySearch(_ query: String) async throws -> [Product] {
+        var pool: [GroceryCandidate] = []
+        var seen = Set<String>()
+        func add(_ items: [GroceryCandidate]) {
+            for item in items where seen.insert(item.product.barcode.isEmpty ? item.product.id : item.product.barcode).inserted {
+                pool.append(item)
+            }
+        }
+        let text = (try? await searchAlicious(SearchRank.textQuery(query), pageSize: 50, sort: nil)) ?? []
+        add(text)
+        if let category = SearchRank.categoryQuery(query) {
+            let popular = (try? await searchAlicious(category, pageSize: 24, sort: "-unique_scans_n")) ?? []
+            add(popular)
+        }
+        var ranked = SearchRank.ordered(query, pool)
+        if ranked.isEmpty {
+            add((try? await openFoodFactsSearch(query)) ?? [])
+            ranked = SearchRank.ordered(query, pool)
+        }
+        return Array(ranked.prefix(15).map(\.product))
+    }
+
+    private static func searchAlicious(_ lucene: String, pageSize: Int, sort: String?) async throws -> [GroceryCandidate] {
+        var parts = URLComponents(string: "https://search.openfoodfacts.org/search")!
+        var items = [
+            URLQueryItem(name: "q", value: lucene),
+            URLQueryItem(name: "langs", value: "en"),
+            URLQueryItem(name: "page_size", value: String(pageSize)),
+            URLQueryItem(name: "fields", value: "code,product_name,product_name_en,brands,ingredients_text,additives_tags,nova_group,categories_tags,countries_tags,nutriments,serving_size,unique_scans_n,popularity_key,lang,lc,image_front_small_url,image_front_url,image_url")
+        ]
+        if let sort {
+            items.append(URLQueryItem(name: "sort_by", value: sort))
+        }
+        parts.queryItems = items
+        guard let url = parts.url else { return [] }
+        let json = try await fetchJSON(url, paced: true)
+        let hits = json["hits"] as? [[String: Any]] ?? []
+        return hits.compactMap(candidate(from:))
+    }
+
+    private static func candidate(from item: [String: Any]) -> GroceryCandidate? {
+        let english = englishName(item)
+        guard !english.isEmpty else { return nil }
+        var copy = item
+        copy["product_name"] = english
+        if let brands = item["brands"] as? [String] {
+            copy["brands"] = brands.joined(separator: ", ")
+        } else if let brands = item["brands"] as? [Any] {
+            copy["brands"] = brands.compactMap { $0 as? String }.joined(separator: ", ")
+        }
+        let code = string(item["code"])
+        guard var product = parseOFF(copy, code: code) else { return nil }
+        product.name = english
+        let countries = (item["countries_tags"] as? [String]) ?? []
+        let image = [item["image_front_small_url"], item["image_front_url"], item["image_url"]].contains { string($0).isEmpty == false }
+        return GroceryCandidate(
+            product: product,
+            countries: countries,
+            scans: doubleValue(item["unique_scans_n"]) ?? 0,
+            popularity: doubleValue(item["popularity_key"]) ?? 0,
+            hasImage: image,
+            englishName: english
+        )
+    }
+
+    private static func englishName(_ item: [String: Any]) -> String {
+        let translated = string(item["product_name_en"]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !translated.isEmpty { return translated }
+        let name = string(item["product_name"]).trimmingCharacters(in: .whitespacesAndNewlines)
+        let language = string(item["lang"]).isEmpty ? string(item["lc"]) : string(item["lang"])
+        guard language == "en", !name.isEmpty else { return "" }
+        let accents = CharacterSet(charactersIn: "àâäéèêëïîôùûüçœ")
+        if name.lowercased().unicodeScalars.contains(where: { accents.contains($0) }) { return "" }
+        return name
+    }
+
+    private static func openFoodFactsSearch(_ query: String) async throws -> [GroceryCandidate] {
         var parts = URLComponents(string: "https://world.openfoodfacts.org/cgi/search.pl")!
         parts.queryItems = [
             URLQueryItem(name: "search_terms", value: query),
             URLQueryItem(name: "search_simple", value: "1"),
             URLQueryItem(name: "action", value: "process"),
             URLQueryItem(name: "json", value: "1"),
-            URLQueryItem(name: "page_size", value: "12"),
-            URLQueryItem(name: "fields", value: "code,product_name,brands,ingredients_text,additives_tags,nova_group,categories_tags,nutriments,serving_size")
+            URLQueryItem(name: "page_size", value: "40"),
+            URLQueryItem(name: "sort_by", value: "unique_scans_n"),
+            URLQueryItem(name: "tagtype_0", value: "countries"),
+            URLQueryItem(name: "tag_contains_0", value: "contains"),
+            URLQueryItem(name: "tag_0", value: "united-states"),
+            URLQueryItem(name: "fields", value: "code,product_name,product_name_en,brands,ingredients_text,additives_tags,nova_group,categories_tags,countries_tags,nutriments,serving_size,unique_scans_n,lang,image_front_url")
         ]
         guard let url = parts.url else { return [] }
         let json = try await fetchJSON(url, paced: true)
         let products = json["products"] as? [[String: Any]] ?? []
-        return products.compactMap { item in
-            let code = string(item["code"])
-            return parseOFF(item, code: code)
-        }
+        return products.compactMap(candidate(from:))
     }
 
     private static func openFoodFactsCategory(_ category: String) async throws -> [Product] {

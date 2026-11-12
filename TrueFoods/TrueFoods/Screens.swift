@@ -111,7 +111,9 @@ struct HomeScreen: View {
                     }
                     .buttonStyle(QuietButton())
                 }
-                .padding(24)
+                .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 108)
             }
             .background(Air.canvas)
             .navigationBarHidden(true)
@@ -184,7 +186,9 @@ struct SearchScreen: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 108)
         }
         .background(Air.canvas)
         .navigationTitle(embedded ? "Search" : "")
@@ -237,7 +241,9 @@ struct SavedScreen: View {
                         }
                     }
                 }
-                .padding(24)
+                .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 108)
             }
             .background(Air.canvas)
             .navigationBarHidden(true)
@@ -293,7 +299,9 @@ struct MeScreen: View {
                     .buttonStyle(QuietButton())
                     AboutBlock()
                 }
-                .padding(24)
+                .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 108)
             }
             .background(Air.canvas)
             .navigationBarHidden(true)
@@ -430,13 +438,21 @@ struct ProductScreen: View {
                 Text(shown.sourceDetail)
                     .airySecondary()
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 108)
         }
         .background(Air.canvas)
         .navigationTitle("Food")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { pantry.remember(shown) }
         .task {
+            if shown.ingredients.isEmpty && !shown.barcode.isEmpty && !shown.isSample {
+                if let full = try? await FoodAPI.lookup(barcode: shown.barcode) {
+                    shown = full
+                    pantry.remember(full)
+                }
+            }
             if !shown.isSample {
                 recall = await FoodAPI.recall(for: shown)
                 swaps = await FoodAPI.swaps(for: shown)
@@ -551,7 +567,9 @@ struct ScoreExplainer: View {
                 Text(Copy.disclaimer)
                     .airySecondary()
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 108)
         }
         .background(Air.canvas)
         .navigationTitle("The score")
@@ -629,7 +647,9 @@ struct SnapScreen: View {
                         .airySecondary()
                 }
             }
-            .padding(24)
+            .padding(.horizontal, 24)
+            .padding(.top, 24)
+            .padding(.bottom, 108)
         }
         .background(Air.canvas)
         .navigationTitle("Label")
