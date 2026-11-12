@@ -1,0 +1,1989 @@
+[
+  {
+    "id": "red-40",
+    "title": "Red 40",
+    "names": [
+      "red 40",
+      "allura red",
+      "fd&c red no. 40",
+      "fd&c red 40",
+      "e129"
+    ],
+    "level": "limit",
+    "plain": "Red 40 is a bright dye the FDA allows in food. Some families choose to limit artificial colors. This is not a claim about any brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/color-additives-food"
+  },
+  {
+    "id": "yellow-5",
+    "title": "Yellow 5",
+    "names": [
+      "yellow 5",
+      "tartrazine",
+      "fd&c yellow no. 5",
+      "fd&c yellow 5",
+      "e102"
+    ],
+    "level": "limit",
+    "plain": "Yellow 5 is an artificial color the FDA allows. The label has to list it. Some people choose to limit it.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/color-additives-food"
+  },
+  {
+    "id": "yellow-6",
+    "title": "Yellow 6",
+    "names": [
+      "yellow 6",
+      "sunset yellow",
+      "fd&c yellow no. 6",
+      "fd&c yellow 6",
+      "e110"
+    ],
+    "level": "limit",
+    "plain": "Yellow 6 is an artificial color the FDA allows in food. Some shoppers prefer to limit dyes like this.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/color-additives-food"
+  },
+  {
+    "id": "blue-1",
+    "title": "Blue 1",
+    "names": [
+      "blue 1",
+      "brilliant blue",
+      "fd&c blue no. 1",
+      "fd&c blue 1",
+      "e133"
+    ],
+    "level": "limit",
+    "plain": "Blue 1 is an artificial color the FDA allows. It is a dye, not a fruit or vegetable color.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/color-additives-food"
+  },
+  {
+    "id": "blue-2",
+    "title": "Blue 2",
+    "names": [
+      "blue 2",
+      "indigotine",
+      "indigo carmine",
+      "fd&c blue no. 2",
+      "e132"
+    ],
+    "level": "limit",
+    "plain": "Blue 2 is an artificial color the FDA allows in foods such as candy and drinks.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/color-additives-food"
+  },
+  {
+    "id": "green-3",
+    "title": "Green 3",
+    "names": [
+      "green 3",
+      "fast green",
+      "fd&c green no. 3",
+      "fd&c green 3"
+    ],
+    "level": "limit",
+    "plain": "Green 3 is an artificial color the FDA allows. It is not the same as green from vegetables.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/color-additives-food"
+  },
+  {
+    "id": "red-3",
+    "title": "Red 3",
+    "names": [
+      "red 3",
+      "erythrosine",
+      "fd&c red no. 3",
+      "fd&c red 3",
+      "e127"
+    ],
+    "level": "limit",
+    "plain": "Red 3 is an artificial color. The FDA has tightened where it can be used. Many shoppers choose foods without it.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/color-additives-food"
+  },
+  {
+    "id": "caramel-color",
+    "title": "Caramel color",
+    "names": [
+      "caramel color",
+      "caramel colour",
+      "e150d",
+      "e150c",
+      "e150a",
+      "sulfite ammonia caramel"
+    ],
+    "level": "limit",
+    "plain": "Caramel color is a brown coloring the FDA allows. It is added for color, not as cooked sugar from a home kitchen.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/color-additives-food"
+  },
+  {
+    "id": "annatto",
+    "title": "Annatto",
+    "names": [
+      "annatto",
+      "e160b",
+      "bixin",
+      "norbixin"
+    ],
+    "level": "fine",
+    "plain": "Annatto is a plant color found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "beta-carotene",
+    "title": "Beta carotene",
+    "names": [
+      "beta carotene",
+      "beta-carotene",
+      "e160a"
+    ],
+    "level": "fine",
+    "plain": "Beta carotene is a plant color that the body can turn into vitamin A found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "turmeric",
+    "title": "Turmeric",
+    "names": [
+      "turmeric",
+      "curcumin",
+      "e100"
+    ],
+    "level": "fine",
+    "plain": "Turmeric is a plant color and spice found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "beet-color",
+    "title": "Beet color",
+    "names": [
+      "beet juice",
+      "beet color",
+      "betanin",
+      "e162"
+    ],
+    "level": "fine",
+    "plain": "Beet color is a color from beets found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "paprika-extract",
+    "title": "Paprika extract",
+    "names": [
+      "paprika",
+      "paprika extract",
+      "e160c"
+    ],
+    "level": "fine",
+    "plain": "Paprika extract is a color from peppers found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "titanium-dioxide",
+    "title": "Titanium dioxide",
+    "names": [
+      "titanium dioxide",
+      "e171"
+    ],
+    "level": "limit",
+    "plain": "Titanium dioxide is a white coloring. The FDA still allows it. The European Union no longer allows it in food. That is a difference in rules, not a verdict on a brand.",
+    "sourceName": "EFSA",
+    "sourceURL": "https://www.efsa.europa.eu/en/topics/topic/food-additives"
+  },
+  {
+    "id": "carmine",
+    "title": "Carmine",
+    "names": [
+      "carmine",
+      "cochineal",
+      "e120"
+    ],
+    "level": "limit",
+    "plain": "Carmine is a red color made from insects. The FDA allows it, and the label should say so. It is not a plant color, and it is not vegan.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/color-additives-food"
+  },
+  {
+    "id": "aspartame",
+    "title": "Aspartame",
+    "names": [
+      "aspartame",
+      "e951"
+    ],
+    "level": "limit",
+    "plain": "Aspartame is a low-calorie sweetener the FDA allows within a daily limit. People with phenylketonuria need to avoid it. This is general information, not medical advice.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/aspartame-and-other-sweeteners-food"
+  },
+  {
+    "id": "sucralose",
+    "title": "Sucralose",
+    "names": [
+      "sucralose",
+      "e955"
+    ],
+    "level": "limit",
+    "plain": "Sucralose is a low-calorie sweetener the FDA allows. It is much sweeter than sugar, so foods use a tiny amount.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/aspartame-and-other-sweeteners-food"
+  },
+  {
+    "id": "acesulfame-k",
+    "title": "Acesulfame potassium",
+    "names": [
+      "acesulfame potassium",
+      "acesulfame k",
+      "acesulfame-k",
+      "e950"
+    ],
+    "level": "limit",
+    "plain": "Acesulfame potassium is a low-calorie sweetener the FDA allows. It is often paired with other sweeteners.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/aspartame-and-other-sweeteners-food"
+  },
+  {
+    "id": "saccharin",
+    "title": "Saccharin",
+    "names": [
+      "saccharin",
+      "e954"
+    ],
+    "level": "limit",
+    "plain": "Saccharin is a low-calorie sweetener the FDA allows. It has been used for many years.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/aspartame-and-other-sweeteners-food"
+  },
+  {
+    "id": "stevia",
+    "title": "Stevia",
+    "names": [
+      "stevia",
+      "steviol glycosides",
+      "reb a",
+      "rebaudioside",
+      "e960"
+    ],
+    "level": "fine",
+    "plain": "Stevia is a sweetener from the stevia plant found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/aspartame-and-other-sweeteners-food"
+  },
+  {
+    "id": "monk-fruit",
+    "title": "Monk fruit",
+    "names": [
+      "monk fruit",
+      "luo han",
+      "luo han guo",
+      "siraitia"
+    ],
+    "level": "fine",
+    "plain": "Monk fruit is a sweetener from monk fruit found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/aspartame-and-other-sweeteners-food"
+  },
+  {
+    "id": "sorbitol",
+    "title": "Sorbitol",
+    "names": [
+      "sorbitol",
+      "e420"
+    ],
+    "level": "limit",
+    "plain": "Sorbitol is a sugar alcohol used in sugar-free foods. Large amounts can bother some people's stomachs. This is not medical advice.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "mannitol",
+    "title": "Mannitol",
+    "names": [
+      "mannitol",
+      "e421"
+    ],
+    "level": "limit",
+    "plain": "Mannitol is a sugar alcohol. Large amounts can bother some people's stomachs. Labels on some foods say so.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "xylitol",
+    "title": "Xylitol",
+    "names": [
+      "xylitol",
+      "e967"
+    ],
+    "level": "fine",
+    "plain": "Xylitol is a sugar alcohol used in sugar-free gum and mints found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "erythritol",
+    "title": "Erythritol",
+    "names": [
+      "erythritol",
+      "e968"
+    ],
+    "level": "limit",
+    "plain": "Erythritol is a sugar alcohol the FDA allows. Research about it is still mixed. This note is not a warning about a brand and not medical advice.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "maltitol",
+    "title": "Maltitol",
+    "names": [
+      "maltitol",
+      "e965"
+    ],
+    "level": "limit",
+    "plain": "Maltitol is a sugar alcohol. It still has some calories, and a large amount can bother some stomachs.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "hfcs",
+    "title": "High-fructose corn syrup",
+    "names": [
+      "high fructose corn syrup",
+      "high-fructose corn syrup",
+      "hfcs",
+      "glucose fructose syrup",
+      "glucose-fructose syrup"
+    ],
+    "level": "limit",
+    "plain": "High-fructose corn syrup is a sweetener made from corn. It counts as added sugar. A high amount per serving lowers the score.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/nutrition-facts-label/added-sugars-new-nutrition-facts-label"
+  },
+  {
+    "id": "corn-syrup",
+    "title": "Corn syrup",
+    "names": [
+      "corn syrup"
+    ],
+    "level": "limit",
+    "plain": "Corn syrup is a sugar syrup from corn. It counts toward added sugar when it is used to sweeten a food.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/nutrition-facts-label/added-sugars-new-nutrition-facts-label"
+  },
+  {
+    "id": "dextrose",
+    "title": "Dextrose",
+    "names": [
+      "dextrose",
+      "glucose"
+    ],
+    "level": "fine",
+    "plain": "Dextrose is a simple sugar found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/nutrition-facts-label/added-sugars-new-nutrition-facts-label"
+  },
+  {
+    "id": "sugar",
+    "title": "Sugar",
+    "names": [
+      "sugar",
+      "sucrose",
+      "cane sugar",
+      "beet sugar"
+    ],
+    "level": "fine",
+    "plain": "Sugar is a sweetener. Added sugar per serving is counted in the score found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/nutrition-facts-label/added-sugars-new-nutrition-facts-label"
+  },
+  {
+    "id": "honey",
+    "title": "Honey",
+    "names": [
+      "honey"
+    ],
+    "level": "fine",
+    "plain": "Honey is a sweetener made by bees. It still counts as added sugar when used that way found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/nutrition-facts-label/added-sugars-new-nutrition-facts-label"
+  },
+  {
+    "id": "molasses",
+    "title": "Molasses",
+    "names": [
+      "molasses"
+    ],
+    "level": "fine",
+    "plain": "Molasses is a thick sweetener from sugar cane found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/nutrition-facts-label/added-sugars-new-nutrition-facts-label"
+  },
+  {
+    "id": "agave",
+    "title": "Agave",
+    "names": [
+      "agave",
+      "agave nectar",
+      "agave syrup"
+    ],
+    "level": "limit",
+    "plain": "Agave is a plant syrup used as a sweetener. It still counts as added sugar.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/nutrition-facts-label/added-sugars-new-nutrition-facts-label"
+  },
+  {
+    "id": "invert-sugar",
+    "title": "Invert sugar",
+    "names": [
+      "invert sugar"
+    ],
+    "level": "fine",
+    "plain": "Invert sugar is a liquid form of sugar found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/nutrition-facts-label/added-sugars-new-nutrition-facts-label"
+  },
+  {
+    "id": "maltodextrin",
+    "title": "Maltodextrin",
+    "names": [
+      "maltodextrin"
+    ],
+    "level": "limit",
+    "plain": "Maltodextrin is a processed starch used to thicken or carry flavors. It is allowed in food.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "neotame",
+    "title": "Neotame",
+    "names": [
+      "neotame",
+      "e961"
+    ],
+    "level": "limit",
+    "plain": "Neotame is a low-calorie sweetener the FDA allows in very small amounts.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/aspartame-and-other-sweeteners-food"
+  },
+  {
+    "id": "advantame",
+    "title": "Advantame",
+    "names": [
+      "advantame",
+      "e969"
+    ],
+    "level": "limit",
+    "plain": "Advantame is a low-calorie sweetener the FDA allows in very small amounts.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/aspartame-and-other-sweeteners-food"
+  },
+  {
+    "id": "cyclamate",
+    "title": "Cyclamate",
+    "names": [
+      "cyclamate",
+      "sodium cyclamate",
+      "e952"
+    ],
+    "level": "avoid",
+    "plain": "Cyclamate is not approved as a sweetener in U.S. food. If a label lists it, that is worth a closer look.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/aspartame-and-other-sweeteners-food"
+  },
+  {
+    "id": "sodium-nitrite",
+    "title": "Sodium nitrite",
+    "names": [
+      "sodium nitrite",
+      "e250"
+    ],
+    "level": "limit",
+    "plain": "Sodium nitrite is used to cure meats such as bacon and hot dogs. The FDA sets limits. Health agencies suggest keeping processed meats modest. This is not medical advice.",
+    "sourceName": "WHO",
+    "sourceURL": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet"
+  },
+  {
+    "id": "sodium-nitrate",
+    "title": "Sodium nitrate",
+    "names": [
+      "sodium nitrate",
+      "e251"
+    ],
+    "level": "limit",
+    "plain": "Sodium nitrate is used in some cured meats. The FDA sets limits for it.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "potassium-nitrite",
+    "title": "Potassium nitrite",
+    "names": [
+      "potassium nitrite",
+      "e249"
+    ],
+    "level": "limit",
+    "plain": "Potassium nitrite is a curing salt used in some meats, with FDA limits.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "bha",
+    "title": "BHA",
+    "names": [
+      "bha",
+      "butylated hydroxyanisole",
+      "e320"
+    ],
+    "level": "limit",
+    "plain": "BHA is a preservative that helps fats stay fresh. The FDA allows it. Some shoppers choose to limit it.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "bht",
+    "title": "BHT",
+    "names": [
+      "bht",
+      "butylated hydroxytoluene",
+      "e321"
+    ],
+    "level": "limit",
+    "plain": "BHT is a preservative that helps fats stay fresh. The FDA allows it. Some shoppers choose to limit it.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "tbhq",
+    "title": "TBHQ",
+    "names": [
+      "tbhq",
+      "tertiary butylhydroquinone",
+      "e319"
+    ],
+    "level": "limit",
+    "plain": "TBHQ is a preservative used to keep fats from going stale. The FDA allows a limited amount.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "sodium-benzoate",
+    "title": "Sodium benzoate",
+    "names": [
+      "sodium benzoate",
+      "e211"
+    ],
+    "level": "limit",
+    "plain": "Sodium benzoate is a preservative the FDA allows. It slows spoilage in acidic foods such as soda and dressings.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "potassium-sorbate",
+    "title": "Potassium sorbate",
+    "names": [
+      "potassium sorbate",
+      "e202"
+    ],
+    "level": "fine",
+    "plain": "Potassium sorbate is a preservative that slows mold found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "calcium-propionate",
+    "title": "Calcium propionate",
+    "names": [
+      "calcium propionate",
+      "e282"
+    ],
+    "level": "fine",
+    "plain": "Calcium propionate is a preservative that slows mold in bread found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "sorbic-acid",
+    "title": "Sorbic acid",
+    "names": [
+      "sorbic acid",
+      "e200"
+    ],
+    "level": "fine",
+    "plain": "Sorbic acid is a preservative that slows mold found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "sulfites",
+    "title": "Sulfites",
+    "names": [
+      "sulfites",
+      "sulfur dioxide",
+      "sulphur dioxide",
+      "e220"
+    ],
+    "level": "limit",
+    "plain": "Sulfites keep some foods from browning. The FDA requires a label when they are used at higher levels because some people are sensitive. This is not medical advice.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "sodium-metabisulfite",
+    "title": "Sodium metabisulfite",
+    "names": [
+      "sodium metabisulfite",
+      "e223"
+    ],
+    "level": "limit",
+    "plain": "Sodium metabisulfite is a sulfite preservative. Some people are sensitive to sulfites.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "potassium-metabisulfite",
+    "title": "Potassium metabisulfite",
+    "names": [
+      "potassium metabisulfite",
+      "e224"
+    ],
+    "level": "limit",
+    "plain": "Potassium metabisulfite is a sulfite preservative. Some people are sensitive to sulfites.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "natamycin",
+    "title": "Natamycin",
+    "names": [
+      "natamycin",
+      "e235"
+    ],
+    "level": "fine",
+    "plain": "Natamycin is a preservative used on the surface of some cheeses found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "ascorbic-acid",
+    "title": "Ascorbic acid",
+    "names": [
+      "ascorbic acid",
+      "vitamin c",
+      "e300"
+    ],
+    "level": "fine",
+    "plain": "Ascorbic acid is vitamin C, often used to keep color found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "sodium-erythorbate",
+    "title": "Sodium erythorbate",
+    "names": [
+      "sodium erythorbate",
+      "e316"
+    ],
+    "level": "fine",
+    "plain": "Sodium erythorbate is a form of vitamin C used to keep color in cured meat found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "citric-acid",
+    "title": "Citric acid",
+    "names": [
+      "citric acid",
+      "e330"
+    ],
+    "level": "fine",
+    "plain": "Citric acid is an acid found in citrus, used for tartness and freshness found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "sodium-citrate",
+    "title": "Sodium citrate",
+    "names": [
+      "sodium citrate",
+      "e331"
+    ],
+    "level": "fine",
+    "plain": "Sodium citrate is a salt of citric acid, used to manage tartness found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "lactic-acid",
+    "title": "Lactic acid",
+    "names": [
+      "lactic acid",
+      "e270"
+    ],
+    "level": "fine",
+    "plain": "Lactic acid is an acid found in fermented foods found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "acetic-acid",
+    "title": "Acetic acid",
+    "names": [
+      "acetic acid",
+      "vinegar",
+      "e260"
+    ],
+    "level": "fine",
+    "plain": "Acetic acid is the acid in vinegar found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "malic-acid",
+    "title": "Malic acid",
+    "names": [
+      "malic acid",
+      "e296"
+    ],
+    "level": "fine",
+    "plain": "Malic acid is an acid found in apples, used for tartness found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "phosphoric-acid",
+    "title": "Phosphoric acid",
+    "names": [
+      "phosphoric acid",
+      "e338"
+    ],
+    "level": "limit",
+    "plain": "Phosphoric acid adds tartness, especially in colas. It is allowed. It is not a fruit.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "sodium-phosphate",
+    "title": "Sodium phosphate",
+    "names": [
+      "sodium phosphate",
+      "e339"
+    ],
+    "level": "fine",
+    "plain": "Sodium phosphate is a mineral salt used to keep texture found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "tocopherols",
+    "title": "Tocopherols",
+    "names": [
+      "tocopherols",
+      "mixed tocopherols",
+      "vitamin e",
+      "e306"
+    ],
+    "level": "fine",
+    "plain": "Tocopherols is vitamin E, often used to keep oils fresh found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "rosemary-extract",
+    "title": "Rosemary extract",
+    "names": [
+      "rosemary extract",
+      "rosemary"
+    ],
+    "level": "fine",
+    "plain": "Rosemary extract is an herb extract used to keep fats fresh found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "propyl-gallate",
+    "title": "Propyl gallate",
+    "names": [
+      "propyl gallate",
+      "e310"
+    ],
+    "level": "limit",
+    "plain": "Propyl gallate is a preservative for fats. The FDA allows a limited amount.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "edta",
+    "title": "EDTA",
+    "names": [
+      "edta",
+      "calcium disodium edta",
+      "calcium disodium edta",
+      "e385"
+    ],
+    "level": "fine",
+    "plain": "EDTA is a preservative that binds minerals so food keeps its color found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "cultured-celery",
+    "title": "Cultured celery powder",
+    "names": [
+      "cultured celery powder",
+      "celery powder"
+    ],
+    "level": "limit",
+    "plain": "Celery powder is often used in meats labeled uncured. It can still supply nitrite. Read it as a curing ingredient, not as a vegetable serving.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "partially-hydrogenated",
+    "title": "Partially hydrogenated oil",
+    "names": [
+      "partially hydrogenated",
+      "partially hydrogenated oil",
+      "partially hydrogenated soybean",
+      "partially hydrogenated cottonseed"
+    ],
+    "level": "avoid",
+    "plain": "Partially hydrogenated oils are the main source of industrial trans fat. The FDA removed them from the U.S. food supply. If a label still lists them, that is worth avoiding.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/trans-fat"
+  },
+  {
+    "id": "hydrogenated-oil",
+    "title": "Hydrogenated oil",
+    "names": [
+      "hydrogenated oil",
+      "fully hydrogenated",
+      "hydrogenated soybean",
+      "hydrogenated palm"
+    ],
+    "level": "limit",
+    "plain": "Fully hydrogenated oil is not the same as partially hydrogenated oil. It is still a processed fat. Check which words the label uses.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/trans-fat"
+  },
+  {
+    "id": "palm-oil",
+    "title": "Palm oil",
+    "names": [
+      "palm oil"
+    ],
+    "level": "limit",
+    "plain": "Palm oil is a common cooking fat. It is higher in saturated fat than many liquid oils. Saturated fat is counted in the score.",
+    "sourceName": "WHO",
+    "sourceURL": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet"
+  },
+  {
+    "id": "canola-oil",
+    "title": "Canola oil",
+    "names": [
+      "canola oil",
+      "rapeseed oil"
+    ],
+    "level": "fine",
+    "plain": "Canola oil is a liquid cooking oil found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "olive-oil",
+    "title": "Olive oil",
+    "names": [
+      "olive oil"
+    ],
+    "level": "fine",
+    "plain": "Olive oil is an oil pressed from olives found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "sunflower-oil",
+    "title": "Sunflower oil",
+    "names": [
+      "sunflower oil"
+    ],
+    "level": "fine",
+    "plain": "Sunflower oil is a liquid oil from sunflower seeds found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "soybean-oil",
+    "title": "Soybean oil",
+    "names": [
+      "soybean oil"
+    ],
+    "level": "fine",
+    "plain": "Soybean oil is a common liquid cooking oil. It is a soy ingredient found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "corn-oil",
+    "title": "Corn oil",
+    "names": [
+      "corn oil"
+    ],
+    "level": "fine",
+    "plain": "Corn oil is a liquid oil from corn found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "coconut-oil",
+    "title": "Coconut oil",
+    "names": [
+      "coconut oil"
+    ],
+    "level": "limit",
+    "plain": "Coconut oil is a plant oil that is high in saturated fat. Saturated fat is counted in the score.",
+    "sourceName": "WHO",
+    "sourceURL": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet"
+  },
+  {
+    "id": "palm-kernel",
+    "title": "Palm kernel oil",
+    "names": [
+      "palm kernel oil"
+    ],
+    "level": "limit",
+    "plain": "Palm kernel oil is high in saturated fat. Saturated fat is counted in the score.",
+    "sourceName": "WHO",
+    "sourceURL": "https://www.who.int/news-room/fact-sheets/detail/healthy-diet"
+  },
+  {
+    "id": "mono-diglycerides",
+    "title": "Mono and diglycerides",
+    "names": [
+      "mono and diglycerides",
+      "monoglycerides",
+      "diglycerides",
+      "e471"
+    ],
+    "level": "fine",
+    "plain": "Mono and diglycerides is fats used to blend oil and water found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "polysorbate-80",
+    "title": "Polysorbate 80",
+    "names": [
+      "polysorbate 80",
+      "e433"
+    ],
+    "level": "limit",
+    "plain": "Polysorbate 80 helps oil and water stay mixed. The FDA allows it in set amounts.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "soy-lecithin",
+    "title": "Lecithin",
+    "names": [
+      "lecithin",
+      "soy lecithin",
+      "sunflower lecithin",
+      "e322"
+    ],
+    "level": "fine",
+    "plain": "Lecithin is an emulsifier, often from soy or sunflower found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "datem",
+    "title": "DATEM",
+    "names": [
+      "datem",
+      "e472e",
+      "diacetyl tartaric"
+    ],
+    "level": "fine",
+    "plain": "DATEM is a dough strengthener used in some breads found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "ssl",
+    "title": "Sodium stearoyl lactylate",
+    "names": [
+      "sodium stearoyl lactylate",
+      "e481"
+    ],
+    "level": "fine",
+    "plain": "Sodium stearoyl lactylate is a dough conditioner used in some breads found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "interesterified",
+    "title": "Interesterified fat",
+    "names": [
+      "interesterified"
+    ],
+    "level": "limit",
+    "plain": "Interesterified fat is a processed fat used to change texture. It is not the same as partially hydrogenated oil.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "carrageenan",
+    "title": "Carrageenan",
+    "names": [
+      "carrageenan",
+      "e407"
+    ],
+    "level": "limit",
+    "plain": "Carrageenan is a thickener made from seaweed. It is allowed in food. Some people prefer to limit it. Research opinions differ, and this is not a verdict on a brand.",
+    "sourceName": "EFSA",
+    "sourceURL": "https://www.efsa.europa.eu/en/topics/topic/food-additives"
+  },
+  {
+    "id": "xanthan",
+    "title": "Xanthan gum",
+    "names": [
+      "xanthan gum",
+      "xanthan",
+      "e415"
+    ],
+    "level": "fine",
+    "plain": "Xanthan gum is a thickener made by fermentation found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "guar",
+    "title": "Guar gum",
+    "names": [
+      "guar gum",
+      "e412"
+    ],
+    "level": "fine",
+    "plain": "Guar gum is a thickener from guar beans found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "locust",
+    "title": "Locust bean gum",
+    "names": [
+      "locust bean gum",
+      "carob bean gum",
+      "e410"
+    ],
+    "level": "fine",
+    "plain": "Locust bean gum is a thickener from carob seeds found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "gellan",
+    "title": "Gellan gum",
+    "names": [
+      "gellan gum",
+      "e418"
+    ],
+    "level": "fine",
+    "plain": "Gellan gum is a thickener made by fermentation found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "cellulose",
+    "title": "Cellulose",
+    "names": [
+      "cellulose",
+      "e460",
+      "microcrystalline cellulose"
+    ],
+    "level": "fine",
+    "plain": "Cellulose is plant fiber used to add bulk or prevent caking found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "cellulose-gum",
+    "title": "Cellulose gum",
+    "names": [
+      "cellulose gum",
+      "carboxymethylcellulose",
+      "carboxymethyl cellulose",
+      "e466"
+    ],
+    "level": "limit",
+    "plain": "Cellulose gum is a thickener made from plant fiber that has been processed. It is allowed in food.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "modified-starch",
+    "title": "Modified food starch",
+    "names": [
+      "modified food starch",
+      "modified starch",
+      "modified corn starch"
+    ],
+    "level": "fine",
+    "plain": "Modified food starch is starch treated so it thickens more evenly found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "pectin",
+    "title": "Pectin",
+    "names": [
+      "pectin",
+      "e440"
+    ],
+    "level": "fine",
+    "plain": "Pectin is a fiber from fruit, used to thicken jams found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "gelatin",
+    "title": "Gelatin",
+    "names": [
+      "gelatin",
+      "gelatine"
+    ],
+    "level": "fine",
+    "plain": "Gelatin is a protein from animal collagen. It is not vegan found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "agar",
+    "title": "Agar",
+    "names": [
+      "agar",
+      "e406"
+    ],
+    "level": "fine",
+    "plain": "Agar is a thickener from seaweed found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "alginate",
+    "title": "Sodium alginate",
+    "names": [
+      "sodium alginate",
+      "e401"
+    ],
+    "level": "fine",
+    "plain": "Sodium alginate is a thickener from seaweed found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "silicon-dioxide",
+    "title": "Silicon dioxide",
+    "names": [
+      "silicon dioxide",
+      "e551"
+    ],
+    "level": "fine",
+    "plain": "Silicon dioxide is a mineral that keeps powders from clumping found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "acacia",
+    "title": "Gum arabic",
+    "names": [
+      "gum arabic",
+      "acacia gum",
+      "e414"
+    ],
+    "level": "fine",
+    "plain": "Gum arabic is a thickener from the acacia tree found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "tara",
+    "title": "Tara gum",
+    "names": [
+      "tara gum",
+      "e417"
+    ],
+    "level": "fine",
+    "plain": "Tara gum is a thickener from tara seeds found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "pga",
+    "title": "Propylene glycol alginate",
+    "names": [
+      "propylene glycol alginate",
+      "e405"
+    ],
+    "level": "fine",
+    "plain": "Propylene glycol alginate is a thickener from seaweed, used in dressings found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "msg",
+    "title": "Monosodium glutamate",
+    "names": [
+      "monosodium glutamate",
+      "msg",
+      "e621"
+    ],
+    "level": "fine",
+    "plain": "Monosodium glutamate is a flavor enhancer. The FDA treats it as safe. A few people say they feel unwell after large amounts. This is not medical advice found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "inosinate",
+    "title": "Disodium inosinate",
+    "names": [
+      "disodium inosinate",
+      "e631"
+    ],
+    "level": "fine",
+    "plain": "Disodium inosinate is a flavor helper often used with monosodium glutamate found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "guanylate",
+    "title": "Disodium guanylate",
+    "names": [
+      "disodium guanylate",
+      "e627"
+    ],
+    "level": "fine",
+    "plain": "Disodium guanylate is a flavor helper often used with monosodium glutamate found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "yeast-extract",
+    "title": "Yeast extract",
+    "names": [
+      "yeast extract",
+      "autolyzed yeast"
+    ],
+    "level": "fine",
+    "plain": "Yeast extract is a savory flavor from yeast found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "natural-flavors",
+    "title": "Natural flavors",
+    "names": [
+      "natural flavors",
+      "natural flavor"
+    ],
+    "level": "fine",
+    "plain": "Natural flavors is flavors from plants or animals. The word natural does not mean the whole food is unprocessed found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "artificial-flavors",
+    "title": "Artificial flavors",
+    "names": [
+      "artificial flavors",
+      "artificial flavor"
+    ],
+    "level": "limit",
+    "plain": "Artificial flavors are made to taste like a food. They are allowed. They are not the food itself.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "smoke-flavor",
+    "title": "Smoke flavor",
+    "names": [
+      "smoke flavor",
+      "smoke flavour"
+    ],
+    "level": "fine",
+    "plain": "Smoke flavor is a flavor that tastes like smoke found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "hydrolyzed",
+    "title": "Hydrolyzed protein",
+    "names": [
+      "hydrolyzed protein",
+      "hydrolyzed soy",
+      "hydrolyzed vegetable protein",
+      "hydrolyzed corn"
+    ],
+    "level": "limit",
+    "plain": "Hydrolyzed protein is a savory ingredient made by breaking a protein apart. The source, such as soy or corn, matters for allergies.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "caffeine",
+    "title": "Caffeine",
+    "names": [
+      "caffeine"
+    ],
+    "level": "limit",
+    "plain": "Caffeine is a stimulant. It is allowed in foods and drinks. Many people limit how much they have, especially for kids and during pregnancy. This is not medical advice.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "potassium-bromate",
+    "title": "Potassium bromate",
+    "names": [
+      "potassium bromate"
+    ],
+    "level": "avoid",
+    "plain": "Potassium bromate is a dough conditioner. Many countries do not allow it. Some U.S. bakers have stopped using it. If you see it, many shoppers skip that bread.",
+    "sourceName": "EFSA",
+    "sourceURL": "https://www.efsa.europa.eu/en/topics/topic/food-additives"
+  },
+  {
+    "id": "azodicarbonamide",
+    "title": "Azodicarbonamide",
+    "names": [
+      "azodicarbonamide",
+      "ada"
+    ],
+    "level": "limit",
+    "plain": "Azodicarbonamide is a dough conditioner the FDA allows. It is not allowed in bread in the European Union.",
+    "sourceName": "EFSA",
+    "sourceURL": "https://www.efsa.europa.eu/en/topics/topic/food-additives"
+  },
+  {
+    "id": "bvo",
+    "title": "Brominated vegetable oil",
+    "names": [
+      "brominated vegetable oil",
+      "bvo"
+    ],
+    "level": "avoid",
+    "plain": "The FDA no longer allows brominated vegetable oil in food. If an older label still lists it, skip that drink.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/brominated-vegetable-oil-bvo"
+  },
+  {
+    "id": "calcium-chloride",
+    "title": "Calcium chloride",
+    "names": [
+      "calcium chloride",
+      "e509"
+    ],
+    "level": "fine",
+    "plain": "Calcium chloride is a mineral salt used in cheese and canned vegetables found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "potassium-chloride",
+    "title": "Potassium chloride",
+    "names": [
+      "potassium chloride"
+    ],
+    "level": "fine",
+    "plain": "Potassium chloride is a salt substitute. It is not the same as table salt found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "baking-soda",
+    "title": "Baking soda",
+    "names": [
+      "baking soda",
+      "sodium bicarbonate",
+      "bicarbonate of soda",
+      "e500"
+    ],
+    "level": "fine",
+    "plain": "Baking soda is a leavening ingredient found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "baking-powder",
+    "title": "Baking powder",
+    "names": [
+      "baking powder",
+      "monocalcium phosphate"
+    ],
+    "level": "fine",
+    "plain": "Baking powder is a leavening mix used in baked foods found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "calcium-carbonate",
+    "title": "Calcium carbonate",
+    "names": [
+      "calcium carbonate",
+      "e170"
+    ],
+    "level": "fine",
+    "plain": "Calcium carbonate is a calcium mineral, also used as a white color found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "salt",
+    "title": "Salt",
+    "names": [
+      "salt",
+      "sea salt",
+      "sodium chloride"
+    ],
+    "level": "fine",
+    "plain": "Salt is sodium chloride. A high amount of sodium per serving lowers the score found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/nutrition-education-resources-materials/sodium-your-diet"
+  },
+  {
+    "id": "glycerin",
+    "title": "Glycerin",
+    "names": [
+      "glycerin",
+      "glycerol",
+      "glycerine",
+      "e422"
+    ],
+    "level": "fine",
+    "plain": "Glycerin is a sweet thick liquid used to keep foods soft found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "propylene-glycol",
+    "title": "Propylene glycol",
+    "names": [
+      "propylene glycol",
+      "e1520"
+    ],
+    "level": "limit",
+    "plain": "Propylene glycol keeps some foods moist and carries flavors. The FDA allows a limited amount in food. It is not the antifreeze chemical ethylene glycol.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "carnauba",
+    "title": "Carnauba wax",
+    "names": [
+      "carnauba wax",
+      "e903"
+    ],
+    "level": "fine",
+    "plain": "Carnauba wax is a plant wax used to shine some candies and fruit found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "beeswax",
+    "title": "Beeswax",
+    "names": [
+      "beeswax",
+      "e901"
+    ],
+    "level": "fine",
+    "plain": "Beeswax is a wax from bees, used to shine some foods. It is not vegan found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "shellac",
+    "title": "Shellac",
+    "names": [
+      "shellac",
+      "confectioners glaze",
+      "confectioner's glaze",
+      "e904"
+    ],
+    "level": "limit",
+    "plain": "Shellac is a glaze from an insect resin, used to shine candy. It is allowed. It is not vegan.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "polydextrose",
+    "title": "Polydextrose",
+    "names": [
+      "polydextrose",
+      "e1200"
+    ],
+    "level": "fine",
+    "plain": "Polydextrose is a processed fiber used to add bulk with fewer calories found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "inulin",
+    "title": "Inulin",
+    "names": [
+      "inulin",
+      "chicory root",
+      "chicory root fiber"
+    ],
+    "level": "fine",
+    "plain": "Inulin is a fiber from chicory or other plants found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "whey",
+    "title": "Whey",
+    "names": [
+      "whey",
+      "whey protein"
+    ],
+    "level": "fine",
+    "plain": "Whey is a protein from milk found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "casein",
+    "title": "Casein",
+    "names": [
+      "casein",
+      "sodium caseinate",
+      "calcium caseinate"
+    ],
+    "level": "fine",
+    "plain": "Casein is a protein from milk found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "soy-protein",
+    "title": "Soy protein isolate",
+    "names": [
+      "soy protein isolate",
+      "isolated soy protein"
+    ],
+    "level": "limit",
+    "plain": "Soy protein isolate is protein taken out of soybeans and dried. It is a processed soy ingredient.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "pea-protein",
+    "title": "Pea protein",
+    "names": [
+      "pea protein"
+    ],
+    "level": "fine",
+    "plain": "Pea protein is protein from peas found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "wheat-gluten",
+    "title": "Wheat gluten",
+    "names": [
+      "wheat gluten",
+      "vital wheat gluten",
+      "gluten"
+    ],
+    "level": "fine",
+    "plain": "Wheat gluten is the protein in wheat. It matters if you avoid wheat found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "corn-starch",
+    "title": "Corn starch",
+    "names": [
+      "corn starch",
+      "cornstarch"
+    ],
+    "level": "fine",
+    "plain": "Corn starch is a starch from corn, used to thicken found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "rice-starch",
+    "title": "Rice starch",
+    "names": [
+      "rice starch"
+    ],
+    "level": "fine",
+    "plain": "Rice starch is a starch from rice found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "tapioca",
+    "title": "Tapioca starch",
+    "names": [
+      "tapioca",
+      "tapioca starch"
+    ],
+    "level": "fine",
+    "plain": "Tapioca starch is a starch from cassava found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "potato-starch",
+    "title": "Potato starch",
+    "names": [
+      "potato starch"
+    ],
+    "level": "fine",
+    "plain": "Potato starch is a starch from potatoes found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "niacin",
+    "title": "Niacin",
+    "names": [
+      "niacin",
+      "niacinamide",
+      "vitamin b3"
+    ],
+    "level": "fine",
+    "plain": "Niacin is a B vitamin often added to flour and cereal found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "riboflavin",
+    "title": "Riboflavin",
+    "names": [
+      "riboflavin",
+      "vitamin b2",
+      "e101"
+    ],
+    "level": "fine",
+    "plain": "Riboflavin is a B vitamin, also used as a yellow color found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "thiamin",
+    "title": "Thiamin",
+    "names": [
+      "thiamin",
+      "thiamine",
+      "vitamin b1"
+    ],
+    "level": "fine",
+    "plain": "Thiamin is a B vitamin often added to flour found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "vitamin-b6",
+    "title": "Vitamin B6",
+    "names": [
+      "pyridoxine",
+      "vitamin b6"
+    ],
+    "level": "fine",
+    "plain": "Vitamin B6 is a B vitamin found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "vitamin-b12",
+    "title": "Vitamin B12",
+    "names": [
+      "cyanocobalamin",
+      "vitamin b12"
+    ],
+    "level": "fine",
+    "plain": "Vitamin B12 is a B vitamin found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "vitamin-d",
+    "title": "Vitamin D",
+    "names": [
+      "cholecalciferol",
+      "ergocalciferol",
+      "vitamin d"
+    ],
+    "level": "fine",
+    "plain": "Vitamin D is a vitamin often added to milk and cereal found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "vitamin-a",
+    "title": "Vitamin A",
+    "names": [
+      "retinyl palmitate",
+      "vitamin a palmitate",
+      "vitamin a"
+    ],
+    "level": "fine",
+    "plain": "Vitamin A is a vitamin. Very high amounts from supplements are a separate question for a clinician found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "folic-acid",
+    "title": "Folic acid",
+    "names": [
+      "folic acid",
+      "folate"
+    ],
+    "level": "fine",
+    "plain": "Folic acid is a B vitamin added to many grain foods found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "iron",
+    "title": "Iron",
+    "names": [
+      "ferrous sulfate",
+      "ferrous fumarate",
+      "reduced iron",
+      "iron"
+    ],
+    "level": "fine",
+    "plain": "Iron is a mineral often added to cereal and flour found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "zinc",
+    "title": "Zinc",
+    "names": [
+      "zinc oxide",
+      "zinc sulfate"
+    ],
+    "level": "fine",
+    "plain": "Zinc is a mineral sometimes added to food found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "calcium-sulfate",
+    "title": "Calcium sulfate",
+    "names": [
+      "calcium sulfate",
+      "e516"
+    ],
+    "level": "fine",
+    "plain": "Calcium sulfate is a calcium mineral used in some baked foods and tofu found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "sodium-aluminum-phosphate",
+    "title": "Sodium aluminum phosphate",
+    "names": [
+      "sodium aluminum phosphate",
+      "sodium aluminium phosphate"
+    ],
+    "level": "limit",
+    "plain": "Sodium aluminum phosphate helps baked foods rise. It is allowed. Some shoppers limit extra aluminum ingredients.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "calcium-peroxide",
+    "title": "Calcium peroxide",
+    "names": [
+      "calcium peroxide"
+    ],
+    "level": "fine",
+    "plain": "Calcium peroxide is a dough conditioner the FDA allows found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "benzoyl-peroxide",
+    "title": "Benzoyl peroxide",
+    "names": [
+      "benzoyl peroxide"
+    ],
+    "level": "limit",
+    "plain": "Benzoyl peroxide is used to bleach some flour. The FDA allows it for that use.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "trisodium-phosphate",
+    "title": "Trisodium phosphate",
+    "names": [
+      "trisodium phosphate"
+    ],
+    "level": "limit",
+    "plain": "Trisodium phosphate is a processing salt used to manage tartness and texture. It is allowed in food.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "sodium-hydroxide",
+    "title": "Sodium hydroxide",
+    "names": [
+      "sodium hydroxide",
+      "e524"
+    ],
+    "level": "fine",
+    "plain": "Sodium hydroxide is a processing aid used, for example, to soften olives. It is not present as a household chemical in the finished food found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "olestra",
+    "title": "Olestra",
+    "names": [
+      "olestra",
+      "olean"
+    ],
+    "level": "limit",
+    "plain": "Olestra is a fat substitute the FDA allows in some snacks. It can bother some people's stomachs.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "transglutaminase",
+    "title": "Transglutaminase",
+    "names": [
+      "transglutaminase"
+    ],
+    "level": "fine",
+    "plain": "Transglutaminase is an enzyme used to bind pieces of protein, sometimes called meat glue found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "allulose",
+    "title": "Allulose",
+    "names": [
+      "allulose"
+    ],
+    "level": "fine",
+    "plain": "Allulose is a low-calorie sugar found in small amounts in some fruit found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "lactitol",
+    "title": "Isomalt and lactitol",
+    "names": [
+      "lactitol",
+      "isomalt",
+      "e953"
+    ],
+    "level": "fine",
+    "plain": "Isomalt and lactitol is sugar alcohols used in sugar-free sweets found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "vanillin",
+    "title": "Artificial vanilla",
+    "names": [
+      "ethyl vanillin",
+      "vanillin"
+    ],
+    "level": "limit",
+    "plain": "Vanillin is a vanilla flavor that can be made in a factory. It is allowed. It is not the same as a vanilla bean.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "oat-fiber",
+    "title": "Oat fiber",
+    "names": [
+      "oat fiber"
+    ],
+    "level": "fine",
+    "plain": "Oat fiber is fiber from oats found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "sunflower-lecithin",
+    "title": "Sunflower lecithin",
+    "names": [
+      "sunflower lecithin"
+    ],
+    "level": "fine",
+    "plain": "Sunflower lecithin is an emulsifier from sunflower seeds found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "cottonseed-oil",
+    "title": "Cottonseed oil",
+    "names": [
+      "cottonseed oil"
+    ],
+    "level": "limit",
+    "plain": "Cottonseed oil is a common cooking oil in packaged food. It is a processed seed oil.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "safflower-oil",
+    "title": "Safflower oil",
+    "names": [
+      "safflower oil"
+    ],
+    "level": "fine",
+    "plain": "Safflower oil is a liquid oil from safflower seeds found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "cultures",
+    "title": "Bacterial cultures",
+    "names": [
+      "cultures",
+      "live cultures",
+      "lactic cultures"
+    ],
+    "level": "fine",
+    "plain": "Bacterial cultures is helpful bacteria used to make yogurt and cheese found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "enzymes",
+    "title": "Enzymes",
+    "names": [
+      "enzymes",
+      "microbial enzymes"
+    ],
+    "level": "fine",
+    "plain": "Enzymes is helpers used to make cheese, bread, and juice found in everyday food. U.S. rules allow it. This is general information, not a rating of a brand.",
+    "sourceName": "FDA",
+    "sourceURL": "https://www.fda.gov/food/food-additives-petitions/food-additive-status-list"
+  },
+  {
+    "id": "trans-fat",
+    "title": "Trans fat",
+    "names": [
+      "trans fat",
+      "trans fats"
+    ],
+    "level": "avoid",
+    "plain": "Trans fat from partially hydrogenated oils is something the FDA moved out of the U.S. food supply. A line that still lists trans fat is worth avoiding.",
+    "sourceName": "WHO",
+    "sourceURL": "https://www.who.int/news-room/fact-sheets/detail/trans-fat"
+  }
+]
