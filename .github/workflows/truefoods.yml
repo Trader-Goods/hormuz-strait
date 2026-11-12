@@ -111,32 +111,20 @@ jobs:
         env:
           KID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISS: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          EXPECTED_BUILD: ${{ github.run_number }}
         run: |
           set -euo pipefail
-          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict>
-            <key>method</key><string>app-store-connect</string>
-            <key>signingStyle</key><string>manual</string>
-            <key>signingCertificate</key><string>Apple Distribution</string>
-            <key>teamID</key><string>${TEAM_ID}</string>
-            <key>provisioningProfiles</key>
-            <dict>
-              <key>${BUNDLE_ID}</key>
-              <string>${PROFILE_NAME}</string>
-            </dict>
-            <key>destination</key><string>upload</string>
-            <key>manageAppVersionAndBuildNumber</key><false/>
-          </dict></plist>
-          PLIST
-          xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/TrueFoods.xcarchive" \
-            -exportPath "$RUNNER_TEMP/upload" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
-            -authenticationKeyPath "$KEY_PATH" \
-            -authenticationKeyID "$KID" \
-            -authenticationKeyIssuerID "$ISS"
+          IPA="$(find "$RUNNER_TEMP/ipa" -name '*.ipa' -print -quit)"
+          test -n "$IPA"
+          unzip -p "$IPA" 'Payload/*.app/Info.plist' > "$RUNNER_TEMP/AppInfo.plist"
+          VERSION="$(plutil -extract CFBundleVersion raw "$RUNNER_TEMP/AppInfo.plist")"
+          echo "IPA CFBundleVersion=$VERSION expected=$EXPECTED_BUILD"
+          test "$VERSION" = "$EXPECTED_BUILD"
+          xcrun iTMSTransporter -m upload \
+            -assetFile "$IPA" \
+            -apiKey "$KID" \
+            -apiIssuer "$ISS" \
+            -v detailed
 
       - name: Add build to Me and Family and Friends
         env:
