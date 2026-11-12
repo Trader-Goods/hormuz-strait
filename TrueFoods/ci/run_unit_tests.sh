@@ -5,22 +5,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 UDID="$(python3 "$ROOT/TrueFoods/ci/pick_simulator.py")"
 
-xcrun simctl boot "$UDID" || true
-
-python3 - "$UDID" << 'PY'
-import subprocess, sys, time
-udid = sys.argv[1]
-proc = subprocess.Popen(["xcrun", "simctl", "bootstatus", udid, "-b"])
-deadline = time.time() + 240
-while proc.poll() is None:
-    if time.time() > deadline:
-        proc.kill()
-        sys.exit("simulator boot timed out after 4 minutes")
-    time.sleep(2)
-if proc.returncode != 0:
-    sys.exit(proc.returncode)
-PY
-
+# xcodebuild boots the simulator itself. A separate bootstatus wait can sit forever
+# on these runners, so the only hard stop is the test command.
 python3 - "$UDID" "$ROOT" << 'PY'
 import subprocess, sys, time
 udid, root = sys.argv[1], sys.argv[2]
@@ -32,11 +18,12 @@ cmd = [
     "CODE_SIGNING_ALLOWED=NO",
 ]
 proc = subprocess.Popen(cmd)
-deadline = time.time() + 12 * 60
+deadline = time.time() + 20 * 60
 while proc.poll() is None:
     if time.time() > deadline:
         proc.kill()
-        sys.exit("unit tests timed out after 12 minutes")
+        subprocess.run(["xcrun", "simctl", "shutdown", udid], check=False)
+        sys.exit("unit tests timed out after 20 minutes")
     time.sleep(5)
 sys.exit(proc.returncode)
 PY

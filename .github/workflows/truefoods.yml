@@ -30,7 +30,7 @@ jobs:
           xcodebuild -version
 
       - name: Unit tests
-        timeout-minutes: 20
+        timeout-minutes: 25
         run: bash TrueFoods/ci/run_unit_tests.sh
 
       - name: Write API key
