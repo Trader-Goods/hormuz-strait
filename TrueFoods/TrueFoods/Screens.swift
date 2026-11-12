@@ -680,7 +680,7 @@ struct AboutBlock: View {
             credit("Tomatoes, peppers, and mushrooms", "engin akyurt", "https://www.pexels.com/photo/1435904/")
             credit("Leafy greens", "Karolina Grabowska", "https://www.pexels.com/photo/4198024/")
             credit("Garden vegetables", "Magda Ehlers", "https://www.pexels.com/photo/1300972/")
-            credit("Apple, including the app icon", "Markus Maeder", "https://www.pexels.com/photo/102104/")
+            credit("App icon background, green hills", "Sergio Zhukov", "https://www.pexels.com/photo/scenic-green-hills-and-blue-skies-landscape-28578392/")
             if let mail = URL(string: "mailto:\(Copy.support)") {
                 Link("Email \(Copy.support)", destination: mail)
                     .font(.system(size: 18, weight: .semibold))
