@@ -120,11 +120,14 @@ jobs:
           VERSION="$(plutil -extract CFBundleVersion raw "$RUNNER_TEMP/AppInfo.plist")"
           echo "IPA CFBundleVersion=$VERSION expected=$EXPECTED_BUILD"
           test "$VERSION" = "$EXPECTED_BUILD"
-          xcrun iTMSTransporter -m upload \
-            -assetFile "$IPA" \
-            -apiKey "$KID" \
-            -apiIssuer "$ISS" \
-            -v detailed
+          # Xcode 26 removed the standalone iTMSTransporter binary. altool still
+          # uploads and prints the App Store Connect rejection on stdout.
+          xcrun altool --upload-app \
+            -f "$IPA" \
+            -t ios \
+            --apiKey "$KID" \
+            --apiIssuer "$ISS" \
+            --verbose
 
       - name: Add build to Me and Family and Friends
         env:
