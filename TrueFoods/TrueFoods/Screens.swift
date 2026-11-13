@@ -81,10 +81,10 @@ struct HomeScreen: View {
                             Text(message)
                                 .airyBody()
                         }
-                        if !pantry.history.isEmpty {
+                        if !recentFoods.isEmpty {
                             Text("Recent")
                                 .airyTitle()
-                            ForEach(pantry.history.prefix(3)) { item in
+                            ForEach(recentFoods) { item in
                                 NavigationLink {
                                     ProductScreen(product: item)
                                 } label: {
@@ -119,6 +119,13 @@ struct HomeScreen: View {
         }
     }
 
+    private var recentFoods: [Product] {
+        if Shot.current == .home, pantry.history.isEmpty {
+            return [Product.sampleEggs, Product.sampleCrunch]
+        }
+        return Array(pantry.history.prefix(3))
+    }
+
     private var homeHero: some View {
         Color.clear
             .frame(height: 300)
@@ -132,30 +139,41 @@ struct HomeScreen: View {
             .overlay {
                 LinearGradient(
                     stops: [
-                        .init(color: .black.opacity(0.08), location: 0),
-                        .init(color: .black.opacity(0.12), location: 0.45),
-                        .init(color: .black.opacity(0.42), location: 0.72),
+                        .init(color: .clear, location: 0.78),
                         .init(color: Air.canvas, location: 1)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
                 )
             }
-            .overlay(alignment: .bottomLeading) {
+            .overlay(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("TrueFoods")
-                        .font(.system(size: 40, weight: .semibold, design: .rounded))
+                        .font(.system(size: 40, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                     Text("Scan a barcode. See the good and the bad.")
-                        .font(.system(size: 18, weight: .regular))
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white)
-                        .lineSpacing(4)
+                        .lineSpacing(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(16)
-                .background(Color.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .padding(.horizontal, 16)
-                .padding(.bottom, 36)
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.05, green: 0.30, blue: 0.16),
+                            Color(red: 0.11, green: 0.46, blue: 0.23),
+                            Color(red: 0.16, green: 0.55, blue: 0.27)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .shadow(color: Color(red: 0.04, green: 0.22, blue: 0.10).opacity(0.35), radius: 14, y: 8)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 28)
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("TrueFoods. Scan a barcode. See the good and the bad.")
@@ -363,21 +381,25 @@ struct ProductScreen: View {
                     Text("Sample food, so you can see this screen. Not a real product.")
                         .airySecondary()
                 }
-                Text(shown.displayName)
-                    .airyTitle()
-                if !shown.brand.isEmpty {
-                    Text(shown.brand)
-                        .airySecondary()
+                ScoreCard(score: report.value) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(shown.displayName)
+                            .airyTitle()
+                        if !shown.brand.isEmpty {
+                            Text(shown.brand)
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(Air.ink.opacity(0.75))
+                        }
+                        HStack(alignment: .center, spacing: 16) {
+                            ScoreBadge(score: report.value)
+                            Text("out of 100")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(Air.ink)
+                        }
+                    }
                 }
                 Text(shown.source)
                     .airySecondary()
-                SoftCard {
-                    HStack(alignment: .center, spacing: 16) {
-                        ScoreBadge(score: report.value)
-                        Text("out of 100")
-                            .airyBody()
-                    }
-                }
                 ForEach(banners, id: \.self) { line in
                     ToneRow(title: "Check this", detail: line, tone: .avoid)
                 }
@@ -492,21 +514,22 @@ struct FoodCard: View {
     var body: some View {
         let notes = IngredientBook.matches(in: product.ingredients, tags: product.additiveTags)
         let score = ScoreEngine.score(product, notes: notes).value
-        SoftCard {
+        ScoreCard(score: score) {
             HStack(alignment: .center, spacing: 14) {
                 ScoreBadge(score: score, diameter: 64)
                 VStack(alignment: .leading, spacing: 6) {
                     Text(product.displayName)
-                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundStyle(Air.ink)
                         .fixedSize(horizontal: false, vertical: true)
                     if !product.brand.isEmpty {
                         Text(product.brand)
-                            .airySecondary()
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(Air.ink.opacity(0.75))
                     }
                     Text("out of 100")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(ScoreColor.rgb(for: score).color)
+                        .foregroundStyle(Air.ink)
                 }
             }
             .accessibilityElement(children: .ignore)

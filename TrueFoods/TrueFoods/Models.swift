@@ -127,6 +127,29 @@ enum Copy {
 }
 
 extension Product {
+    static let sampleEggs = Product(
+        id: "sample-eggs",
+        name: "Eggs",
+        brand: "Pasture",
+        barcode: "",
+        ingredients: "eggs",
+        additiveTags: [],
+        categories: ["en:eggs"],
+        nova: 1,
+        kcal: 70,
+        sugar: 0,
+        addedSugar: 0,
+        sodiumMg: 70,
+        saturatedFat: 1.5,
+        fiber: 0,
+        protein: 6,
+        basis: "per serving",
+        serving: "1 large",
+        source: "Sample",
+        sourceDetail: "A practice food so you can see the screen. Not a real product.",
+        isSample: true
+    )
+
     static let sampleOats = Product(
         id: "sample-oats",
         name: "Sample rolled oats",

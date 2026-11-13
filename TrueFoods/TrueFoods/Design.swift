@@ -224,14 +224,37 @@ enum ScoreColor {
         }
     }
 
-    /// Darkened #D4A017 so the digits stay readable on the light cards.
+    static let goldMinimum = 95
+    /// Darkened #D4A017 so the digits stay readable on a light gold card.
     static let gold = RGB(red: 140.0 / 255, green: 106.0 / 255, blue: 16.0 / 255)
     static let goldRich = RGB(red: 212.0 / 255, green: 160.0 / 255, blue: 23.0 / 255)
+    static let goldWash = RGB(red: 247.0 / 255, green: 224.0 / 255, blue: 138.0 / 255)
     static let goldHighlight = RGB(red: 232.0 / 255, green: 196.0 / 255, blue: 74.0 / 255)
+
+    struct Fill: Equatable {
+        var top: RGB
+        var bottom: RGB
+        var border: RGB
+    }
+
+    /// Light tint of the score color, or the rich gold gradient from 95 up.
+    static func fill(for score: Int) -> Fill {
+        let value = min(100, max(0, score))
+        if value >= goldMinimum {
+            return Fill(top: goldWash, bottom: goldRich, border: gold)
+        }
+        let ink = rgb(for: value)
+        let white = RGB(red: 1, green: 1, blue: 1)
+        return Fill(
+            top: mix(ink, white, 0.86),
+            bottom: mix(ink, white, 0.70),
+            border: ink
+        )
+    }
 
     static func rgb(for score: Int) -> RGB {
         let value = min(100, max(0, score))
-        if value >= 95 {
+        if value >= goldMinimum {
             return gold
         }
         let stops: [(Int, RGB)] = [
@@ -265,13 +288,15 @@ struct ScoreBadge: View {
     var score: Int
     var diameter: CGFloat = 120
 
+    private var onGold: Bool { score >= ScoreColor.goldMinimum }
+
     var body: some View {
-        let ink = ScoreColor.rgb(for: score).color
+        let ink = onGold ? Air.ink : ScoreColor.rgb(for: score).color
         ZStack {
             Circle()
                 .stroke(ring, lineWidth: max(4, diameter * 0.07))
             Text("\(score)")
-                .font(.system(size: diameter * 0.34, weight: .semibold, design: .rounded))
+                .font(.system(size: diameter * 0.34, weight: .bold, design: .rounded))
                 .foregroundStyle(ink)
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
@@ -281,15 +306,48 @@ struct ScoreBadge: View {
     }
 
     private var ring: AnyShapeStyle {
-        if score >= 95 {
-            return AnyShapeStyle(
-                LinearGradient(
-                    colors: [ScoreColor.goldHighlight.color, ScoreColor.goldRich.color, ScoreColor.gold.color],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+        if onGold {
+            return AnyShapeStyle(Air.ink)
         }
         return AnyShapeStyle(ScoreColor.rgb(for: score).color)
+    }
+}
+
+struct ScoreCard<Content: View>: View {
+    var score: Int
+    var content: Content
+
+    init(score: Int, @ViewBuilder content: () -> Content) {
+        self.score = score
+        self.content = content()
+    }
+
+    var body: some View {
+        let fill = ScoreColor.fill(for: score)
+        content
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                ZStack {
+                    LinearGradient(
+                        colors: [fill.top.color, fill.bottom.color],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    if score >= ScoreColor.goldMinimum {
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.38), Color.white.opacity(0)],
+                            startPoint: .top,
+                            endPoint: .center
+                        )
+                    }
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(fill.border.color, lineWidth: score >= ScoreColor.goldMinimum ? 2 : 1.5)
+            )
+            .shadow(color: fill.border.color.opacity(0.18), radius: 12, y: 6)
     }
 }
