@@ -8,7 +8,7 @@ struct TrueFoodsApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(pantry)
-                .preferredColorScheme(pantry.colorScheme)
+                .preferredColorScheme(.light)
         }
     }
 }

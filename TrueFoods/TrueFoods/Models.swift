@@ -120,18 +120,6 @@ enum Allergen: String, CaseIterable, Identifiable {
     }
 }
 
-enum AppearanceChoice: String, Codable, CaseIterable, Identifiable {
-    case light, dark, system
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .light: return "Light"
-        case .dark: return "Soft dark"
-        case .system: return "Match this phone"
-        }
-    }
-}
-
 enum Copy {
     static let disclaimer = "TrueFoods shares public information in plain words. It is not medical advice, not a diagnosis, and not a reason to start or stop a food. Talk with a clinician about your own health."
     static let support = "support@tradergoods.us"

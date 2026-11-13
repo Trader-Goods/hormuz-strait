@@ -5,7 +5,6 @@ final class Pantry: ObservableObject {
     @Published var history: [Product] = []
     @Published var favorites: [Product] = []
     @Published var flags = PersonalFlags()
-    @Published var appearance: AppearanceChoice = .light
 
     private let folder: URL
     private let encoder = JSONEncoder()
@@ -20,18 +19,6 @@ final class Pantry: ObservableObject {
         if let data = try? Data(contentsOf: folder.appendingPathComponent("flags.json")),
            let saved = try? decoder.decode(PersonalFlags.self, from: data) {
             flags = saved
-        }
-        if let raw = UserDefaults.standard.string(forKey: "truefoods.appearance"),
-           let choice = AppearanceChoice(rawValue: raw) {
-            appearance = choice
-        }
-    }
-
-    var colorScheme: ColorScheme? {
-        switch appearance {
-        case .light: return .light
-        case .dark: return .dark
-        case .system: return nil
         }
     }
 
@@ -59,10 +46,6 @@ final class Pantry: ObservableObject {
         if let data = try? encoder.encode(flags) {
             try? data.write(to: folder.appendingPathComponent("flags.json"), options: .atomic)
         }
-    }
-
-    func saveAppearance() {
-        UserDefaults.standard.set(appearance.rawValue, forKey: "truefoods.appearance")
     }
 
     private func read(_ name: String) -> [Product] {

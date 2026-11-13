@@ -313,19 +313,6 @@ struct MeScreen: View {
                         .tint(Air.leafButton)
                     }
                     .onChange(of: pantry.flags) { _, _ in pantry.saveFlags() }
-                    SoftCard {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Look")
-                                .font(.system(size: 22, weight: .semibold, design: .rounded))
-                            Picker("Look", selection: $pantry.appearance) {
-                                ForEach(AppearanceChoice.allCases) { choice in
-                                    Text(choice.title).tag(choice)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                        }
-                    }
-                    .onChange(of: pantry.appearance) { _, _ in pantry.saveAppearance() }
                     AboutBlock()
                 }
                 .padding(.horizontal, 24)
