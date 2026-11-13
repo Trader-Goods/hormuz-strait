@@ -372,11 +372,8 @@ struct ProductScreen: View {
                 Text(shown.source)
                     .airySecondary()
                 SoftCard {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("\(report.value)")
-                            .font(.system(size: 64, weight: .semibold, design: .rounded))
-                            .foregroundStyle(Air.ink)
-                            .accessibilityLabel("Score \(report.value) out of 100")
+                    HStack(alignment: .center, spacing: 16) {
+                        ScoreBadge(score: report.value)
                         Text("out of 100")
                             .airyBody()
                     }
@@ -496,19 +493,24 @@ struct FoodCard: View {
         let notes = IngredientBook.matches(in: product.ingredients, tags: product.additiveTags)
         let score = ScoreEngine.score(product, notes: notes).value
         SoftCard {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(product.displayName)
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Air.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                if !product.brand.isEmpty {
-                    Text(product.brand)
-                        .airySecondary()
+            HStack(alignment: .center, spacing: 14) {
+                ScoreBadge(score: score, diameter: 64)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(product.displayName)
+                        .font(.system(size: 22, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Air.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !product.brand.isEmpty {
+                        Text(product.brand)
+                            .airySecondary()
+                    }
+                    Text("out of 100")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(ScoreColor.rgb(for: score).color)
                 }
-                Text("Score \(score) out of 100")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Air.leaf)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(product.displayName), \(product.brand), score \(score) out of 100")
         }
     }
 }

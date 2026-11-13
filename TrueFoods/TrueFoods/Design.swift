@@ -211,3 +211,85 @@ struct ToneRow: View {
         }
     }
 }
+
+/// One color for every score number. Low scores are red, the middle moves through orange and yellow, 94 is green, and 95–100 is gold.
+enum ScoreColor {
+    struct RGB: Equatable {
+        var red: Double
+        var green: Double
+        var blue: Double
+
+        var color: Color {
+            Color(red: red, green: green, blue: blue)
+        }
+    }
+
+    /// Darkened #D4A017 so the digits stay readable on the light cards.
+    static let gold = RGB(red: 140.0 / 255, green: 106.0 / 255, blue: 16.0 / 255)
+    static let goldRich = RGB(red: 212.0 / 255, green: 160.0 / 255, blue: 23.0 / 255)
+    static let goldHighlight = RGB(red: 232.0 / 255, green: 196.0 / 255, blue: 74.0 / 255)
+
+    static func rgb(for score: Int) -> RGB {
+        let value = min(100, max(0, score))
+        if value >= 95 {
+            return gold
+        }
+        let stops: [(Int, RGB)] = [
+            (0, RGB(red: 180.0 / 255, green: 35.0 / 255, blue: 24.0 / 255)),
+            (50, RGB(red: 161.0 / 255, green: 78.0 / 255, blue: 0)),
+            (72, RGB(red: 122.0 / 255, green: 104.0 / 255, blue: 0)),
+            (94, RGB(red: 31.0 / 255, green: 107.0 / 255, blue: 58.0 / 255))
+        ]
+        for index in 0..<(stops.count - 1) {
+            let left = stops[index]
+            let right = stops[index + 1]
+            if value <= right.0 {
+                let span = Double(right.0 - left.0)
+                let t = span == 0 ? 0 : Double(value - left.0) / span
+                return mix(left.1, right.1, t)
+            }
+        }
+        return stops[stops.count - 1].1
+    }
+
+    private static func mix(_ start: RGB, _ end: RGB, _ t: Double) -> RGB {
+        RGB(
+            red: start.red + (end.red - start.red) * t,
+            green: start.green + (end.green - start.green) * t,
+            blue: start.blue + (end.blue - start.blue) * t
+        )
+    }
+}
+
+struct ScoreBadge: View {
+    var score: Int
+    var diameter: CGFloat = 120
+
+    var body: some View {
+        let ink = ScoreColor.rgb(for: score).color
+        ZStack {
+            Circle()
+                .stroke(ring, lineWidth: max(4, diameter * 0.07))
+            Text("\(score)")
+                .font(.system(size: diameter * 0.34, weight: .semibold, design: .rounded))
+                .foregroundStyle(ink)
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+        }
+        .frame(width: diameter, height: diameter)
+        .accessibilityLabel("Score \(score) out of 100")
+    }
+
+    private var ring: AnyShapeStyle {
+        if score >= 95 {
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [ScoreColor.goldHighlight.color, ScoreColor.goldRich.color, ScoreColor.gold.color],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        }
+        return AnyShapeStyle(ScoreColor.rgb(for: score).color)
+    }
+}

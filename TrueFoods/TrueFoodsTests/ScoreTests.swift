@@ -40,6 +40,54 @@ final class ScoreTests: XCTestCase {
         XCTAssertTrue(lines.contains { $0.contains("Milk") })
     }
 
+    func testScoreColorBoundaries() {
+        let zero = ScoreColor.rgb(for: 0)
+        let mid = ScoreColor.rgb(for: 50)
+        let green = ScoreColor.rgb(for: 94)
+        let gold = ScoreColor.rgb(for: 95)
+        let top = ScoreColor.rgb(for: 100)
+
+        XCTAssertGreaterThan(zero.red, 0.65)
+        XCTAssertLessThan(zero.green, 0.2)
+        XCTAssertLessThan(zero.blue, 0.15)
+
+        XCTAssertGreaterThan(mid.red, mid.green)
+        XCTAssertGreaterThan(mid.green, zero.green + 0.1)
+        XCTAssertEqual(mid.blue, 0)
+        XCTAssertGreaterThan(mid.red, 0.55)
+
+        XCTAssertGreaterThan(green.green, green.red)
+        XCTAssertGreaterThan(green.green, 0.35)
+        XCTAssertNotEqual(green, gold)
+
+        XCTAssertEqual(gold, top)
+        XCTAssertEqual(gold, ScoreColor.gold)
+        XCTAssertGreaterThan(gold.red, gold.green)
+        XCTAssertGreaterThan(gold.green, gold.blue + 0.2)
+        XCTAssertGreaterThan(green.green, gold.green)
+
+        for sample in [zero, mid, green, gold] {
+            XCTAssertGreaterThanOrEqual(contrast(sample, on: card), 4.5)
+        }
+    }
+
+    private var card: ScoreColor.RGB {
+        ScoreColor.RGB(red: 0.975, green: 0.988, blue: 0.976)
+    }
+
+    private func contrast(_ ink: ScoreColor.RGB, on background: ScoreColor.RGB) -> Double {
+        let lighter = max(luminance(ink), luminance(background))
+        let darker = min(luminance(ink), luminance(background))
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    private func luminance(_ color: ScoreColor.RGB) -> Double {
+        func channel(_ value: Double) -> Double {
+            value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(color.red) + 0.7152 * channel(color.green) + 0.0722 * channel(color.blue)
+    }
+
     func testScoreStaysInRangeAndExplainsItself() {
         let crunchNotes = IngredientBook.matches(in: Product.sampleCrunch.ingredients, tags: Product.sampleCrunch.additiveTags)
         let oatNotes = IngredientBook.matches(in: Product.sampleOats.ingredients, tags: [])
