@@ -95,12 +95,83 @@ def api(method, path, auth, body=None, quiet=False):
                 payload = json.loads(raw)
             except json.JSONDecodeError:
                 payload = {}
+                if raw and not quiet:
+                    print(raw[:2000])
             if not quiet:
                 for item in payload.get("errors", []):
-                    print(item.get("status"), item.get("code"), item.get("title"), item.get("detail"))
+                    print(json.dumps(item, sort_keys=True))
             failure = SystemExit(1)
             failure.code = error.code
+            failure.payload = payload
             raise failure
+
+
+def probe_call(auth, path):
+    """Read one endpoint and print the full error body. Does not stop the probe."""
+    request = urllib.request.Request(
+        API + path,
+        method="GET",
+        headers={"Authorization": "Bearer " + auth, "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request) as response:
+            raw = response.read().decode()
+            print(f"probe {path.split('?')[0]} {response.status}")
+            return response.status, json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as error:
+        raw = error.read().decode()
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            payload = {"raw": raw[:2000]}
+        print(f"probe {path.split('?')[0]} {error.code}")
+        print(json.dumps(payload, sort_keys=True)[:4000])
+        return error.code, payload
+
+
+def probe_agreements():
+    """See whether App Store Connect still blocks this key, and print every error field."""
+    for name in ("KEY_PATH", "KID", "ISS"):
+        if not os.environ.get(name):
+            raise SystemExit(f"missing {name}")
+    auth = token()
+    app = os.environ.get("ASC_APP_ID", "6833977562")
+    paths = [
+        f"/v1/apps/{app}",
+        "/v1/apps?limit=1",
+        "/v1/builds?limit=1",
+        "/v1/certificates?limit=1&filter[certificateType]=IOS_DISTRIBUTION",
+        "/v1/bundleIds?limit=1",
+        "/v1/users?limit=1",
+        "/v1/agreements?limit=5",
+    ]
+    blocked = []
+    for path in paths:
+        code, payload = probe_call(auth, path)
+        errors = payload.get("errors") if isinstance(payload, dict) else None
+        if code == 403 and errors:
+            blocked.append(errors)
+        if code == 200 and path.startswith("/v1/apps"):
+            print("app store connect read succeeded")
+            return
+    if not blocked:
+        print("agreement endpoints did not return the missing-agreement error")
+        raise SystemExit(1)
+    codes = []
+    sees = []
+    for errors in blocked:
+        for item in errors:
+            codes.append(item.get("code") or "")
+            link = (item.get("links") or {}).get("see") or ""
+            if link:
+                sees.append(link)
+    print("agreement codes " + ", ".join(sorted(set(codes))))
+    if sees:
+        print("apple points to " + ", ".join(sorted(set(sees))))
+    print("The API does not name Paid Apps versus the Program License Agreement.")
+    print("Account Holder: App Store Connect, Business, Agreements. Accept any Paid Apps row that is not Active.")
+    print("Also open developer.apple.com/account and accept any Program License Agreement banner. That is the Free Apps Agreement.")
+    raise SystemExit(1)
 
 
 def set_env(key, value):
@@ -500,5 +571,7 @@ def revoke_run_certificate():
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "revoke":
         revoke_run_certificate()
+    elif len(sys.argv) > 1 and sys.argv[1] == "probe":
+        probe_agreements()
     else:
         main()

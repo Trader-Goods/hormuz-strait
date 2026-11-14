@@ -29,10 +29,6 @@ jobs:
           fi
           xcodebuild -version
 
-      - name: Unit tests
-        timeout-minutes: 25
-        run: bash TrueFoods/ci/run_unit_tests.sh
-
       - name: Write API key
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
@@ -45,6 +41,16 @@ jobs:
           { echo "-----BEGIN PRIVATE KEY-----"; echo "$BODY" | fold -w 64; echo "-----END PRIVATE KEY-----"; } > "$KEY"
           chmod 600 "$KEY"
           echo "KEY_PATH=$KEY" >> "$GITHUB_ENV"
+
+      - name: Check App Store Connect agreements
+        env:
+          KID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISS: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: python3 TrueFoods/ci/prepare_appstore_signing.py probe
+
+      - name: Unit tests
+        timeout-minutes: 25
+        run: bash TrueFoods/ci/run_unit_tests.sh
 
       - name: Prepare App Store certificate and profile
         env:
