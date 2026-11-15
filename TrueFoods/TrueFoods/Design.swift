@@ -249,7 +249,8 @@ enum ScoreColor {
     static func fill(for score: Int) -> Fill {
         let value = min(100, max(0, score))
         if value >= goldMinimum {
-            return Fill(top: goldHighlight, bottom: goldRich, border: gold)
+            let green = rgb(for: 94)
+            return Fill(top: green, bottom: green, border: goldRich)
         }
         let solid = rgb(for: value)
         return Fill(top: solid, bottom: solid, border: solid)
@@ -337,7 +338,9 @@ struct ScoreBadge: View {
     private var paint: Int { colorScore ?? score }
 
     var body: some View {
-        let ring = unknown ? ScoreColor.unknownGray.color : ScoreColor.rgb(for: paint).color
+        let ring = unknown
+            ? ScoreColor.unknownGray.color
+            : (paint >= ScoreColor.goldMinimum ? ScoreColor.goldRich.color : ScoreColor.rgb(for: paint).color)
         ZStack {
             Circle()
                 .stroke(ring, lineWidth: max(5, diameter * 0.08))

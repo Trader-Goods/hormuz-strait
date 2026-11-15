@@ -138,9 +138,10 @@ final class ScoreTests: XCTestCase {
 
         let goldFill = ScoreColor.fill(for: 95)
         XCTAssertEqual(goldFill, ScoreColor.fill(for: 100))
-        XCTAssertEqual(goldFill.top, ScoreColor.goldHighlight)
-        XCTAssertEqual(goldFill.bottom, ScoreColor.goldRich)
-        XCTAssertNotEqual(ScoreColor.fill(for: 94).bottom, goldFill.bottom)
+        XCTAssertEqual(goldFill.top, ScoreColor.rgb(for: 94))
+        XCTAssertEqual(goldFill.bottom, ScoreColor.rgb(for: 94))
+        XCTAssertEqual(goldFill.border, ScoreColor.goldRich)
+        XCTAssertNotEqual(goldFill.border, goldFill.bottom)
 
         for score in [0, 30, 50, 62, 80, 94] {
             let fill = ScoreColor.fill(for: score)
