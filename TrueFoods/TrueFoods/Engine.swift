@@ -12,6 +12,8 @@ enum ScoreRules {
     static let limitPenalty = 8
     static let grainPenalty = 8
     static let refinedPenalty = 10
+    static let alcoholPenalty = 60
+    static let alcoholCap = 40
     static let dyeIDs: Set<String> = ["red-40", "yellow-5", "yellow-6", "blue-1", "blue-2", "green-3", "red-3"]
     static let addedSugarDV = 50.0
     static let sodiumDV = 2300.0
@@ -160,7 +162,48 @@ enum ScoreEngine {
             ))
         }
 
+        if isAlcoholic(product) {
+            value -= ScoreRules.alcoholPenalty
+            reasons.append(ScoreReason(
+                id: "alcohol",
+                title: "Alcoholic drink",
+                detail: "Wine, beer, and spirits are not scored like food.",
+                tone: .limit
+            ))
+            value = min(value, ScoreRules.alcoholCap)
+        }
+
         return ScoreReport(value: min(100, max(0, value)), reasons: reasons)
+    }
+
+    static func hasKnownIngredients(_ product: Product) -> Bool {
+        !product.ingredients.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Wine, beer, spirits, and hard seltzer. A missing ingredient list is handled separately.
+    static func isAlcoholic(_ product: Product) -> Bool {
+        if let alcohol = product.alcoholPercent, alcohol >= 0.5 {
+            return true
+        }
+        let tags = product.categories.joined(separator: " ").lowercased()
+        let tagHits = [
+            "alcoholic", "wine", "beer", "ales", "spirit", "liquor", "cider", "sake",
+            "hard-seltzer"
+        ]
+        if tagHits.contains(where: { tags.contains($0) }) {
+            return true
+        }
+        let hay = IngredientBook.normalize(
+            product.name + " " + product.brand + " " + product.ingredients
+        )
+        let names = [
+            "wine", "merlot", "cabernet", "chardonnay", "pinot", "sauvignon",
+            "zinfandel", "riesling", "malbec", "syrah", "shiraz", "champagne",
+            "prosecco", "beer", "lager", "ipa", "stout", "vodka",
+            "whiskey", "whisky", "bourbon", "tequila", "rum", "gin", "brandy",
+            "sake", "hard seltzer", "spiked seltzer"
+        ]
+        return names.contains { hay.contains(IngredientBook.normalize($0)) }
     }
 
     /// A small nudge, at most 10 points. Ingredients and processing still drive the score.

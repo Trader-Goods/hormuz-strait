@@ -242,6 +242,7 @@ enum FoodAPI {
             saturatedFat: nutrient(nutriments, serving: "saturated-fat_serving", hundred: "saturated-fat_100g", grams: grams),
             fiber: nutrient(nutriments, serving: "fiber_serving", hundred: "fiber_100g", grams: grams),
             protein: nutrient(nutriments, serving: "proteins_serving", hundred: "proteins_100g", grams: grams),
+            alcoholPercent: doubleValue(nutriments["alcohol"]) ?? doubleValue(nutriments["alcohol_100g"]) ?? doubleValue(nutriments["alcohol_value"]),
             basis: basis,
             serving: string(item["serving_size"]),
             source: "Open Food Facts",

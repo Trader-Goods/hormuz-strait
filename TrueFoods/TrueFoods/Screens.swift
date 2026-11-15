@@ -381,14 +381,10 @@ struct ProductScreen: View {
     @State private var swaps: [Product] = []
     @State private var recall: RecallNote?
     @State private var recallChecked = false
-    @State private var detailsReady: Bool
-    @State private var detailsFailed = false
 
     init(product: Product) {
         self.product = product
         _shown = State(initialValue: product)
-        let ready = product.isSample || !product.ingredients.isEmpty || product.barcode.isEmpty
-        _detailsReady = State(initialValue: ready)
     }
 
     var body: some View {
@@ -403,35 +399,15 @@ struct ProductScreen: View {
                     Text("Sample food, so you can see this screen. Not a real product.")
                         .airySecondary()
                 }
-                if detailsReady {
-                    ScoreCard(score: colorScore) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(shown.displayName)
-                                .font(.system(size: 34, weight: .bold, design: .rounded))
-                                .scoreInk(colorScore)
-                            if !shown.brand.isEmpty {
-                                Text(shown.brand)
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .scoreInk(colorScore)
-                            }
-                            HStack(alignment: .center, spacing: 16) {
-                                ScoreBadge(score: score, colorScore: colorScore)
-                                Text("out of 100")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .scoreInk(colorScore)
-                            }
-                        }
-                    }
-                } else {
-                    SoftCard {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(shown.displayName)
-                                .airyTitle()
-                            Text(detailsFailed ? "Score isn’t ready for this food." : "Checking the score…")
-                                .airySecondary()
-                        }
-                    }
-                }
+                ScoreSummary(
+                    title: shown.displayName,
+                    subtitle: shown.brand,
+                    score: score,
+                    colorScore: colorScore,
+                    unknown: ColorSamples.displayedScore(for: shown) == nil && !ScoreEngine.hasKnownIngredients(shown),
+                    badge: 120,
+                    titleSize: 34
+                )
                 Text(shown.source)
                     .airySecondary()
                 ForEach(banners, id: \.self) { line in
@@ -501,9 +477,6 @@ struct ProductScreen: View {
                 if let full = try? await FoodAPI.lookup(barcode: shown.barcode) {
                     shown = full
                     pantry.remember(full)
-                    detailsReady = true
-                } else {
-                    detailsFailed = true
                 }
             }
             if !shown.isSample {
@@ -548,68 +521,62 @@ struct ProductScreen: View {
 struct FoodCard: View {
     var product: Product
     @State private var fetched: Product?
-    @State private var lookupFailed = false
 
     private var shown: Product { fetched ?? product }
-
-    private var needsLookup: Bool {
-        !product.isSample && !product.barcode.isEmpty && product.ingredients.isEmpty
-    }
-
-    private var waitingForScore: Bool {
-        needsLookup && fetched == nil
-    }
 
     var body: some View {
         let notes = IngredientBook.matches(in: shown.ingredients, tags: shown.additiveTags)
         let score = ColorSamples.displayedScore(for: shown) ?? ScoreEngine.score(shown, notes: notes).value
         let colorScore = ScoreColor.colorScore(numeric: score, notes: notes)
-        Group {
-            if waitingForScore {
-                SoftCard {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(product.displayName)
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
-                            .foregroundStyle(Air.ink)
-                        if !product.brand.isEmpty {
-                            Text(product.brand)
-                                .airySecondary()
-                        }
-                        Text(lookupFailed ? "Score isn’t ready for this row." : "Checking the score…")
-                            .airySecondary()
-                    }
-                }
-            } else {
-                ScoreCard(score: colorScore) {
-                    HStack(alignment: .center, spacing: 14) {
-                        ScoreBadge(score: score, colorScore: colorScore, diameter: 64)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(shown.displayName)
-                                .font(.system(size: 22, weight: .bold, design: .rounded))
-                                .scoreInk(colorScore)
-                                .fixedSize(horizontal: false, vertical: true)
-                            if !shown.brand.isEmpty {
-                                Text(shown.brand)
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .scoreInk(colorScore)
-                            }
-                            Text("out of 100")
-                                .font(.system(size: 18, weight: .semibold))
-                                .scoreInk(colorScore)
-                        }
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(shown.displayName), \(shown.brand), score \(score) out of 100")
-                }
-            }
-        }
+        let unknown = ColorSamples.displayedScore(for: shown) == nil && !ScoreEngine.hasKnownIngredients(shown)
+        ScoreSummary(
+            title: shown.displayName,
+            subtitle: shown.brand,
+            score: score,
+            colorScore: colorScore,
+            unknown: unknown,
+            badge: 64,
+            titleSize: 22
+        )
         .task(id: product.id) {
             guard !product.isSample, product.ingredients.isEmpty, !product.barcode.isEmpty else { return }
             if let full = try? await FoodAPI.lookup(barcode: product.barcode) {
                 fetched = full
-            } else {
-                lookupFailed = true
             }
+        }
+    }
+}
+
+struct ScoreSummary: View {
+    var title: String
+    var subtitle: String
+    var score: Int
+    var colorScore: Int
+    var unknown: Bool
+    var badge: CGFloat
+    var titleSize: CGFloat
+
+    var body: some View {
+        ScoreCard(score: colorScore, unknown: unknown) {
+            HStack(alignment: .center, spacing: 14) {
+                ScoreBadge(score: score, colorScore: colorScore, unknown: unknown, diameter: badge)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title)
+                        .font(.system(size: titleSize, weight: .bold, design: .rounded))
+                        .scoreInk(colorScore, unknown: unknown)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.system(size: 18, weight: .semibold))
+                            .scoreInk(colorScore, unknown: unknown)
+                    }
+                    Text("out of 100")
+                        .font(.system(size: 18, weight: .semibold))
+                        .scoreInk(colorScore, unknown: unknown)
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(unknown ? "\(title), \(subtitle), score not available, out of 100" : "\(title), \(subtitle), score \(score) out of 100")
         }
     }
 }

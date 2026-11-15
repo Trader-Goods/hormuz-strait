@@ -61,6 +61,31 @@ final class ScoreTests: XCTestCase {
         XCTAssertEqual(ScoreColor.colorScore(numeric: 96, notes: []), 96)
     }
 
+    func testWineCannotScoreGoldAndBlankIngredientsAreUnknown() {
+        var wine = Product.sampleOats
+        wine.name = "Vella Merlot"
+        wine.ingredients = "grapes, sulfites"
+        wine.categories = ["en:wines"]
+        wine.alcoholPercent = 13.5
+        let scored = ScoreEngine.score(wine, notes: [])
+        XCTAssertTrue(ScoreEngine.isAlcoholic(wine))
+        XCTAssertLessThanOrEqual(scored.value, ScoreRules.alcoholCap)
+        XCTAssertLessThan(scored.value, 95)
+        XCTAssertTrue(scored.reasons.contains { $0.id == "alcohol" })
+
+        var blank = Product.sampleOats
+        blank.ingredients = "  "
+        blank.name = "Mystery milk"
+        XCTAssertFalse(ScoreEngine.hasKnownIngredients(blank))
+        XCTAssertFalse(ScoreEngine.isAlcoholic(blank))
+
+        var ginger = Product.sampleOats
+        ginger.name = "Ginger ale"
+        ginger.ingredients = "carbonated water, ginger"
+        ginger.categories = ["en:sodas"]
+        XCTAssertFalse(ScoreEngine.isAlcoholic(ginger))
+    }
+
     func testScoreColorBoundaries() {
         for score in [0, 30, 50, 62, 80, 94] {
             let color = ScoreColor.hsb(for: score)

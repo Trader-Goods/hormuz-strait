@@ -50,6 +50,7 @@ struct Product: Identifiable, Codable, Hashable {
     var saturatedFat: Double?
     var fiber: Double?
     var protein: Double?
+    var alcoholPercent: Double? = nil
     var basis: String
     var serving: String
     var source: String

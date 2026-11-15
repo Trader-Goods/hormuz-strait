@@ -237,6 +237,7 @@ enum ScoreColor {
     static let gold = RGB(red: 140.0 / 255, green: 106.0 / 255, blue: 16.0 / 255)
     static let goldRich = RGB(red: 212.0 / 255, green: 160.0 / 255, blue: 23.0 / 255)
     static let goldHighlight = RGB(red: 232.0 / 255, green: 196.0 / 255, blue: 74.0 / 255)
+    static let unknownGray = RGB(red: 0.42, green: 0.45, blue: 0.48)
 
     struct Fill: Equatable {
         var top: RGB
@@ -321,30 +322,34 @@ enum ScoreColor {
 struct ScoreBadge: View {
     var score: Int
     var colorScore: Int? = nil
+    var unknown: Bool = false
     var diameter: CGFloat = 120
 
     private var paint: Int { colorScore ?? score }
 
     var body: some View {
+        let ring = unknown ? ScoreColor.unknownGray.color : ScoreColor.rgb(for: paint).color
         ZStack {
             Circle()
-                .stroke(ScoreColor.rgb(for: paint).color, lineWidth: max(5, diameter * 0.08))
-            Text("\(score)")
-                .font(.system(size: diameter * 0.32, weight: .bold, design: .rounded))
-                .scoreInk(paint)
+                .stroke(ring, lineWidth: max(5, diameter * 0.08))
+            Text(unknown ? "- -" : "\(score)")
+                .font(.system(size: diameter * (unknown ? 0.28 : 0.32), weight: .bold, design: .rounded))
+                .scoreInk(paint, unknown: unknown)
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
         }
         .frame(width: diameter, height: diameter)
-        .accessibilityLabel("Score \(score) out of 100")
+        .accessibilityLabel(unknown ? "Score not available, out of 100" : "Score \(score) out of 100")
     }
 }
 
 struct ScoreInk: ViewModifier {
     var colorScore: Int
+    var unknown: Bool = false
 
     func body(content: Content) -> some View {
-        if ScoreColor.inkIsWhite(for: colorScore) {
+        let white = unknown || ScoreColor.inkIsWhite(for: colorScore)
+        if white {
             content
                 .foregroundStyle(Color.white)
                 .shadow(color: Color.black.opacity(0.45), radius: 1.5, y: 1)
@@ -355,22 +360,26 @@ struct ScoreInk: ViewModifier {
 }
 
 extension View {
-    func scoreInk(_ colorScore: Int) -> some View {
-        modifier(ScoreInk(colorScore: colorScore))
+    func scoreInk(_ colorScore: Int, unknown: Bool = false) -> some View {
+        modifier(ScoreInk(colorScore: colorScore, unknown: unknown))
     }
 }
 
 struct ScoreCard<Content: View>: View {
     var score: Int
+    var unknown: Bool = false
     var content: Content
 
-    init(score: Int, @ViewBuilder content: () -> Content) {
+    init(score: Int, unknown: Bool = false, @ViewBuilder content: () -> Content) {
         self.score = score
+        self.unknown = unknown
         self.content = content()
     }
 
     var body: some View {
-        let fill = ScoreColor.fill(for: score)
+        let fill = unknown
+            ? ScoreColor.Fill(top: ScoreColor.unknownGray, bottom: ScoreColor.unknownGray, border: ScoreColor.unknownGray)
+            : ScoreColor.fill(for: score)
         content
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
