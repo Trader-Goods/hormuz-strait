@@ -364,7 +364,7 @@ final class LibraryModel: ObservableObject {
 
     private func deleteChunk(_ chunk: [LiveItem], keeping: Bool, total: Int) async -> Bool {
         progress = WorkProgress(
-            title: "Waiting for deletion confirmation",
+            title: "Photos have been converted, delete these Live Photos now",
             detail: "iOS asks once for this batch. These Live Photos move to Recently Deleted and still use space until that album is emptied in Photos.",
             completed: sessionConverted,
             total: max(total, 1)

@@ -73,14 +73,14 @@ final class ScreenshotUITests: XCTestCase {
             let end = Date().addingTimeInterval(8)
             while Date() < end {
                 dismissSystemAlerts()
-                if app.staticTexts["Waiting for deletion confirmation"].exists || app.staticTexts["In Recently Deleted"].exists {
+                if app.staticTexts["Photos have been converted, delete these Live Photos now"].exists || app.staticTexts["In Recently Deleted"].exists {
                     return
                 }
                 if !message.exists { return }
                 Thread.sleep(forTimeInterval: 0.3)
             }
         }
-        if app.staticTexts["Waiting for deletion confirmation"].exists { return }
+        if app.staticTexts["Photos have been converted, delete these Live Photos now"].exists { return }
         dumpUI("convert confirmation stayed open")
         XCTFail("could not confirm convert")
     }
