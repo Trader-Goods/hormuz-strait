@@ -67,24 +67,29 @@ final class ScoreTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(color.saturation, 0.85, "score \(score) saturation")
             XCTAssertGreaterThanOrEqual(color.brightness, 0.90, "score \(score) brightness")
             let degrees = color.hue * 360
-            XCTAssertFalse((20...70).contains(degrees), "score \(score) hue \(degrees) is yellow or orange")
+            XCTAssertTrue((0...120).contains(degrees), "score \(score) hue \(degrees) left the green-to-red arc")
+            XCTAssertFalse((180...359).contains(degrees), "score \(score) hue \(degrees) is purple, magenta, or blue")
         }
 
+        let worst = ScoreColor.hsb(for: 0)
+        let redThirty = ScoreColor.hsb(for: 30)
+        XCTAssertEqual(worst.hue, 0)
+        XCTAssertEqual(redThirty.hue, 0)
+        XCTAssertGreaterThan(worst.brightness, redThirty.brightness)
         for score in [0, 30] {
-            let degrees = ScoreColor.hsb(for: score).hue * 360
-            XCTAssertTrue(degrees <= 15 || degrees >= 345, "score \(score) hue \(degrees)")
             let rgb = ScoreColor.rgb(for: score)
             XCTAssertGreaterThan(rgb.red, 0.8)
-            XCTAssertGreaterThan(rgb.red, rgb.green + 0.4)
-            XCTAssertGreaterThan(rgb.red, rgb.blue + 0.4)
+            XCTAssertGreaterThan(rgb.red, rgb.green + 0.5)
+            XCTAssertGreaterThan(rgb.red, rgb.blue + 0.5)
+            XCTAssertLessThan(rgb.blue, 0.08)
         }
 
         let fifty = ScoreColor.hsb(for: 50).hue * 360
-        XCTAssertTrue((250...330).contains(fifty), "score 50 hue \(fifty)")
+        XCTAssertTrue((30...50).contains(fifty), "score 50 hue \(fifty)")
         let sixtyTwo = ScoreColor.hsb(for: 62).hue * 360
-        XCTAssertTrue((200...270).contains(sixtyTwo), "score 62 hue \(sixtyTwo)")
+        XCTAssertTrue((50...75).contains(sixtyTwo), "score 62 hue \(sixtyTwo)")
         let eighty = ScoreColor.hsb(for: 80).hue * 360
-        XCTAssertTrue((140...200).contains(eighty), "score 80 hue \(eighty)")
+        XCTAssertTrue((80...110).contains(eighty), "score 80 hue \(eighty)")
         let greenHue = ScoreColor.hsb(for: 94).hue * 360
         XCTAssertTrue((110...140).contains(greenHue), "score 94 hue \(greenHue)")
 

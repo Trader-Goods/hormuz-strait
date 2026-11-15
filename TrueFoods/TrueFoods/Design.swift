@@ -212,7 +212,7 @@ struct ToneRow: View {
     }
 }
 
-/// One color for every score. 95–100 is gold. 94 is bright green, and lower scores fade to bright red the long way around the hue wheel so they never pass through yellow, orange, or brown.
+/// One color for every score. 95–100 is gold. 94 is bright green, then the hue falls straight toward red. The worst scores are pure red and get brighter, never purple or pink.
 enum ScoreColor {
     struct RGB: Equatable {
         var red: Double
@@ -289,13 +289,12 @@ enum ScoreColor {
             return HSB(hue: 43.5 / 360.0, saturation: 0.89, brightness: 0.83)
         }
         if value <= redCeiling {
-            return HSB(hue: 1.0 / 360.0, saturation: 0.92, brightness: 0.95)
+            let worse = Double(redCeiling - value) / Double(redCeiling)
+            return HSB(hue: 0, saturation: 1, brightness: 0.90 + 0.10 * worse)
         }
-        let greenHue = 120.0 / 360.0
         let t = Double(value - redCeiling) / Double(94 - redCeiling)
-        // From red (1.0) down to green. This arc is cyan, blue, and magenta, not yellow or orange.
-        let hue = 1.0 - (1.0 - greenHue) * t
-        return HSB(hue: hue, saturation: 0.92, brightness: 0.95)
+        // 0 at the red end through orange and yellow up to green. Hue stays at or below 120°, so it never wraps into purple.
+        return HSB(hue: (120.0 / 360.0) * t, saturation: 1, brightness: 0.98)
     }
 
     private static func rgb(from hsb: HSB) -> RGB {
