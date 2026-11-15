@@ -42,14 +42,23 @@ final class ScoreTests: XCTestCase {
 
     func testColorPreviewSamplesStayOutOfRealScores() {
         XCTAssertEqual(ColorSamples.scores, [35, 45, 62, 75, 85, 94, 96])
-        XCTAssertEqual(ColorSamples.foods.map(\.id), ColorSamples.scores.map { "color-sample-\($0)" })
+        XCTAssertEqual(ColorSamples.foods.dropLast().map(\.id), ColorSamples.scores.map { "color-sample-\($0)" })
+        let flagged = ColorSamples.foods.last
+        XCTAssertEqual(flagged?.id, "color-sample-flagged")
+        XCTAssertEqual(flagged?.ingredients, "red 40")
+        let flaggedNotes = IngredientBook.matches(in: flagged?.ingredients ?? "", tags: flagged?.additiveTags ?? [])
+        XCTAssertTrue(flaggedNotes.contains { $0.id == "red-40" })
+        XCTAssertEqual(ColorSamples.displayedScore(for: flagged!), 90)
+        XCTAssertEqual(ScoreColor.colorScore(numeric: 90, notes: flaggedNotes), 0)
+        let red = ScoreColor.hsb(for: 0)
+        XCTAssertTrue(red.hue * 360 <= 15 || red.hue * 360 >= 345)
         for food in ColorSamples.foods {
             XCTAssertTrue(food.isSample)
             XCTAssertTrue(food.name.hasPrefix("Sample"))
             XCTAssertEqual(food.brand, "Color preview")
-            XCTAssertEqual(ColorSamples.displayedScore(for: food), Int(food.name.dropFirst("Sample ".count)))
         }
         XCTAssertNil(ColorSamples.displayedScore(for: .sampleEggs))
+        XCTAssertEqual(ScoreColor.colorScore(numeric: 96, notes: []), 96)
     }
 
     func testScoreColorBoundaries() {
@@ -96,17 +105,16 @@ final class ScoreTests: XCTestCase {
 
         let goldFill = ScoreColor.fill(for: 95)
         XCTAssertEqual(goldFill, ScoreColor.fill(for: 100))
-        XCTAssertEqual(goldFill.top, ScoreColor.goldWash)
+        XCTAssertEqual(goldFill.top, ScoreColor.goldHighlight)
         XCTAssertEqual(goldFill.bottom, ScoreColor.goldRich)
-        XCTAssertEqual(goldFill.border, ScoreColor.goldRich)
-        XCTAssertNotEqual(ScoreColor.fill(for: 94).border, goldFill.border)
+        XCTAssertNotEqual(ScoreColor.fill(for: 94).bottom, goldFill.bottom)
 
         for score in [0, 30, 50, 62, 80, 94] {
             let fill = ScoreColor.fill(for: score)
-            XCTAssertEqual(fill.border, ScoreColor.rgb(for: score))
-            let tint = fill.bottom.red + fill.bottom.green + fill.bottom.blue
-            let ink = fill.border.red + fill.border.green + fill.border.blue
-            XCTAssertGreaterThan(tint, ink)
+            let solid = ScoreColor.rgb(for: score)
+            XCTAssertEqual(fill.top, solid)
+            XCTAssertEqual(fill.bottom, solid)
+            XCTAssertEqual(fill.border, solid)
         }
     }
 

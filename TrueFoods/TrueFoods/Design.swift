@@ -236,7 +236,6 @@ enum ScoreColor {
     /// Darkened #D4A017 so a gold number can stay readable if it sits on a light gold card.
     static let gold = RGB(red: 140.0 / 255, green: 106.0 / 255, blue: 16.0 / 255)
     static let goldRich = RGB(red: 212.0 / 255, green: 160.0 / 255, blue: 23.0 / 255)
-    static let goldWash = RGB(red: 247.0 / 255, green: 224.0 / 255, blue: 138.0 / 255)
     static let goldHighlight = RGB(red: 232.0 / 255, green: 196.0 / 255, blue: 74.0 / 255)
 
     struct Fill: Equatable {
@@ -245,20 +244,34 @@ enum ScoreColor {
         var border: RGB
     }
 
-    /// Light tint of the score hue, or the rich gold gradient from 95 up. The border stays saturated.
+    /// Solid saturated fill. Gold stays a rich gold. Every other score uses its vivid hue, not a pale tint.
     static func fill(for score: Int) -> Fill {
         let value = min(100, max(0, score))
         if value >= goldMinimum {
-            return Fill(top: goldWash, bottom: goldRich, border: goldRich)
+            return Fill(top: goldHighlight, bottom: goldRich, border: gold)
         }
-        let vivid = hsb(for: value)
-        var bottom = vivid
-        bottom.saturation = 0.34
-        bottom.brightness = 0.98
-        var top = vivid
-        top.saturation = 0.16
-        top.brightness = 1
-        return Fill(top: rgb(from: top), bottom: rgb(from: bottom), border: rgb(from: vivid))
+        let solid = rgb(for: value)
+        return Fill(top: solid, bottom: solid, border: solid)
+    }
+
+    /// A flagged ingredient paints the card bright red even when the number is high.
+    static func colorScore(numeric: Int, notes: [IngredientNote]) -> Int {
+        if notes.contains(where: { $0.level == "avoid" || $0.level == "limit" }) {
+            return 0
+        }
+        return min(100, max(0, numeric))
+    }
+
+    static func inkIsWhite(for colorScore: Int) -> Bool {
+        relativeLuminance(fill(for: colorScore).bottom) < 0.35
+    }
+
+    private static func relativeLuminance(_ color: RGB) -> Double {
+        func channel(_ value: Double) -> Double {
+            let clamped = min(1, max(0, value))
+            return clamped <= 0.04045 ? clamped / 12.92 : pow((clamped + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(color.red) + 0.7152 * channel(color.green) + 0.0722 * channel(color.blue)
     }
 
     static func rgb(for score: Int) -> RGB {
@@ -308,30 +321,43 @@ enum ScoreColor {
 
 struct ScoreBadge: View {
     var score: Int
+    var colorScore: Int? = nil
     var diameter: CGFloat = 120
 
-    private var onGold: Bool { score >= ScoreColor.goldMinimum }
+    private var paint: Int { colorScore ?? score }
 
     var body: some View {
-        let ink = onGold ? Air.ink : ScoreColor.rgb(for: score).color
         ZStack {
             Circle()
-                .stroke(ring, lineWidth: max(4, diameter * 0.07))
+                .stroke(ScoreColor.rgb(for: paint).color, lineWidth: max(5, diameter * 0.08))
             Text("\(score)")
-                .font(.system(size: diameter * 0.34, weight: .bold, design: .rounded))
-                .foregroundStyle(ink)
+                .font(.system(size: diameter * 0.32, weight: .bold, design: .rounded))
+                .scoreInk(paint)
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
         }
         .frame(width: diameter, height: diameter)
         .accessibilityLabel("Score \(score) out of 100")
     }
+}
 
-    private var ring: AnyShapeStyle {
-        if onGold {
-            return AnyShapeStyle(Air.ink)
+struct ScoreInk: ViewModifier {
+    var colorScore: Int
+
+    func body(content: Content) -> some View {
+        if ScoreColor.inkIsWhite(for: colorScore) {
+            content
+                .foregroundStyle(Color.white)
+                .shadow(color: Color.black.opacity(0.45), radius: 1.5, y: 1)
+        } else {
+            content.foregroundStyle(Color(red: 0.07, green: 0.07, blue: 0.07))
         }
-        return AnyShapeStyle(ScoreColor.rgb(for: score).color)
+    }
+}
+
+extension View {
+    func scoreInk(_ colorScore: Int) -> some View {
+        modifier(ScoreInk(colorScore: colorScore))
     }
 }
 
@@ -356,13 +382,6 @@ struct ScoreCard<Content: View>: View {
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
-                    if score >= ScoreColor.goldMinimum {
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.38), Color.white.opacity(0)],
-                            startPoint: .top,
-                            endPoint: .center
-                        )
-                    }
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))

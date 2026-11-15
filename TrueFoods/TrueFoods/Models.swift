@@ -126,7 +126,7 @@ enum ColorSamples {
 
     static var foods: [Product] {
         #if DEBUG || TESTFLIGHT
-        return scores.map(make)
+        return scores.map(make) + [flagged]
         #else
         return []
         #endif
@@ -134,6 +134,7 @@ enum ColorSamples {
 
     static func displayedScore(for product: Product) -> Int? {
         #if DEBUG || TESTFLIGHT
+        if product.id == "color-sample-flagged" { return 90 }
         let prefix = "color-sample-"
         guard product.id.hasPrefix(prefix) else { return nil }
         return Int(product.id.dropFirst(prefix.count))
@@ -167,6 +168,29 @@ enum ColorSamples {
             isSample: true
         )
     }
+
+    private static let flagged = Product(
+        id: "color-sample-flagged",
+        name: "Sample with Red 40",
+        brand: "Color preview",
+        barcode: "",
+        ingredients: "red 40",
+        additiveTags: ["en:e129"],
+        categories: [],
+        nova: nil,
+        kcal: nil,
+        sugar: nil,
+        addedSugar: nil,
+        sodiumMg: nil,
+        saturatedFat: nil,
+        fiber: nil,
+        protein: nil,
+        basis: "sample",
+        serving: "",
+        source: "Sample",
+        sourceDetail: "A color sample for this TestFlight build. Not a real food. Red 40 is flagged, so the card stays bright red.",
+        isSample: true
+    )
     #endif
 }
 

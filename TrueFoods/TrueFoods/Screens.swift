@@ -381,16 +381,21 @@ struct ProductScreen: View {
     @State private var swaps: [Product] = []
     @State private var recall: RecallNote?
     @State private var recallChecked = false
+    @State private var detailsReady: Bool
+    @State private var detailsFailed = false
 
     init(product: Product) {
         self.product = product
         _shown = State(initialValue: product)
+        let ready = product.isSample || !product.ingredients.isEmpty || product.barcode.isEmpty
+        _detailsReady = State(initialValue: ready)
     }
 
     var body: some View {
         let notes = IngredientBook.matches(in: shown.ingredients, tags: shown.additiveTags)
         let report = ScoreEngine.score(shown, notes: notes)
         let score = ColorSamples.displayedScore(for: shown) ?? report.value
+        let colorScore = ScoreColor.colorScore(numeric: score, notes: notes)
         let banners = FlagEngine.banners(for: shown, notes: notes, flags: pantry.flags)
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
@@ -398,20 +403,32 @@ struct ProductScreen: View {
                     Text("Sample food, so you can see this screen. Not a real product.")
                         .airySecondary()
                 }
-                ScoreCard(score: score) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(shown.displayName)
-                            .airyTitle()
-                        if !shown.brand.isEmpty {
-                            Text(shown.brand)
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(Air.ink.opacity(0.75))
+                if detailsReady {
+                    ScoreCard(score: colorScore) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(shown.displayName)
+                                .font(.system(size: 34, weight: .bold, design: .rounded))
+                                .scoreInk(colorScore)
+                            if !shown.brand.isEmpty {
+                                Text(shown.brand)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .scoreInk(colorScore)
+                            }
+                            HStack(alignment: .center, spacing: 16) {
+                                ScoreBadge(score: score, colorScore: colorScore)
+                                Text("out of 100")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .scoreInk(colorScore)
+                            }
                         }
-                        HStack(alignment: .center, spacing: 16) {
-                            ScoreBadge(score: score)
-                            Text("out of 100")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(Air.ink)
+                    }
+                } else {
+                    SoftCard {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(shown.displayName)
+                                .airyTitle()
+                            Text(detailsFailed ? "Score isn’t ready for this food." : "Checking the score…")
+                                .airySecondary()
                         }
                     }
                 }
@@ -484,6 +501,9 @@ struct ProductScreen: View {
                 if let full = try? await FoodAPI.lookup(barcode: shown.barcode) {
                     shown = full
                     pantry.remember(full)
+                    detailsReady = true
+                } else {
+                    detailsFailed = true
                 }
             }
             if !shown.isSample {
@@ -527,30 +547,69 @@ struct ProductScreen: View {
 
 struct FoodCard: View {
     var product: Product
+    @State private var fetched: Product?
+    @State private var lookupFailed = false
+
+    private var shown: Product { fetched ?? product }
+
+    private var needsLookup: Bool {
+        !product.isSample && !product.barcode.isEmpty && product.ingredients.isEmpty
+    }
+
+    private var waitingForScore: Bool {
+        needsLookup && fetched == nil
+    }
 
     var body: some View {
-        let notes = IngredientBook.matches(in: product.ingredients, tags: product.additiveTags)
-        let score = ColorSamples.displayedScore(for: product) ?? ScoreEngine.score(product, notes: notes).value
-        ScoreCard(score: score) {
-            HStack(alignment: .center, spacing: 14) {
-                ScoreBadge(score: score, diameter: 64)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(product.displayName)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
-                        .foregroundStyle(Air.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if !product.brand.isEmpty {
-                        Text(product.brand)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(Air.ink.opacity(0.75))
+        let notes = IngredientBook.matches(in: shown.ingredients, tags: shown.additiveTags)
+        let score = ColorSamples.displayedScore(for: shown) ?? ScoreEngine.score(shown, notes: notes).value
+        let colorScore = ScoreColor.colorScore(numeric: score, notes: notes)
+        Group {
+            if waitingForScore {
+                SoftCard {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(product.displayName)
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundStyle(Air.ink)
+                        if !product.brand.isEmpty {
+                            Text(product.brand)
+                                .airySecondary()
+                        }
+                        Text(lookupFailed ? "Score isn’t ready for this row." : "Checking the score…")
+                            .airySecondary()
                     }
-                    Text("out of 100")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(Air.ink)
+                }
+            } else {
+                ScoreCard(score: colorScore) {
+                    HStack(alignment: .center, spacing: 14) {
+                        ScoreBadge(score: score, colorScore: colorScore, diameter: 64)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(shown.displayName)
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .scoreInk(colorScore)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if !shown.brand.isEmpty {
+                                Text(shown.brand)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .scoreInk(colorScore)
+                            }
+                            Text("out of 100")
+                                .font(.system(size: 18, weight: .semibold))
+                                .scoreInk(colorScore)
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(shown.displayName), \(shown.brand), score \(score) out of 100")
                 }
             }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(product.displayName), \(product.brand), score \(score) out of 100")
+        }
+        .task(id: product.id) {
+            guard !product.isSample, product.ingredients.isEmpty, !product.barcode.isEmpty else { return }
+            if let full = try? await FoodAPI.lookup(barcode: product.barcode) {
+                fetched = full
+            } else {
+                lookupFailed = true
+            }
         }
     }
 }
