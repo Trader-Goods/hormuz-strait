@@ -212,7 +212,7 @@ struct ToneRow: View {
     }
 }
 
-/// One color for every score number. Low scores are red, the middle moves through orange and yellow, 94 is green, and 95–100 is gold.
+/// One color for every score. 95–100 is gold. 94 is bright green, and lower scores fade to bright red the long way around the hue wheel so they never pass through yellow, orange, or brown.
 enum ScoreColor {
     struct RGB: Equatable {
         var red: Double
@@ -224,8 +224,16 @@ enum ScoreColor {
         }
     }
 
+    struct HSB: Equatable {
+        /// 0...1 around the wheel. 0 is red.
+        var hue: Double
+        var saturation: Double
+        var brightness: Double
+    }
+
     static let goldMinimum = 95
-    /// Darkened #D4A017 so the digits stay readable on a light gold card.
+    static let redCeiling = 30
+    /// Darkened #D4A017 so a gold number can stay readable if it sits on a light gold card.
     static let gold = RGB(red: 140.0 / 255, green: 106.0 / 255, blue: 16.0 / 255)
     static let goldRich = RGB(red: 212.0 / 255, green: 160.0 / 255, blue: 23.0 / 255)
     static let goldWash = RGB(red: 247.0 / 255, green: 224.0 / 255, blue: 138.0 / 255)
@@ -237,50 +245,64 @@ enum ScoreColor {
         var border: RGB
     }
 
-    /// Light tint of the score color, or the rich gold gradient from 95 up.
+    /// Light tint of the score hue, or the rich gold gradient from 95 up. The border stays saturated.
     static func fill(for score: Int) -> Fill {
         let value = min(100, max(0, score))
         if value >= goldMinimum {
-            return Fill(top: goldWash, bottom: goldRich, border: gold)
+            return Fill(top: goldWash, bottom: goldRich, border: goldRich)
         }
-        let ink = rgb(for: value)
-        let white = RGB(red: 1, green: 1, blue: 1)
-        return Fill(
-            top: mix(ink, white, 0.86),
-            bottom: mix(ink, white, 0.70),
-            border: ink
-        )
+        let vivid = hsb(for: value)
+        var bottom = vivid
+        bottom.saturation = 0.34
+        bottom.brightness = 0.98
+        var top = vivid
+        top.saturation = 0.16
+        top.brightness = 1
+        return Fill(top: rgb(from: top), bottom: rgb(from: bottom), border: rgb(from: vivid))
     }
 
     static func rgb(for score: Int) -> RGB {
         let value = min(100, max(0, score))
         if value >= goldMinimum {
-            return gold
+            return goldRich
         }
-        let stops: [(Int, RGB)] = [
-            (0, RGB(red: 180.0 / 255, green: 35.0 / 255, blue: 24.0 / 255)),
-            (50, RGB(red: 161.0 / 255, green: 78.0 / 255, blue: 0)),
-            (72, RGB(red: 122.0 / 255, green: 104.0 / 255, blue: 0)),
-            (94, RGB(red: 31.0 / 255, green: 107.0 / 255, blue: 58.0 / 255))
-        ]
-        for index in 0..<(stops.count - 1) {
-            let left = stops[index]
-            let right = stops[index + 1]
-            if value <= right.0 {
-                let span = Double(right.0 - left.0)
-                let t = span == 0 ? 0 : Double(value - left.0) / span
-                return mix(left.1, right.1, t)
-            }
-        }
-        return stops[stops.count - 1].1
+        return rgb(from: hsb(for: value))
     }
 
-    private static func mix(_ start: RGB, _ end: RGB, _ t: Double) -> RGB {
-        RGB(
-            red: start.red + (end.red - start.red) * t,
-            green: start.green + (end.green - start.green) * t,
-            blue: start.blue + (end.blue - start.blue) * t
-        )
+    /// Hue, saturation, and brightness for a score. Below 95, saturation and brightness stay high.
+    static func hsb(for score: Int) -> HSB {
+        let value = min(100, max(0, score))
+        if value >= goldMinimum {
+            return HSB(hue: 43.5 / 360.0, saturation: 0.89, brightness: 0.83)
+        }
+        if value <= redCeiling {
+            return HSB(hue: 1.0 / 360.0, saturation: 0.92, brightness: 0.95)
+        }
+        let greenHue = 120.0 / 360.0
+        let t = Double(value - redCeiling) / Double(94 - redCeiling)
+        // From red (1.0) down to green. This arc is cyan, blue, and magenta, not yellow or orange.
+        let hue = 1.0 - (1.0 - greenHue) * t
+        return HSB(hue: hue, saturation: 0.92, brightness: 0.95)
+    }
+
+    private static func rgb(from hsb: HSB) -> RGB {
+        let hue = hsb.hue - floor(hsb.hue)
+        let saturation = min(1, max(0, hsb.saturation))
+        let brightness = min(1, max(0, hsb.brightness))
+        let sector = hue * 6
+        let index = Int(sector) % 6
+        let fraction = sector - Double(Int(sector))
+        let p = brightness * (1 - saturation)
+        let q = brightness * (1 - fraction * saturation)
+        let t = brightness * (1 - (1 - fraction) * saturation)
+        switch index {
+        case 0: return RGB(red: brightness, green: t, blue: p)
+        case 1: return RGB(red: q, green: brightness, blue: p)
+        case 2: return RGB(red: p, green: brightness, blue: t)
+        case 3: return RGB(red: p, green: q, blue: brightness)
+        case 4: return RGB(red: t, green: p, blue: brightness)
+        default: return RGB(red: brightness, green: p, blue: q)
+        }
     }
 }
 

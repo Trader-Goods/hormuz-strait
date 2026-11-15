@@ -41,60 +41,61 @@ final class ScoreTests: XCTestCase {
     }
 
     func testScoreColorBoundaries() {
-        let zero = ScoreColor.rgb(for: 0)
-        let mid = ScoreColor.rgb(for: 50)
+        for score in [0, 30, 50, 62, 80, 94] {
+            let color = ScoreColor.hsb(for: score)
+            XCTAssertGreaterThanOrEqual(color.saturation, 0.85, "score \(score) saturation")
+            XCTAssertGreaterThanOrEqual(color.brightness, 0.90, "score \(score) brightness")
+            let degrees = color.hue * 360
+            XCTAssertFalse((20...70).contains(degrees), "score \(score) hue \(degrees) is yellow or orange")
+        }
+
+        for score in [0, 30] {
+            let degrees = ScoreColor.hsb(for: score).hue * 360
+            XCTAssertTrue(degrees <= 15 || degrees >= 345, "score \(score) hue \(degrees)")
+            let rgb = ScoreColor.rgb(for: score)
+            XCTAssertGreaterThan(rgb.red, 0.8)
+            XCTAssertGreaterThan(rgb.red, rgb.green + 0.4)
+            XCTAssertGreaterThan(rgb.red, rgb.blue + 0.4)
+        }
+
+        let fifty = ScoreColor.hsb(for: 50).hue * 360
+        XCTAssertTrue((250...330).contains(fifty), "score 50 hue \(fifty)")
+        let sixtyTwo = ScoreColor.hsb(for: 62).hue * 360
+        XCTAssertTrue((200...270).contains(sixtyTwo), "score 62 hue \(sixtyTwo)")
+        let eighty = ScoreColor.hsb(for: 80).hue * 360
+        XCTAssertTrue((140...200).contains(eighty), "score 80 hue \(eighty)")
+        let greenHue = ScoreColor.hsb(for: 94).hue * 360
+        XCTAssertTrue((110...140).contains(greenHue), "score 94 hue \(greenHue)")
+
         let green = ScoreColor.rgb(for: 94)
-        let gold = ScoreColor.rgb(for: 95)
-        let top = ScoreColor.rgb(for: 100)
+        XCTAssertGreaterThan(green.green, 0.8)
+        XCTAssertGreaterThan(green.green, green.red + 0.5)
+        XCTAssertGreaterThan(green.green, green.blue)
 
-        XCTAssertGreaterThan(zero.red, 0.65)
-        XCTAssertLessThan(zero.green, 0.2)
-        XCTAssertLessThan(zero.blue, 0.15)
-
-        XCTAssertGreaterThan(mid.red, mid.green)
-        XCTAssertGreaterThan(mid.green, zero.green + 0.1)
-        XCTAssertEqual(mid.blue, 0)
-        XCTAssertGreaterThan(mid.red, 0.55)
-
-        XCTAssertGreaterThan(green.green, green.red)
-        XCTAssertGreaterThan(green.green, 0.35)
-        XCTAssertNotEqual(green, gold)
-
-        XCTAssertEqual(gold, top)
-        XCTAssertEqual(gold, ScoreColor.gold)
+        let gold = ScoreColor.hsb(for: 95)
+        XCTAssertEqual(ScoreColor.rgb(for: 95), ScoreColor.rgb(for: 100))
+        XCTAssertEqual(ScoreColor.rgb(for: 95), ScoreColor.goldRich)
+        XCTAssertNotEqual(ScoreColor.rgb(for: 94), ScoreColor.rgb(for: 95))
         XCTAssertEqual(ScoreColor.goldMinimum, 95)
+        let goldDegrees = gold.hue * 360
+        XCTAssertTrue((35...55).contains(goldDegrees), "gold hue \(goldDegrees)")
+        XCTAssertGreaterThanOrEqual(gold.saturation, 0.8)
+        XCTAssertGreaterThanOrEqual(gold.brightness, 0.8)
+
         let goldFill = ScoreColor.fill(for: 95)
         XCTAssertEqual(goldFill, ScoreColor.fill(for: 100))
         XCTAssertEqual(goldFill.top, ScoreColor.goldWash)
         XCTAssertEqual(goldFill.bottom, ScoreColor.goldRich)
-        XCTAssertNotEqual(ScoreColor.fill(for: 94).bottom, goldFill.bottom)
-        XCTAssertGreaterThan(ScoreColor.fill(for: 0).border.red, ScoreColor.fill(for: 0).border.green)
-        XCTAssertGreaterThan(ScoreColor.fill(for: 94).border.green, ScoreColor.fill(for: 94).border.red)
-        XCTAssertGreaterThan(ScoreColor.fill(for: 0).bottom.red, ScoreColor.fill(for: 0).bottom.green)
-        XCTAssertGreaterThan(gold.red, gold.green)
-        XCTAssertGreaterThan(gold.green, gold.blue + 0.2)
-        XCTAssertGreaterThan(green.green, gold.green)
+        XCTAssertEqual(goldFill.border, ScoreColor.goldRich)
+        XCTAssertNotEqual(ScoreColor.fill(for: 94).border, goldFill.border)
 
-        for sample in [zero, mid, green, gold] {
-            XCTAssertGreaterThanOrEqual(contrast(sample, on: card), 4.5)
+        for score in [0, 30, 50, 62, 80, 94] {
+            let fill = ScoreColor.fill(for: score)
+            XCTAssertEqual(fill.border, ScoreColor.rgb(for: score))
+            let tint = fill.bottom.red + fill.bottom.green + fill.bottom.blue
+            let ink = fill.border.red + fill.border.green + fill.border.blue
+            XCTAssertGreaterThan(tint, ink)
         }
-    }
-
-    private var card: ScoreColor.RGB {
-        ScoreColor.RGB(red: 0.975, green: 0.988, blue: 0.976)
-    }
-
-    private func contrast(_ ink: ScoreColor.RGB, on background: ScoreColor.RGB) -> Double {
-        let lighter = max(luminance(ink), luminance(background))
-        let darker = min(luminance(ink), luminance(background))
-        return (lighter + 0.05) / (darker + 0.05)
-    }
-
-    private func luminance(_ color: ScoreColor.RGB) -> Double {
-        func channel(_ value: Double) -> Double {
-            value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
-        }
-        return 0.2126 * channel(color.red) + 0.7152 * channel(color.green) + 0.0722 * channel(color.blue)
     }
 
     func testScoreStaysInRangeAndExplainsItself() {
