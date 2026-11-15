@@ -87,34 +87,37 @@ final class ScoreTests: XCTestCase {
     }
 
     func testScoreColorBoundaries() {
-        for score in [0, 30, 50, 62, 80, 94] {
+        for score in [0, 30, 35, 45, 50, 62, 80, 94] {
             let color = ScoreColor.hsb(for: score)
-            XCTAssertGreaterThanOrEqual(color.saturation, 0.85, "score \(score) saturation")
-            XCTAssertGreaterThanOrEqual(color.brightness, 0.90, "score \(score) brightness")
+            XCTAssertGreaterThanOrEqual(color.saturation, 0.95, "score \(score) saturation")
             let degrees = color.hue * 360
             XCTAssertTrue((0...120).contains(degrees), "score \(score) hue \(degrees) left the green-to-red arc")
-            XCTAssertFalse((180...359).contains(degrees), "score \(score) hue \(degrees) is purple, magenta, or blue")
+            XCTAssertFalse((180...359).contains(degrees), "score \(score) hue \(degrees) is purple, magenta, or pink")
         }
 
         let worst = ScoreColor.hsb(for: 0)
         let redThirty = ScoreColor.hsb(for: 30)
-        XCTAssertEqual(worst.hue, 0)
-        XCTAssertEqual(redThirty.hue, 0)
-        XCTAssertGreaterThan(worst.brightness, redThirty.brightness)
-        for score in [0, 30] {
+        let redFortyFive = ScoreColor.hsb(for: 45)
+        XCTAssertLessThanOrEqual(worst.hue * 360, 5)
+        XCTAssertLessThanOrEqual(redThirty.hue * 360, 5)
+        XCTAssertLessThanOrEqual(redFortyFive.hue * 360, 5)
+        XCTAssertLessThan(worst.brightness, redThirty.brightness)
+        XCTAssertLessThan(redThirty.brightness, redFortyFive.brightness)
+        XCTAssertTrue(ScoreColor.inkIsWhite(for: 0))
+        for score in [0, 30, 35, 45] {
             let rgb = ScoreColor.rgb(for: score)
-            XCTAssertGreaterThan(rgb.red, 0.8)
-            XCTAssertGreaterThan(rgb.red, rgb.green + 0.5)
-            XCTAssertGreaterThan(rgb.red, rgb.blue + 0.5)
-            XCTAssertLessThan(rgb.blue, 0.08)
+            XCTAssertGreaterThan(rgb.red, rgb.green + 0.25)
+            XCTAssertGreaterThan(rgb.red, rgb.blue + 0.25)
+            XCTAssertLessThan(rgb.blue, 0.05)
+            XCTAssertLessThan(rgb.green, 0.08)
         }
 
         let fifty = ScoreColor.hsb(for: 50).hue * 360
-        XCTAssertTrue((30...50).contains(fifty), "score 50 hue \(fifty)")
+        XCTAssertTrue((5...40).contains(fifty), "score 50 hue \(fifty)")
         let sixtyTwo = ScoreColor.hsb(for: 62).hue * 360
-        XCTAssertTrue((50...75).contains(sixtyTwo), "score 62 hue \(sixtyTwo)")
+        XCTAssertTrue((20...55).contains(sixtyTwo), "score 62 hue \(sixtyTwo)")
         let eighty = ScoreColor.hsb(for: 80).hue * 360
-        XCTAssertTrue((80...110).contains(eighty), "score 80 hue \(eighty)")
+        XCTAssertTrue((70...110).contains(eighty), "score 80 hue \(eighty)")
         let greenHue = ScoreColor.hsb(for: 94).hue * 360
         XCTAssertTrue((110...140).contains(greenHue), "score 94 hue \(greenHue)")
 

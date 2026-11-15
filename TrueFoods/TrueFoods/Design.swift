@@ -232,7 +232,7 @@ enum ScoreColor {
     }
 
     static let goldMinimum = 95
-    static let redCeiling = 30
+    static let redCeiling = 45
     /// Darkened #D4A017 so a gold number can stay readable if it sits on a light gold card.
     static let gold = RGB(red: 140.0 / 255, green: 106.0 / 255, blue: 16.0 / 255)
     static let goldRich = RGB(red: 212.0 / 255, green: 160.0 / 255, blue: 23.0 / 255)
@@ -290,12 +290,21 @@ enum ScoreColor {
             return HSB(hue: 43.5 / 360.0, saturation: 0.89, brightness: 0.83)
         }
         if value <= redCeiling {
-            let worse = Double(redCeiling - value) / Double(redCeiling)
-            return HSB(hue: 0, saturation: 1, brightness: 0.90 + 0.10 * worse)
+            let lighter = Double(value) / Double(redCeiling)
+            return HSB(hue: clampedHue(2), saturation: 1, brightness: 0.40 + 0.55 * lighter)
         }
         let t = Double(value - redCeiling) / Double(94 - redCeiling)
-        // 0 at the red end through orange and yellow up to green. Hue stays at or below 120°, so it never wraps into purple.
-        return HSB(hue: (120.0 / 360.0) * t, saturation: 1, brightness: 0.98)
+        let degrees = 2 + (120 - 2) * t
+        return HSB(hue: clampedHue(degrees), saturation: 1, brightness: 0.98)
+    }
+
+    /// Keeps every score hue on the green-to-red side. Nothing can wrap into 300–360 (pink, magenta, purple).
+    private static func clampedHue(_ degrees: Double) -> Double {
+        var wrapped = degrees.truncatingRemainder(dividingBy: 360)
+        if wrapped < 0 { wrapped += 360 }
+        if wrapped >= 300 { return 0 }
+        if wrapped > 120 { return 120.0 / 360.0 }
+        return wrapped / 360.0
     }
 
     private static func rgb(from hsb: HSB) -> RGB {
