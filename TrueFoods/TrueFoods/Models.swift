@@ -120,6 +120,56 @@ enum Allergen: String, CaseIterable, Identifiable {
     }
 }
 
+/// Score swatches for TestFlight and debug builds. The App Store build compiles this list out.
+enum ColorSamples {
+    static let scores = [35, 45, 62, 75, 85, 94, 96]
+
+    static var foods: [Product] {
+        #if DEBUG || TESTFLIGHT
+        return scores.map(make)
+        #else
+        return []
+        #endif
+    }
+
+    static func displayedScore(for product: Product) -> Int? {
+        #if DEBUG || TESTFLIGHT
+        let prefix = "color-sample-"
+        guard product.id.hasPrefix(prefix) else { return nil }
+        return Int(product.id.dropFirst(prefix.count))
+        #else
+        return nil
+        #endif
+    }
+
+    #if DEBUG || TESTFLIGHT
+    private static func make(_ score: Int) -> Product {
+        Product(
+            id: "color-sample-\(score)",
+            name: "Sample \(score)",
+            brand: "Color preview",
+            barcode: "",
+            ingredients: "",
+            additiveTags: [],
+            categories: [],
+            nova: nil,
+            kcal: nil,
+            sugar: nil,
+            addedSugar: nil,
+            sodiumMg: nil,
+            saturatedFat: nil,
+            fiber: nil,
+            protein: nil,
+            basis: "sample",
+            serving: "",
+            source: "Sample",
+            sourceDetail: "A color sample for this TestFlight build. Not a real food.",
+            isSample: true
+        )
+    }
+    #endif
+}
+
 enum Copy {
     static let disclaimer = "TrueFoods shares public information in plain words. It is not medical advice, not a diagnosis, and not a reason to start or stop a food. Talk with a clinician about your own health."
     static let support = "support@tradergoods.us"

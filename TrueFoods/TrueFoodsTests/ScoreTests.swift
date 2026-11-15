@@ -40,6 +40,18 @@ final class ScoreTests: XCTestCase {
         XCTAssertTrue(lines.contains { $0.contains("Milk") })
     }
 
+    func testColorPreviewSamplesStayOutOfRealScores() {
+        XCTAssertEqual(ColorSamples.scores, [35, 45, 62, 75, 85, 94, 96])
+        XCTAssertEqual(ColorSamples.foods.map(\.id), ColorSamples.scores.map { "color-sample-\($0)" })
+        for food in ColorSamples.foods {
+            XCTAssertTrue(food.isSample)
+            XCTAssertTrue(food.name.hasPrefix("Sample"))
+            XCTAssertEqual(food.brand, "Color preview")
+            XCTAssertEqual(ColorSamples.displayedScore(for: food), Int(food.name.dropFirst("Sample ".count)))
+        }
+        XCTAssertNil(ColorSamples.displayedScore(for: .sampleEggs))
+    }
+
     func testScoreColorBoundaries() {
         for score in [0, 30, 50, 62, 80, 94] {
             let color = ScoreColor.hsb(for: score)

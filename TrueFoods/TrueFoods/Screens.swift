@@ -81,6 +81,22 @@ struct HomeScreen: View {
                             Text(message)
                                 .airyBody()
                         }
+                        #if DEBUG || TESTFLIGHT
+                        if !ColorSamples.foods.isEmpty {
+                            Text("Color preview samples")
+                                .airyTitle()
+                            Text("Sample cards for this TestFlight build. Not real foods.")
+                                .airySecondary()
+                            ForEach(ColorSamples.foods) { item in
+                                NavigationLink {
+                                    ProductScreen(product: item)
+                                } label: {
+                                    FoodCard(product: item)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        #endif
                         if !recentFoods.isEmpty {
                             Text("Recent")
                                 .airyTitle()
@@ -374,6 +390,7 @@ struct ProductScreen: View {
     var body: some View {
         let notes = IngredientBook.matches(in: shown.ingredients, tags: shown.additiveTags)
         let report = ScoreEngine.score(shown, notes: notes)
+        let score = ColorSamples.displayedScore(for: shown) ?? report.value
         let banners = FlagEngine.banners(for: shown, notes: notes, flags: pantry.flags)
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
@@ -381,7 +398,7 @@ struct ProductScreen: View {
                     Text("Sample food, so you can see this screen. Not a real product.")
                         .airySecondary()
                 }
-                ScoreCard(score: report.value) {
+                ScoreCard(score: score) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(shown.displayName)
                             .airyTitle()
@@ -391,7 +408,7 @@ struct ProductScreen: View {
                                 .foregroundStyle(Air.ink.opacity(0.75))
                         }
                         HStack(alignment: .center, spacing: 16) {
-                            ScoreBadge(score: report.value)
+                            ScoreBadge(score: score)
                             Text("out of 100")
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundStyle(Air.ink)
@@ -513,7 +530,7 @@ struct FoodCard: View {
 
     var body: some View {
         let notes = IngredientBook.matches(in: product.ingredients, tags: product.additiveTags)
-        let score = ScoreEngine.score(product, notes: notes).value
+        let score = ColorSamples.displayedScore(for: product) ?? ScoreEngine.score(product, notes: notes).value
         ScoreCard(score: score) {
             HStack(alignment: .center, spacing: 14) {
                 ScoreBadge(score: score, diameter: 64)
