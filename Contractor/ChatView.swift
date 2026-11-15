@@ -1,5 +1,122 @@
 import SwiftUI
 
+struct MessagesInbox: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var names: [UUID: String] = [:]
+
+    private struct Thread: Identifiable {
+        var id: String
+        var jobID: UUID
+        var proID: UUID
+        var otherID: UUID
+        var title: String
+        var subtitle: String
+        var unread: Int
+    }
+
+    private var threads: [Thread] {
+        guard let me = model.session else { return [] }
+        var seen = Set<String>()
+        var rows: [Thread] = []
+        func add(jobID: UUID, proID: UUID, otherID: UUID, fallback: String) {
+            let key = "\(jobID.uuidString)-\(proID.uuidString)"
+            guard seen.insert(key).inserted else { return }
+            guard let job = model.jobs.first(where: { $0.id == jobID }) else { return }
+            rows.append(Thread(
+                id: key,
+                jobID: jobID,
+                proID: proID,
+                otherID: otherID,
+                title: names[otherID] ?? fallback,
+                subtitle: job.serviceTitle,
+                unread: model.unreadCount(jobID: jobID)
+            ))
+        }
+        if me.role == .customer {
+            for job in model.jobs {
+                for quote in model.quotes(for: job.id) {
+                    add(jobID: job.id, proID: quote.proID, otherID: quote.proID, fallback: "Pro")
+                }
+                if let booking = model.booking(for: job.id) {
+                    add(jobID: job.id, proID: booking.proID, otherID: booking.proID, fallback: "Pro")
+                }
+            }
+        } else {
+            for quote in model.quotes where quote.proID == me.id {
+                if let job = model.jobs.first(where: { $0.id == quote.jobID }) {
+                    add(jobID: job.id, proID: me.id, otherID: job.customerID, fallback: "Customer")
+                }
+            }
+            for booking in model.bookings where booking.proID == me.id {
+                if let job = model.jobs.first(where: { $0.id == booking.jobID }) {
+                    add(jobID: job.id, proID: me.id, otherID: job.customerID, fallback: "Customer")
+                }
+            }
+        }
+        return rows.sorted { lhs, rhs in
+            if lhs.unread != rhs.unread { return lhs.unread > rhs.unread }
+            return lhs.subtitle < rhs.subtitle
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                BrandHeader()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Messages")
+                            .appText(28, weight: .bold, relativeTo: .title)
+                            .foregroundStyle(ink)
+                        Text(model.session?.role == .customer
+                             ? "Conversations with pros about your jobs."
+                             : "Conversations with customers about their jobs.")
+                            .appText()
+                            .foregroundStyle(.secondary)
+                        if threads.isEmpty {
+                            FriendlyEmpty(symbol: "bubble.left.and.bubble.right", title: "No messages yet.", photo: "yard-beds", button: nil)
+                        }
+                        ForEach(threads) { thread in
+                            NavigationLink {
+                                ChatView(jobID: thread.jobID, proID: thread.proID, title: thread.title)
+                            } label: {
+                                Card {
+                                    HStack(spacing: 12) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(thread.title)
+                                                .appText(20, weight: .semibold, relativeTo: .headline)
+                                                .foregroundStyle(ink)
+                                            Text(thread.subtitle)
+                                                .appText()
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer(minLength: 8)
+                                        UnreadBadge(count: thread.unread)
+                                        Image(systemName: "chevron.right")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(thread.unread > 0 ? "\(thread.title), \(thread.subtitle), \(thread.unread) unread" : "\(thread.title), \(thread.subtitle)")
+                        }
+                    }
+                    .padding(16)
+                }
+                .refreshable { await model.reload() }
+            }
+            .background(paper)
+            .task(id: threads.map(\.otherID)) {
+                for id in Set(threads.map(\.otherID)) where names[id] == nil {
+                    if let person = await model.person(id) {
+                        names[id] = person.publicName
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct ChatView: View {
     @EnvironmentObject private var model: AppModel
     var jobID: UUID

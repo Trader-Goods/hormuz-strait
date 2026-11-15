@@ -164,7 +164,7 @@ struct ProJobMap: View {
                     latitudeDelta = next
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: expands ? 540 : 360, maxHeight: expands ? .infinity : 360)
+            .frame(maxWidth: .infinity, minHeight: expands ? 280 : 200, maxHeight: expands ? .infinity : 320)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
             if locating {
@@ -504,7 +504,6 @@ struct GuestJobPreview: View {
     @State private var locating = false
 
     var body: some View {
-        ScrollView {
         VStack(spacing: 8) {
             Text("Jobs near you")
                 .appText(28, weight: .bold, relativeTo: .title)
@@ -564,16 +563,15 @@ struct GuestJobPreview: View {
                     ) { id in
                         selected = jobs.first { $0.id == id }
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(minHeight: 180, maxHeight: .infinity)
                 }
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 8) {
                 Button("Sign up free to post a job") {

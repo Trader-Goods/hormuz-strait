@@ -547,6 +547,7 @@ struct AppTab: Identifiable {
     var title: String
     var symbol: String
     var selectedSymbol: String
+    var badge: Int = 0
 }
 
 struct AppTabBar: View {
@@ -567,6 +568,10 @@ struct AppTabBar: View {
                             Image(systemName: on ? tab.selectedSymbol : tab.symbol)
                                 .appText(20, weight: .bold, relativeTo: .headline)
                                 .accessibilityHidden(true)
+                                .overlay(alignment: .topTrailing) {
+                                    UnreadBadge(count: tab.badge)
+                                        .offset(x: 10, y: -8)
+                                }
                             Text(tab.title)
                                 .appText(18, weight: on ? .bold : .semibold)
                                 .multilineTextAlignment(.center)
@@ -582,7 +587,7 @@ struct AppTabBar: View {
                         .padding(.vertical, 6)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(tab.title)
+                    .accessibilityLabel(tab.badge > 0 ? "\(tab.title), \(tab.badge) unread" : tab.title)
                     .accessibilityAddTraits(on ? [.isSelected, .isButton] : .isButton)
                 }
             }
@@ -745,18 +750,19 @@ struct CustomerShell: View {
 
     private static var startingTab: Int {
         switch ProcessInfo.processInfo.environment["SCREENSHOT"] {
-        case "map": return 2
+        case "map": return 3
         case "post": return 0
-        default: return 1
+        default: return 2
         }
     }
 
     private var tabs: [AppTab] {
         [
             AppTab(id: 0, title: "Post a Job", symbol: "plus.circle", selectedSymbol: "plus.circle.fill"),
-            AppTab(id: 1, title: "My Jobs", symbol: "list.bullet.rectangle", selectedSymbol: "list.bullet.rectangle.fill"),
-            AppTab(id: 2, title: "Prices Near Me", symbol: "map", selectedSymbol: "map.fill"),
-            AppTab(id: 3, title: "Me", symbol: "person", selectedSymbol: "person.fill"),
+            AppTab(id: 1, title: "Messages", symbol: "bubble.left.and.bubble.right", selectedSymbol: "bubble.left.and.bubble.right.fill", badge: model.unreadTotal),
+            AppTab(id: 2, title: "My Jobs", symbol: "list.bullet.rectangle", selectedSymbol: "list.bullet.rectangle.fill"),
+            AppTab(id: 3, title: "Prices Near Me", symbol: "map", selectedSymbol: "map.fill"),
+            AppTab(id: 4, title: "Me", symbol: "person", selectedSymbol: "person.fill"),
         ]
     }
 
@@ -765,8 +771,9 @@ struct CustomerShell: View {
             Group {
                 switch tab {
                 case 0: PostJobView()
-                case 2: NearbyPricesPage(readOnly: true)
-                case 3: AccountView()
+                case 1: MessagesInbox()
+                case 3: NearbyPricesPage(readOnly: true)
+                case 4: AccountView()
                 default: CustomerHome()
                 }
             }
@@ -784,9 +791,10 @@ struct ProShell: View {
     private var tabs: [AppTab] {
         [
             AppTab(id: 0, title: "Jobs Near Me", symbol: "mappin.and.ellipse", selectedSymbol: "mappin.circle.fill"),
-            AppTab(id: 1, title: "My Jobs", symbol: "list.bullet.rectangle", selectedSymbol: "list.bullet.rectangle.fill"),
-            AppTab(id: 2, title: "Money", symbol: "dollarsign.circle", selectedSymbol: "dollarsign.circle.fill"),
-            AppTab(id: 3, title: "Me", symbol: "person", selectedSymbol: "person.fill"),
+            AppTab(id: 1, title: "Messages", symbol: "bubble.left.and.bubble.right", selectedSymbol: "bubble.left.and.bubble.right.fill", badge: model.unreadTotal),
+            AppTab(id: 2, title: "My Jobs", symbol: "list.bullet.rectangle", selectedSymbol: "list.bullet.rectangle.fill"),
+            AppTab(id: 3, title: "Money", symbol: "dollarsign.circle", selectedSymbol: "dollarsign.circle.fill"),
+            AppTab(id: 4, title: "Me", symbol: "person", selectedSymbol: "person.fill"),
         ]
     }
 
@@ -794,9 +802,10 @@ struct ProShell: View {
         VStack(spacing: 0) {
             Group {
                 switch tab {
-                case 1: ProHome(lane: 1)
-                case 2: EarningsView()
-                case 3: AccountView()
+                case 1: MessagesInbox()
+                case 2: ProHome(lane: 1)
+                case 3: EarningsView()
+                case 4: AccountView()
                 default: ProHome(lane: 0)
                 }
             }

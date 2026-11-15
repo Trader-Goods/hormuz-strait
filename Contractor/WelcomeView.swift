@@ -157,7 +157,7 @@ struct WelcomeView: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             HStack(spacing: 12) {
                 pageChip("Welcome", index: 0)
-                pageChip("Jobs near you", index: 1)
+                pageChip("Map", index: 1)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
