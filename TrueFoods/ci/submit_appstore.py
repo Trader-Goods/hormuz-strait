@@ -191,7 +191,7 @@ def set_age_rating(auth, info_id):
     }
     attrs = {}
     for key, value in current.items():
-        if key in ("developerAgeRatingInfoUrl",):
+        if key in ("developerAgeRatingInfoUrl", "gracRatingClassificationNumber", "ageRatingOverride"):
             continue
         if key == "alcoholTobaccoOrDrugUseOrReferences":
             attrs[key] = "INFREQUENT_OR_MILD"
@@ -234,10 +234,18 @@ def set_age_rating(auth, info_id):
                 elif "TYPE" in code or "not a valid" in detail.lower():
                     attrs[pointer] = "NONE" if pointer != "alcoholTobaccoOrDrugUseOrReferences" else "INFREQUENT_OR_MILD"
                     changed = True
-                elif any(word in detail.lower() for word in ("unknown", "does not exist", "not supported", "read-only", "read only", "cannot be modified")):
+                elif any(word in detail.lower() for word in ("unknown", "does not exist", "not supported", "read-only", "read only", "cannot be modified", "cannot be set")):
                     attrs.pop(pointer, None)
                     changed = True
-                print("age rating field", pointer, "->", attrs.get(pointer, "dropped"))
+                else:
+                    for name in __import__("re").findall(r"'([A-Za-z][A-Za-z0-9]*)'", detail):
+                        if name in attrs and "cannot" in detail.lower():
+                            attrs.pop(name, None)
+                            changed = True
+                            print("dropped", name)
+                            break
+                if pointer:
+                    print("age rating field", pointer, "->", attrs.get(pointer, "dropped"))
             if changed:
                 continue
             fail(f"could not save the age rating: {text[:1500]}")
