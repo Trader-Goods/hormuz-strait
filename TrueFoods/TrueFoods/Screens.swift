@@ -17,14 +17,22 @@ enum Shot: String {
     }
 }
 
+private var reviewCereal: Product {
+    var food = Product.sampleCrunch
+    food.name = "Berry crunch cereal"
+    food.brand = "Breakfast aisle"
+    food.source = "Product label"
+    food.sourceDetail = "Ingredient list used for the store screenshot."
+    food.isSample = false
+    return food
+}
+
 struct RootView: View {
     var body: some View {
         Group {
             switch Shot.current {
-            case .result:
-                NavigationStack { ProductScreen(product: .sampleCrunch) }
-            case .score:
-                NavigationStack { ProductScreen(product: .sampleCrunch) }
+            case .result, .score:
+                NavigationStack { ProductScreen(product: reviewCereal) }
             case .snap:
                 NavigationStack { SnapScreen(previewText: Product.sampleLabel) }
             case .home, .none:
