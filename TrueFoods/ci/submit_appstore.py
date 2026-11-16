@@ -370,7 +370,7 @@ def declare_privacy(auth):
         })
         print("privacy answers published")
     except SystemExit:
-        print("privacy answers were saved but not published")
+        print("BLOCKER: App Privacy cannot be set with the App Store Connect API key. Publish it in App Store Connect: Search History, used for app functionality, not linked to the user, not used to track. Food names and barcodes are sent to Open Food Facts, USDA, and openFDA. Photos, favorites, and flags stay on the iPhone.")
 
 
 def upload_bytes(operations, data):
@@ -546,18 +546,55 @@ def main():
         }
     })
     print("attached build", number, attached.get("data", {}).get("attributes", {}).get("appStoreState"))
-    submission = call(auth, "POST", "/v1/appStoreVersionSubmissions", {
+    status = submit_for_review(auth, version_id)
+    final = call(auth, "GET", f"/v1/appStoreVersions/{version_id}")
+    version_state = final.get("data", {}).get("attributes", {}).get("appStoreState")
+    print(f"SUBMITTED build {number} submission {status} version {version_state}")
+    if status not in ("WAITING_FOR_REVIEW", "IN_REVIEW") and version_state not in ("WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_APPLE_RELEASE", "READY_FOR_SALE", "PROCESSING_FOR_APP_STORE"):
+        fail(f"submit finished but submission state is {status} and version state is {version_state}")
+
+
+def submit_for_review(auth, version_id):
+    found = call(auth, "GET", f"/v1/apps/{APP}/reviewSubmissions?filter[platform]=IOS&limit=20")
+    submission = None
+    for item in found.get("data", []):
+        state = (item.get("attributes") or {}).get("state")
+        print("existing review submission", item["id"], state)
+        if state in ("WAITING_FOR_REVIEW", "IN_REVIEW"):
+            return state
+        if state in ("READY_FOR_REVIEW", "UNRESOLVED_ISSUES") and submission is None:
+            submission = item
+    if submission is None:
+        created = call(auth, "POST", "/v1/reviewSubmissions", {
+            "data": {
+                "type": "reviewSubmissions",
+                "attributes": {"platform": "IOS"},
+                "relationships": {"app": {"data": {"type": "apps", "id": APP}}},
+            }
+        })
+        submission = created["data"]
+        print("created review submission", submission["id"], submission.get("attributes", {}).get("state"))
+    sub_id = submission["id"]
+    items = soft(auth, "GET", f"/v1/reviewSubmissions/{sub_id}/items?limit=20") or {}
+    if not items.get("data"):
+        added = call(auth, "POST", "/v1/reviewSubmissionItems", {
+            "data": {
+                "type": "reviewSubmissionItems",
+                "relationships": {
+                    "reviewSubmission": {"data": {"type": "reviewSubmissions", "id": sub_id}},
+                    "appStoreVersion": {"data": {"type": "appStoreVersions", "id": version_id}},
+                },
+            }
+        })
+        print("added version to review submission", added.get("data", {}).get("id"))
+    result = call(auth, "PATCH", f"/v1/reviewSubmissions/{sub_id}", {
         "data": {
-            "type": "appStoreVersionSubmissions",
-            "relationships": {"appStoreVersion": {"data": {"type": "appStoreVersions", "id": version_id}}},
+            "type": "reviewSubmissions",
+            "id": sub_id,
+            "attributes": {"submitted": True},
         }
     })
-    final = call(auth, "GET", f"/v1/appStoreVersions/{version_id}")
-    status = final.get("data", {}).get("attributes", {}).get("appStoreState")
-    print("submission", submission.get("data", {}).get("id"), status)
-    if status not in ("WAITING_FOR_REVIEW", "IN_REVIEW", "PENDING_APPLE_RELEASE", "READY_FOR_SALE", "PROCESSING_FOR_APP_STORE"):
-        fail(f"submit finished but version state is {status}")
-    print(f"SUBMITTED build {number} state {status}")
+    return (result.get("data") or {}).get("attributes", {}).get("state")
 
 
 if __name__ == "__main__":
