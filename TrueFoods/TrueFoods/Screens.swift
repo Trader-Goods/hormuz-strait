@@ -145,7 +145,10 @@ struct HomeScreen: View {
 
     private var recentFoods: [Product] {
         if Shot.current == .home, pantry.history.isEmpty {
-            return [Product.sampleEggs, Product.sampleCrunch]
+            var eggs = Product.sampleEggs
+            eggs.brand = "Large white"
+            eggs.isSample = false
+            return [eggs, reviewCereal]
         }
         return Array(pantry.history.prefix(3))
     }

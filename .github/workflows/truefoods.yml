@@ -9,7 +9,7 @@ on:
 jobs:
   testflight:
     name: Build, sign and upload to TestFlight
-    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[groups-only]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[groups-only]') && !contains(github.event.head_commit.message, '[store]') }}
     runs-on: macos-15-intel
     timeout-minutes: 60
     env:
@@ -181,6 +181,8 @@ jobs:
     if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
     runs-on: macos-15-intel
     timeout-minutes: 60
+    env:
+      STORE_SHOTS_ONLY: ${{ contains(github.event.head_commit.message, '[store]') && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -206,7 +208,7 @@ jobs:
   appstore:
     name: Submit version 1.0 for App Store review
     needs: [testflight, screenshots]
-    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[groups-only]') }}
+    if: ${{ always() && !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[groups-only]') && (needs.testflight.result == 'success' || contains(github.event.head_commit.message, '[store]')) && needs.screenshots.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -234,7 +236,7 @@ jobs:
         env:
           KID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISS: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          BUILD_NUMBER: ${{ github.run_number }}
+          BUILD_NUMBER: ${{ contains(github.event.head_commit.message, '[store]') && '28' || github.run_number }}
           SHOTS: artifacts/screenshots
         run: python3 TrueFoods/ci/submit_appstore.py
 

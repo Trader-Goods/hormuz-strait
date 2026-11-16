@@ -178,22 +178,67 @@ def set_categories(auth, info_id):
         })
 
 
-def set_age_rating(auth, version_id):
-    found = call(auth, "GET", f"/v1/appStoreVersions/{version_id}/ageRatingDeclaration")
+def set_age_rating(auth, info_id):
+    found = call(auth, "GET", f"/v1/appInfos/{info_id}/ageRatingDeclaration")
     item = found["data"]
+    current = item.get("attributes") or {}
+    print("age rating fields", ", ".join(sorted(current)))
+    bool_true = {"healthOrWellnessTopics"}
+    bool_false = {
+        "advertising", "ageAssurance", "gambling", "lootBox", "messagingAndChat",
+        "parentalControls", "unrestrictedWebAccess", "userGeneratedContent",
+    }
     attrs = {}
-    for key, value in (item.get("attributes") or {}).items():
-        if key in ("alcoholTobaccoOrDrugUseOrReferences", "healthOrWellnessTopics"):
+    for key, value in current.items():
+        if key in ("developerAgeRatingInfoUrl",):
+            continue
+        if key == "alcoholTobaccoOrDrugUseOrReferences":
             attrs[key] = "INFREQUENT_OR_MILD"
-        elif isinstance(value, bool):
-            attrs[key] = False
-        elif value is None or isinstance(value, str):
-            if key == "kidsAgeBand":
-                attrs[key] = None
-            else:
-                attrs[key] = "NONE"
-    patch_attributes(auth, f"/v1/ageRatingDeclarations/{item['id']}", "ageRatingDeclarations", item["id"], attrs)
-    print("age rating saved")
+        elif key == "kidsAgeBand":
+            attrs[key] = None
+        elif isinstance(value, bool) or key in bool_true or key in bool_false:
+            attrs[key] = key in bool_true
+        else:
+            attrs[key] = "NONE"
+    for key in bool_false:
+        attrs.setdefault(key, False)
+    for key in bool_true:
+        attrs.setdefault(key, True)
+    path = f"/v1/ageRatingDeclarations/{item['id']}"
+    for _ in range(12):
+        body = {"data": {"type": "ageRatingDeclarations", "id": item["id"], "attributes": attrs}}
+        try:
+            api("PATCH", path, auth, body)
+            print("age rating saved")
+            return
+        except SystemExit as error:
+            text = json.dumps(getattr(error, "payload", {}) or {})
+            print(text[:1500])
+            removed = [key for key in list(attrs) if key in text and any(word in text.lower() for word in ("unknown", "does not exist", "not supported", "read-only", "read only"))]
+            if removed:
+                for key in removed:
+                    attrs.pop(key, None)
+                    print("dropped", key)
+                continue
+            flipped = False
+            for key, value in list(attrs.items()):
+                if key not in text:
+                    continue
+                if isinstance(value, bool):
+                    attrs[key] = "INFREQUENT_OR_MILD" if key == "healthOrWellnessTopics" else "NONE"
+                elif value == "INFREQUENT_OR_MILD":
+                    attrs[key] = "NONE"
+                elif isinstance(value, str):
+                    attrs[key] = False
+                else:
+                    continue
+                print("flipped", key, "to", attrs[key])
+                flipped = True
+                break
+            if flipped:
+                continue
+            fail(f"could not save the age rating: {text[:1500]}")
+    fail("could not save the age rating")
 
 
 def set_price(auth):
@@ -249,49 +294,72 @@ def set_price(auth):
         print("available in territories", len(ids))
 
 
+def iris(auth, method, path, body=None):
+    data = None if body is None else json.dumps(body).encode()
+    request = urllib.request.Request(
+        "https://appstoreconnect.apple.com/iris/v1" + path,
+        data=data,
+        method=method,
+        headers={"Authorization": "Bearer " + auth, "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            raw = response.read().decode()
+            return json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as error:
+        raw = error.read().decode()
+        print(f"IRIS {method} {path.split('?')[0]} failed: {error.code}")
+        print(raw[:2000])
+        failure = SystemExit(1)
+        failure.code = error.code
+        failure.payload = json.loads(raw) if raw[:1] in "{[" else {"raw": raw[:2000]}
+        raise failure
+
+
 def declare_privacy(auth):
-    existing = soft(auth, "GET", f"/v1/apps/{APP}/dataUsages?limit=50")
-    categories = []
-    if existing:
-        categories = [(item.get("attributes") or {}).get("category") for item in existing.get("data", [])]
-    if "SEARCH_HISTORY" not in categories:
-        created = soft(auth, "POST", "/v1/appDataUsages", {
-            "data": {
-                "type": "appDataUsages",
-                "attributes": {
-                    "category": "SEARCH_HISTORY",
-                    "purpose": "APP_FUNCTIONALITY",
-                    "dataProtection": ["DATA_NOT_LINKED_TO_YOU", "DATA_NOT_USED_TO_TRACK_YOU"],
-                },
-                "relationships": {"app": {"data": {"type": "apps", "id": APP}}},
-            }
-        })
-        if created is None:
-            soft(auth, "POST", "/v1/appDataUsages", {
+    """The food name or barcode is sent to look up the product. It is not linked to a person."""
+    try:
+        existing = iris(auth, "GET", f"/apps/{APP}/dataUsages?limit=50")
+    except SystemExit:
+        existing = {"data": []}
+    already = False
+    for item in existing.get("data", []):
+        relations = item.get("relationships") or {}
+        category = ((relations.get("category") or {}).get("data") or {}).get("id")
+        purpose = ((relations.get("purpose") or {}).get("data") or {}).get("id")
+        protection = ((relations.get("dataProtection") or {}).get("data") or {}).get("id")
+        if category == "SEARCH_HISTORY" and purpose == "APP_FUNCTIONALITY" and protection == "DATA_NOT_LINKED_TO_YOU":
+            already = True
+    if not already:
+        try:
+            iris(auth, "POST", "/appDataUsages", {
                 "data": {
                     "type": "appDataUsages",
-                    "attributes": {
-                        "category": "SEARCH_HISTORY",
-                        "purpose": "APP_FUNCTIONALITY",
-                        "dataProtections": ["DATA_NOT_LINKED_TO_YOU", "DATA_NOT_USED_TO_TRACK_YOU"],
+                    "relationships": {
+                        "app": {"data": {"type": "apps", "id": APP}},
+                        "category": {"data": {"type": "appDataUsageCategories", "id": "SEARCH_HISTORY"}},
+                        "purpose": {"data": {"type": "appDataUsagePurposes", "id": "APP_FUNCTIONALITY"}},
+                        "dataProtection": {"data": {"type": "appDataUsageDataProtections", "id": "DATA_NOT_LINKED_TO_YOU"}},
                     },
-                    "relationships": {"app": {"data": {"type": "apps", "id": APP}}},
                 }
             })
-    published = soft(auth, "POST", "/v1/appDataUsagePublishState", {
-        "data": {
-            "type": "appDataUsagePublishState",
-            "attributes": {"published": True},
-            "relationships": {"app": {"data": {"type": "apps", "id": APP}}},
-        }
-    })
-    if published is None:
-        soft(auth, "POST", "/v1/appDataUsagePublishRequests", {
+            print("privacy usage saved")
+        except SystemExit as error:
+            if getattr(error, "code", None) not in (409, 422):
+                print("privacy usage was not saved")
+    try:
+        state = iris(auth, "GET", f"/apps/{APP}/dataUsagePublishState")
+        state_id = state["data"]["id"]
+        iris(auth, "PATCH", f"/appDataUsagesPublishState/{state_id}", {
             "data": {
-                "type": "appDataUsagePublishRequests",
-                "relationships": {"app": {"data": {"type": "apps", "id": APP}}},
+                "type": "appDataUsagesPublishState",
+                "id": state_id,
+                "attributes": {"published": True},
             }
         })
+        print("privacy answers published")
+    except SystemExit:
+        print("privacy answers were saved but not published")
 
 
 def upload_bytes(operations, data):
@@ -431,7 +499,7 @@ def main():
         "keywords": KEYWORDS,
         "supportUrl": SUPPORT,
     })
-    set_age_rating(auth, version_id)
+    set_age_rating(auth, info["id"])
     set_price(auth)
     declare_privacy(auth)
     upload_screenshots(auth, copy["id"], folder)

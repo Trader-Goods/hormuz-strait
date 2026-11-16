@@ -7,6 +7,7 @@ mkdir -p "$OUT"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PROJ="$ROOT/TrueFoods/TrueFoods.xcodeproj"
 DD="${RUNNER_TEMP:-/tmp}/truefoods-shots"
+if [ "${STORE_SHOTS_ONLY:-0}" != "1" ]; then
 UDID="$(python3 "$ROOT/TrueFoods/ci/pick_simulator.py")"
 
 xcrun simctl boot "$UDID" || true
@@ -94,6 +95,7 @@ while IFS=$'\t' read -r EXTRA_UDID EXTRA_NAME; do
 done < "$RUNNER_TEMP/truefoods-extra-devices.txt"
 
 xcrun simctl shutdown "$UDID" || true
+fi
 
 # Store screenshots come from a Release build, so the TestFlight color samples are absent.
 REL="${RUNNER_TEMP:-/tmp}/truefoods-review"
@@ -163,16 +165,97 @@ while IFS=$'\t' read -r KIND EXTRA_UDID EXTRA_NAME; do
   [ -n "${EXTRA_UDID:-}" ] || continue
   xcrun simctl boot "$EXTRA_UDID" || true
   xcrun simctl bootstatus "$EXTRA_UDID" -b
+  sleep 8
   xcrun simctl ui "$EXTRA_UDID" appearance light || true
   xcrun simctl install "$EXTRA_UDID" "$RELAPP"
   xcrun simctl status_bar "$EXTRA_UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --cellularMode active --cellularBars 4 --wifiBars 3 || true
+  xcrun simctl terminate "$EXTRA_UDID" com.tradergoods.madewithlove || true
+  xcrun simctl launch "$EXTRA_UDID" com.tradergoods.madewithlove -screenshot home
+  sleep 16
+  xcrun simctl terminate "$EXTRA_UDID" com.tradergoods.madewithlove || true
   for SHOT in home result score; do
-    xcrun simctl terminate "$EXTRA_UDID" com.tradergoods.madewithlove || true
-    xcrun simctl launch "$EXTRA_UDID" com.tradergoods.madewithlove -screenshot "$SHOT"
-    sleep 10
     FILE="$OUT/review-$KIND-$SHOT.png"
-    xcrun simctl io "$EXTRA_UDID" screenshot "$FILE"
-    test -s "$FILE"
+    ok=0
+    for TRY in 1 2 3; do
+      xcrun simctl terminate "$EXTRA_UDID" com.tradergoods.madewithlove || true
+      sleep 2
+      xcrun simctl launch "$EXTRA_UDID" com.tradergoods.madewithlove -screenshot "$SHOT"
+      sleep 14
+      xcrun simctl io "$EXTRA_UDID" screenshot "$FILE.try"
+      sleep 3
+      xcrun simctl io "$EXTRA_UDID" screenshot "$FILE"
+      if python3 - "$FILE" << 'PY'
+import pathlib, struct, sys, zlib
+path, = sys.argv[1:]
+data = pathlib.Path(path).read_bytes()
+if data[12:16] != b"IHDR":
+    sys.exit(1)
+width, height, bit, color, _comp, _filt, inter = struct.unpack(">IIBBBBB", data[16:29])
+if inter or bit != 8 or color not in (2, 6):
+    sys.exit(0)
+channels = 3 if color == 2 else 4
+pos = 8
+blob = b""
+while pos + 8 <= len(data):
+    length = struct.unpack(">I", data[pos:pos + 4])[0]
+    kind = data[pos + 4:pos + 8]
+    chunk = data[pos + 8:pos + 8 + length]
+    if kind == b"IDAT":
+        blob += chunk
+    if kind == b"IEND":
+        break
+    pos += 12 + length
+raw = zlib.decompress(blob)
+stride = width * channels
+prev = bytearray(stride)
+index = 0
+samples = []
+for y in range(height):
+    filter_type = raw[index]
+    index += 1
+    row = bytearray(raw[index:index + stride])
+    index += stride
+    if filter_type == 1:
+        for x in range(stride):
+            left = row[x - channels] if x >= channels else 0
+            row[x] = (row[x] + left) & 255
+    elif filter_type == 2:
+        for x in range(stride):
+            row[x] = (row[x] + prev[x]) & 255
+    elif filter_type == 3:
+        for x in range(stride):
+            left = row[x - channels] if x >= channels else 0
+            row[x] = (row[x] + ((left + prev[x]) // 2)) & 255
+    elif filter_type == 4:
+        for x in range(stride):
+            left = row[x - channels] if x >= channels else 0
+            up = prev[x]
+            upper_left = prev[x - channels] if x >= channels else 0
+            guess = left + up - upper_left
+            choices = (abs(guess - left), left), (abs(guess - up), up), (abs(guess - upper_left), upper_left)
+            row[x] = (row[x] + min(choices)[1]) & 255
+    prev = row
+    if height // 5 <= y <= 4 * height // 5 and y % 50 == 0:
+        samples.append(row)
+total = count = 0
+for row in samples:
+    for x in range(width // 5, 4 * width // 5, 50):
+        pixel = x * channels
+        total += row[pixel] + row[pixel + 1] + row[pixel + 2]
+        count += 3
+luma = total / max(count, 1)
+print(path, "luma", round(luma, 1))
+if luma < 40:
+    sys.exit(1)
+PY
+      then
+        ok=1
+        break
+      fi
+      echo "retrying $FILE because the picture was blank"
+    done
+    test "$ok" = 1
+    rm -f "$FILE.try"
   done
   xcrun simctl shutdown "$EXTRA_UDID" || true
 done < "$RUNNER_TEMP/truefoods-review-devices.txt"
