@@ -466,6 +466,7 @@ def review_notes(auth, version_id):
         "contactFirstName": "Trader",
         "contactLastName": "Goods",
         "contactEmail": "support@tradergoods.us",
+        "demoAccountRequired": False,
         "notes": NOTES,
     }
     existing_phone = (((found or {}).get("data") or {}).get("attributes") or {}).get("contactPhone")
@@ -529,6 +530,13 @@ def main():
         "supportUrl": SUPPORT,
     })
     set_age_rating(auth, info["id"])
+    soft(auth, "PATCH", f"/v1/apps/{APP}", {
+        "data": {
+            "type": "apps",
+            "id": APP,
+            "attributes": {"contentRightsDeclaration": "USES_THIRD_PARTY_CONTENT"},
+        }
+    })
     set_price(auth)
     declare_privacy(auth)
     upload_screenshots(auth, copy["id"], folder)
