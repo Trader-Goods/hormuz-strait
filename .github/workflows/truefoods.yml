@@ -9,7 +9,7 @@ on:
 jobs:
   testflight:
     name: Build, sign and upload to TestFlight
-    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[groups-only]') && !contains(github.event.head_commit.message, '[store]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[groups-only]') && !contains(github.event.head_commit.message, '[store]') && !contains(github.event.head_commit.message, '[submit-only]') }}
     runs-on: macos-15-intel
     timeout-minutes: 60
     env:
@@ -178,7 +178,7 @@ jobs:
 
   screenshots:
     name: Capture simulator screenshots
-    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[submit-only]') }}
     runs-on: macos-15-intel
     timeout-minutes: 60
     env:
@@ -208,16 +208,27 @@ jobs:
   appstore:
     name: Submit version 1.0 for App Store review
     needs: [testflight, screenshots]
-    if: ${{ always() && !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[groups-only]') && (needs.testflight.result == 'success' || contains(github.event.head_commit.message, '[store]')) && needs.screenshots.result == 'success' }}
+    if: ${{ always() && !contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, '[groups-only]') && (needs.testflight.result == 'success' || contains(github.event.head_commit.message, '[store]') || contains(github.event.head_commit.message, '[submit-only]')) && (needs.screenshots.result == 'success' || contains(github.event.head_commit.message, '[submit-only]')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v4
+        if: ${{ !contains(github.event.head_commit.message, '[submit-only]') }}
         with:
           name: truefoods-screenshots
           path: artifacts/screenshots
+
+      - name: Reuse the saved store screenshots
+        if: contains(github.event.head_commit.message, '[submit-only]')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts/screenshots
+          gh run download 43787888404 --name truefoods-screenshots --dir artifacts/screenshots
+          find artifacts/screenshots -name 'review-*.png' -exec mv -n {} artifacts/screenshots/ \;
+          ls -l artifacts/screenshots
 
       - name: Write API key
         env:
@@ -236,7 +247,7 @@ jobs:
         env:
           KID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           ISS: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          BUILD_NUMBER: ${{ contains(github.event.head_commit.message, '[store]') && '28' || github.run_number }}
+          BUILD_NUMBER: ${{ (contains(github.event.head_commit.message, '[store]') || contains(github.event.head_commit.message, '[submit-only]')) && '28' || github.run_number }}
           SHOTS: artifacts/screenshots
         run: python3 TrueFoods/ci/submit_appstore.py
 

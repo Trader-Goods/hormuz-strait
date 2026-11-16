@@ -186,7 +186,8 @@ def set_age_rating(auth, info_id):
     bool_true = {"healthOrWellnessTopics"}
     bool_false = {
         "advertising", "ageAssurance", "gambling", "lootBox", "messagingAndChat",
-        "parentalControls", "unrestrictedWebAccess", "userGeneratedContent",
+        "parentalControls", "socialMedia", "socialMediaAgeRestricted",
+        "unrestrictedWebAccess", "userGeneratedContent",
     }
     attrs = {}
     for key, value in current.items():
@@ -205,37 +206,39 @@ def set_age_rating(auth, info_id):
     for key in bool_true:
         attrs.setdefault(key, True)
     path = f"/v1/ageRatingDeclarations/{item['id']}"
+    seen = set()
     for _ in range(12):
+        signature = tuple(sorted((key, repr(value)) for key, value in attrs.items()))
+        if signature in seen:
+            fail("age rating answers did not settle: " + ", ".join(sorted(attrs)))
+        seen.add(signature)
         body = {"data": {"type": "ageRatingDeclarations", "id": item["id"], "attributes": attrs}}
         try:
             api("PATCH", path, auth, body)
             print("age rating saved")
             return
         except SystemExit as error:
-            text = json.dumps(getattr(error, "payload", {}) or {})
+            payload = getattr(error, "payload", {}) or {}
+            text = json.dumps(payload)
             print(text[:1500])
-            removed = [key for key in list(attrs) if key in text and any(word in text.lower() for word in ("unknown", "does not exist", "not supported", "read-only", "read only"))]
-            if removed:
-                for key in removed:
-                    attrs.pop(key, None)
-                    print("dropped", key)
-                continue
-            flipped = False
-            for key, value in list(attrs.items()):
-                if key not in text:
+            changed = False
+            for item in payload.get("errors", []):
+                pointer = ((item.get("source") or {}).get("pointer") or "").rsplit("/", 1)[-1]
+                detail = item.get("detail") or ""
+                code = item.get("code") or ""
+                if not pointer or pointer not in attrs:
                     continue
-                if isinstance(value, bool):
-                    attrs[key] = "INFREQUENT_OR_MILD" if key == "healthOrWellnessTopics" else "NONE"
-                elif value == "INFREQUENT_OR_MILD":
-                    attrs[key] = "NONE"
-                elif isinstance(value, str):
-                    attrs[key] = False
-                else:
-                    continue
-                print("flipped", key, "to", attrs[key])
-                flipped = True
-                break
-            if flipped:
+                if "Expected a BOOLEAN" in detail:
+                    attrs[pointer] = False
+                    changed = True
+                elif "TYPE" in code or "not a valid" in detail.lower():
+                    attrs[pointer] = "NONE" if pointer != "alcoholTobaccoOrDrugUseOrReferences" else "INFREQUENT_OR_MILD"
+                    changed = True
+                elif any(word in detail.lower() for word in ("unknown", "does not exist", "not supported", "read-only", "read only", "cannot be modified")):
+                    attrs.pop(pointer, None)
+                    changed = True
+                print("age rating field", pointer, "->", attrs.get(pointer, "dropped"))
+            if changed:
                 continue
             fail(f"could not save the age rating: {text[:1500]}")
     fail("could not save the age rating")
