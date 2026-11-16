@@ -446,6 +446,20 @@ def find_valid_build(auth, number):
     fail(f"build {number} is not VALID")
 
 
+def account_phone(auth):
+    """Use a review phone already saved on this developer account. Do not invent one."""
+    apps = soft(auth, "GET", "/v1/apps?limit=50") or {}
+    for app in apps.get("data", []):
+        versions = soft(auth, "GET", f"/v1/apps/{app['id']}/appStoreVersions?limit=8") or {}
+        for version in versions.get("data", []):
+            detail = soft(auth, "GET", f"/v1/appStoreVersions/{version['id']}/appStoreReviewDetail") or {}
+            phone = ((detail.get("data") or {}).get("attributes") or {}).get("contactPhone")
+            if phone:
+                print("found a review phone already saved on this developer account")
+                return phone
+    return ""
+
+
 def review_notes(auth, version_id):
     found = soft(auth, "GET", f"/v1/appStoreVersions/{version_id}/appStoreReviewDetail")
     attributes = {
@@ -454,6 +468,10 @@ def review_notes(auth, version_id):
         "contactEmail": "support@tradergoods.us",
         "notes": NOTES,
     }
+    existing_phone = (((found or {}).get("data") or {}).get("attributes") or {}).get("contactPhone")
+    phone = existing_phone or account_phone(auth)
+    if phone:
+        attributes["contactPhone"] = phone
     if found and found.get("data"):
         patch_attributes(auth, f"/v1/appStoreReviewDetails/{found['data']['id']}", "appStoreReviewDetails", found["data"]["id"], attributes)
         return
@@ -465,7 +483,7 @@ def review_notes(auth, version_id):
         }
     })
     if created is None:
-        fail("review notes could not be saved. A review contact phone may be required, and none is on file.")
+        fail("Apple requires a review contact phone number, and this developer account has none saved. Add a phone in App Store Connect for the TrueFoods review contact, then the submission can be sent.")
 
 
 def main():
