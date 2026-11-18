@@ -15,6 +15,7 @@ jobs:
     env:
       TEAM_ID: 35734G7ZCQ
       BUNDLE_ID: com.tradergoods.screenclean
+      ASC_APP_ID: "6836547547"
     steps:
       - uses: actions/checkout@v4
 

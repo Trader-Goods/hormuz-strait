@@ -5,14 +5,18 @@ import importlib.util
 import json
 import os
 import pathlib
+import urllib.error
 import urllib.parse
+import urllib.request
 
 APP_BUNDLE = "com.tradergoods.screenclean"
+APP_ID = "6836547547"
+STORE_NAME = "Screen Clean: Smudge Finder"
 SUPPORT = "https://trader-goods.github.io/hormuz-strait/screenclean.html"
 PRIVACY = "https://trader-goods.github.io/hormuz-strait/screenclean-privacy.html"
-DESCRIPTION = """Screen Clean turns the glass black for one minute so you can see what you are wiping.
+DESCRIPTION = """Screen Clean: Smudge Finder turns the glass black for one minute so you can see what you are wiping.
 
-Press Clean. The screen goes pure black and the brightness drops. Fingerprint oil reflects the light in the room, and dust shows up as a bright speck. A bright page hides both. Wipes do not tap or swipe anything. The phone stays awake. After 60 seconds your previous brightness comes back. Hold the black screen to stop early.
+On your home screen the app is named Screen Clean. Press Clean. The screen goes pure black and the brightness drops. Fingerprint oil reflects the light in the room, and dust shows up as a bright speck. A bright page hides both. Wipes do not tap or swipe anything. The phone stays awake. After 60 seconds your previous brightness comes back. Hold the black screen to stop early.
 
 Tilt the phone under a lamp and use a soft, dry cloth. Do not spray liquid on the glass. The app does not wash the screen for you.
 
@@ -43,11 +47,10 @@ def soft(auth, method, path, body=None):
 
 
 def app_id(auth):
-    query = urllib.parse.urlencode({"filter[bundleId]": APP_BUNDLE, "limit": 5})
-    for item in call(auth, "GET", "/v1/apps?" + query).get("data", []):
-        if item.get("attributes", {}).get("bundleId") == APP_BUNDLE:
-            print("app", item["id"], item.get("attributes", {}).get("name"))
-            return item["id"]
+    item = call(auth, "GET", "/v1/apps/" + APP_ID).get("data") or {}
+    if item.get("attributes", {}).get("bundleId") == APP_BUNDLE:
+        print("app", item["id"], item.get("attributes", {}).get("name"))
+        return item["id"]
     raise SystemExit("app record was not found")
 
 
@@ -140,6 +143,7 @@ def main():
     locale = next((item for item in locales.get("data", []) if str(item.get("attributes", {}).get("locale", "")).startswith("en")), None)
     if locale:
         patch(auth, f"/v1/appInfoLocalizations/{locale['id']}", "appInfoLocalizations", locale["id"], {
+            "name": STORE_NAME,
             "subtitle": SUBTITLE,
             "privacyPolicyUrl": PRIVACY,
         })
@@ -154,8 +158,98 @@ def main():
     print("listing text saved")
     folder = pathlib.Path(os.environ.get("SHOTS", "artifacts/screenshots"))
     upload_screenshots(auth, copy["id"], folder)
+    set_price(auth, app)
+    declare_not_collected(auth, app)
     print("LISTING_READY")
     print("not submitted for review")
+
+
+def set_price(auth, app):
+    points = []
+    path = f"/v1/apps/{app}/appPricePoints?filter[territory]=USA&limit=200"
+    for _ in range(8):
+        page = soft(auth, "GET", path)
+        if not page:
+            print("PRICE_BLOCKED")
+            return
+        points.extend(page.get("data", []))
+        nxt = (page.get("links") or {}).get("next") or ""
+        if nxt.startswith(signing.API):
+            path = nxt[len(signing.API):]
+        else:
+            break
+    free = next((item for item in points if str((item.get("attributes") or {}).get("customerPrice")) in ("0", "0.0", "0.00")), None)
+    if not free:
+        print("PRICE_BLOCKED no free USA price point")
+        return
+    result = soft(auth, "POST", "/v1/appPriceSchedules", {
+        "data": {
+            "type": "appPriceSchedules",
+            "relationships": {
+                "app": {"data": {"type": "apps", "id": app}},
+                "baseTerritory": {"data": {"type": "territories", "id": "USA"}},
+                "manualPrices": {"data": [{"type": "appPrices", "id": "${free}"}]},
+            },
+        },
+        "included": [{
+            "type": "appPrices",
+            "id": "${free}",
+            "attributes": {"startDate": None},
+            "relationships": {"appPricePoint": {"data": {"type": "appPricePoints", "id": free["id"]}}},
+        }],
+    })
+    print("price set to free" if result is not None else "price schedule was not changed")
+
+
+def iris(auth, method, path, body=None):
+    data = None if body is None else json.dumps(body).encode()
+    request = urllib.request.Request(
+        "https://appstoreconnect.apple.com/iris/v1" + path,
+        data=data,
+        method=method,
+        headers={"Authorization": "Bearer " + auth, "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            raw = response.read().decode()
+            return json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as error:
+        raw = error.read().decode()
+        print(f"IRIS {method} {path.split('?')[0]} {error.code} {raw[:500]}")
+        failure = SystemExit(1)
+        failure.code = error.code
+        raise failure
+
+
+def declare_not_collected(auth, app):
+    """Privacy label: Data Not Collected. The public API often cannot publish this."""
+    body = {
+        "data": {
+            "type": "appDataUsages",
+            "relationships": {
+                "app": {"data": {"type": "apps", "id": app}},
+                "dataProtection": {"data": {"type": "appDataUsageDataProtections", "id": "DATA_NOT_COLLECTED"}},
+            },
+        }
+    }
+    created = soft(auth, "POST", "/v1/appDataUsages", body)
+    if created is None:
+        try:
+            created = iris(auth, "POST", "/appDataUsages", body)
+        except SystemExit:
+            created = None
+    if created is None:
+        print("PRIVACY_BLOCKED Data Not Collected could not be published with this API key")
+        return
+    try:
+        state = iris(auth, "GET", f"/apps/{app}/dataUsagePublishState")
+        state_id = state["data"]["id"]
+        iris(auth, "PATCH", f"/appDataUsagesPublishState/{state_id}", {
+            "data": {"type": "appDataUsagesPublishState", "id": state_id, "attributes": {"published": True}}
+        })
+        print("privacy published: Data Not Collected")
+    except SystemExit:
+        print("PRIVACY_BLOCKED usage was sent but not published")
 
 
 if __name__ == "__main__":
